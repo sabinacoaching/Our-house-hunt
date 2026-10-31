@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "Our House Hunt - Zoopla & Rightmove Import",
+  "version": "0.9.0",
+  "description": "Reliable Zoopla floorplan capture using DOM and newly loaded image resources; original listing only.",
+  "permissions": [
+    "tabs",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://www.zoopla.co.uk/*",
+    "https://zoopla.co.uk/*",
+    "https://www.rightmove.co.uk/*",
+    "https://rightmove.co.uk/*",
+    "https://*.zoocdn.com/*",
+    "https://*.rightmove.co.uk/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://sabinacoaching.github.io/our-house-hunt/*"
+      ],
+      "js": [
+        "bridge.js"
+      ],
+      "run_at": "document_start"
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
+}

@@ -28,29 +28,20 @@ test('choose fastest returned transit route, not the nearest arrival',async()=>{
  assert.equal(r.route.seconds,1800);
  assert.equal(r.alternatives,2);
 });
-test('photo galleries compare content across distinct file paths and do not delete original array',async()=>{
- const keep={fetch:globalThis.fetch,createImageBitmap:globalThis.createImageBitmap,document:globalThis.document};
- const same={path:'a'},copy={path:'b'},distinct={path:'c'};
- const source=[same,copy,distinct],original=JSON.stringify(source);
- const images={a:'kitchen',b:'kitchen',c:'garden'};
- let seed='';let fetched=0;
- globalThis.fetch=async url=>{fetched++;return {ok:true,blob:async()=>({key:images[url]})}};
- globalThis.createImageBitmap=async blob=>({key:blob.key,close(){}});
- globalThis.document={createElement:()=>({getContext:()=>({clearRect(){},drawImage(image){seed=image.key},getImageData(){
-   let state=Array.from(seed).reduce((n,ch)=>(Math.imul(n,33)+ch.charCodeAt(0))>>>0,1337);
-   const data=new Uint8ClampedArray(17*16*4);
-   for(let i=0;i<17*16;i++){state=(Math.imul(state,1664525)+1013904223)>>>0;
-    const v=state%255;data[i*4]=data[i*4+1]=data[i*4+2]=v;data[i*4+3]=255}
-   return {data};
- }})})};
+test('photo galleries preserve order and all distinct bytes across views',async()=>{
+ const keep=globalThis.fetch;
+ const source=['a','b','c','d','e','f'].map(path=>({path})),original=JSON.stringify(source);
+ const images={a:'front',b:'front',c:'kitchen angle one',d:'kitchen angle two',e:'garden',f:'bedroom'};
+ let fetched=0;
+ globalThis.fetch=async url=>{fetched++;return {ok:true,blob:async()=>new Blob([images[url]],{type:'image/jpeg'})}};
  try{
   const store=createUniquePhotoStore(async x=>x.path),p={id:'123',images:source};
   const [table,details]=await Promise.all([store.unique(p,4),store.unique(p)]);
-  assert.deepEqual(details.map(x=>x.path),['a','c']);
-  assert.deepEqual(table.map(x=>x.path),['a','c']);
+  assert.deepEqual(table.map(x=>x.path),['a','c','d','e']);
+  assert.deepEqual(details.map(x=>x.path),['a','c','d','e','f']);
   assert.equal(JSON.stringify(source),original);
-  assert.equal(fetched,3);
- }finally{for(const [k,v] of Object.entries(keep)){if(v===undefined)delete globalThis[k];else globalThis[k]=v}}
+  assert.equal(fetched,6);
+ }finally{globalThis.fetch=keep}
 });
 test('legacy timers are disabled and station alias support is preserved',()=>{
  const ui=readFileSync(new URL('../index.html',import.meta.url),'utf8');

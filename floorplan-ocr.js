@@ -40,28 +40,7 @@ export function parsePlanText(original){
     .match(/^(?:(?:rear|private|back)\s+)?garden\s*[:( -]?\s*(?:(?:dimensions?|size|measures?|approx(?:imately)?)\s*[: -]?\s*)?(\d{1,2}(?:\.\d{1,2})?)\s*(?:m|metres?)?\s*(?:x|by)\s*(\d{1,2}(?:\.\d{1,2})?)\s*(?:m|metres?)\b/i);
   if(candidate){garden=candidate;break}
  }
- // Many original floor plans place the garden label on one OCR line and
- // the dimensions immediately below it, often without printed metric units.
- // Use only the next one or two lines attached to the Garden heading, not
- // arbitrary measurements elsewhere in the plan.
- if(!garden){
-  const rows=String(original||'').split(/[\r\n]+/).map(v=>v.trim());
-  for(let i=0;i<rows.length;i++){
-   if(!/^(?:rear\s+|back\s+|private\s+)?garden\b/i.test(rows[i]))continue;
-   const local=rows.slice(i,Math.min(rows.length,i+3)).join(' ').replace(/[×✕]/g,'x');
-   const m=local.match(/\b(\d{1,2}(?:\.\d{1,2})?)\s*(?:m|metres?)?\s*x\s*(\d{1,2}(?:\.\d{1,2})?)\s*(?:m|metres?)?(?=\s|$|[),;])/i);
-   if(m&&(/\./.test(m[1])&&/\./.test(m[2])||/\b(?:m|metres?)\b/i.test(local))){garden=m;break}
-  }
- }
- // Agency plans sometimes print imperial measurements with metric lengths in parentheses.
- // Example: Garden Approximate 49'3 (15.00) x 16'5 (5.00)
- if(!garden){
-  const block=String(original||'').replace(/[×✕]/g,'x').match(/\b(?:rear\s+|private\s+)?garden\s+(?:approx(?:imate)?\s+)?([\s\S]{0,120})/i);
-  if(block){
-   const pair=block[1].match(/\b\d{1,3}'\d{1,2}\s*\(\s*(\d{1,2}(?:\.\d{1,2})?)\s*\)\s*x\s*\d{1,3}'\d{1,2}\s*\(\s*(\d{1,2}(?:\.\d{1,2})?)\s*\)/i);
-   if(pair)garden=pair;
-  }
- }
+ // Other OCR lines can belong to a different room, so do not attach them to a garden label.
  if(garden){
   const width=numeric(garden[1]),length=numeric(garden[2]),sqm=width*length;
   if(width>1&&width<=40&&length>1&&length<=50&&sqm>=8&&sqm<=1500)result.garden_area_sqm=Math.round(sqm*100)/100;
@@ -158,7 +137,6 @@ export async function analyzeFloorplan({sb,property,photo}){
  if(planSignals<2)return {status:'unverified-floorplan-image'};
  const measurements=parsePlanText(ocrText),changes={};
  // Total floor area printed on the plan has priority over an approximate listing value.
- if(!p.manual_overrides?.floor_area_sqm&&measurements.floor_area_sqm!=null&&Math.abs(Number(p.floor_area_sqm)-measurements.floor_area_sqm)>0.2)changes.floor_area_sqm=measurements.floor_area_sqm;
  if(!p.manual_overrides?.floor_area_sqm&&p.floor_area_sqm==null&&measurements.floor_area_sqm!=null)changes.floor_area_sqm=measurements.floor_area_sqm;
  if(!p.manual_overrides?.garden_area_sqm&&p.garden_area_sqm==null&&measurements.garden_area_sqm!=null)changes.garden_area_sqm=measurements.garden_area_sqm;
  if(!p.manual_overrides?.floors&&p.floors==null&&measurements.floors!=null)changes.floors=measurements.floors;
@@ -167,14 +145,16 @@ export async function analyzeFloorplan({sb,property,photo}){
  const labelled=measurements.plan_bathrooms,standalone=measurements.plan_separate_wcs;
  const portalCount=p.bathrooms==null?null:Number(p.bathrooms);const existingTotal=portalCount==null?null:portalCount+(p.wc_count==null?0:Number(p.wc_count));
  if(labelled!=null&&(portalCount==null||labelled+standalone===portalCount||labelled+standalone===existingTotal)){
-   if(!p.manual_overrides?.bathrooms&&p.bathrooms!==labelled)changes.bathrooms=labelled;
-   if(!p.manual_overrides?.wc_count&&p.wc_count!==standalone)changes.wc_count=standalone;
+   if(!p.manual_overrides?.bathrooms&&p.bathrooms==null)changes.bathrooms=labelled;
+   if(!p.manual_overrides?.wc_count&&p.wc_count==null&&standalone>0)changes.wc_count=standalone;
  }
- // Cache only successful readable plans; failed extraction is retried at a later visit.
- if(Object.keys(measurements).length)try{localStorage.setItem(key,String(Date.now()))}catch{}
  if(!Object.keys(changes).length)return {status:'no-labelled-measurements'};
- const saved=await sb.from('properties').update(changes).eq('id',p.id).select('id').single();
+ let request=sb.from('properties').update(changes).eq('id',p.id).eq('manual_overrides',JSON.stringify(p.manual_overrides||{}));
+ for(const field of Object.keys(changes))request=p[field]==null?request.is(field,null):request.eq(field,p[field]);
+ const saved=await request.select('id');
  if(saved.error)throw saved.error;
+ if(!saved.data?.length)return {status:'concurrent-edit'};
+ if(Object.keys(measurements).length)try{localStorage.setItem(key,String(Date.now()))}catch{}
  Object.assign(p,changes);
  return {status:'saved',fields:Object.keys(changes)};
 }
