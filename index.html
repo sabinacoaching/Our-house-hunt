@@ -1,0 +1,700 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><title>Our House Hunt</title>
+<style>
+:root{--ink:#253433;--muted:#72817f;--line:#dce4df;--green:#315e50;--bg:#f5f7f4;--paper:white;--gold:#b7965e}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font:15px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;color:var(--ink)}button,input,select,textarea{font:inherit}button{cursor:pointer;background:var(--green);border:1px solid var(--green);border-radius:9px;color:#fff;padding:11px 16px;font-weight:600}button:hover{filter:brightness(1.08)}button:disabled{opacity:.55;cursor:wait}.secondary{background:white;color:var(--green);border-color:var(--line)}.danger{background:#fff;color:#a24742;border-color:#eed5d1}.top{background:#fff;border-bottom:1px solid var(--line);padding:16px clamp(16px,4vw,64px);display:flex;align-items:center;justify-content:space-between;gap:20px}.brand{font-size:21px;font-weight:750;letter-spacing:-.5px}.brand span{color:var(--green)}.topright{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;color:var(--muted)}main{max-width:1200px;margin:12px auto 70px;padding:0 22px}.panel{background:#fff;border:1px solid var(--line);border-radius:17px;padding:24px;box-shadow:0 8px 26px #204b3810}.login{max-width:410px;margin:12vh auto 0}.login h1{font-size:30px;margin:0 0 8px}.login p{color:var(--muted)}.login label{display:block;margin:16px 0;font-weight:600}.login input{display:block;width:100%;margin-top:5px}.login button{width:100%;margin-top:5px}.error{color:#b73b38}.hint{color:var(--muted);font-size:13px}.hero{display:flex;align-items:end;justify-content:space-between;gap:20px;margin:12px 0 22px}.hero h1{font-family:Georgia,serif;font-weight:500;font-size:clamp(30px,4vw,46px);letter-spacing:-1px;margin:0}.hero p{margin:6px 0;color:var(--muted)}.count{color:var(--muted);white-space:nowrap;margin-left:auto;font-size:12px;align-self:center}.import{padding:18px 20px}.import label{font-weight:700;display:block;margin-bottom:8px}.inputrow{display:flex;gap:10px}.inputrow input{flex:1;min-width:0}input,select,textarea{border:1px solid #cbd7d1;background:#fff;border-radius:9px;padding:10px 12px;color:var(--ink)}input:focus,textarea:focus,select:focus{outline:2px solid #9bc7b0;outline-offset:1px}textarea{width:100%;resize:vertical}.filters{display:flex;flex-wrap:wrap;align-items:end;gap:13px;margin:22px 0}.filters label{font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:5px}.filters input{min-width:240px}.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:20px}.card{background:white;border-radius:16px;overflow:hidden;border:1px solid var(--line);box-shadow:0 3px 14px #163c2f10;cursor:pointer;transition:transform .13s,box-shadow .13s}.card:hover{transform:translateY(-3px);box-shadow:0 10px 24px #163c2f19}.photo{height:185px;background:linear-gradient(130deg,#e4ece6,#f5f2e8);display:flex;align-items:center;justify-content:center;color:#9aaa9e;font-size:34px}.photo img{width:100%;height:100%;object-fit:cover}.cardtext{padding:16px}.address{font-weight:750;min-height:44px;font-size:16px}.price{font-size:22px;font-weight:750;margin-top:5px}.facts{font-size:13px;color:var(--muted);margin:6px 0 14px}.cardfoot{display:flex;justify-content:space-between;gap:8px;align-items:center;color:var(--muted);font-size:12px}.pill{display:inline-flex;border-radius:99px;background:#e8f0eb;color:#315e50;font-weight:650;padding:5px 9px;font-size:12px}.empty{padding:50px;text-align:center;color:var(--muted)}[hidden]{display:none!important}dialog{border:0;border-radius:17px;max-width:min(850px,94vw);width:100%;max-height:93vh;padding:0;box-shadow:0 25px 100px #192a2980;color:var(--ink)}dialog::backdrop{background:#172721a8}.dialogtop{display:flex;justify-content:space-between;align-items:center;padding:18px 22px;border-bottom:1px solid var(--line);gap:10px}.dialogtop h2{margin:0;font-size:21px}.gallery{display:flex;gap:10px;overflow-x:auto;padding:14px 22px;background:#edf0ec;min-height:130px}.gallery img{max-height:295px;min-width:170px;max-width:520px;object-fit:contain;background:#fff;border-radius:8px}.detailbody{padding:22px}.detailsgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:20px 0}.detailsgrid label{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:650}.detailsgrid input,.detailsgrid select{width:100%;min-width:0}.actions{display:flex;gap:9px;flex-wrap:wrap}a{color:var(--green)}hr{border:0;border-top:1px solid var(--line);margin:22px 0}.note{background:#f5f7f4;padding:12px 15px;border-radius:12px;margin:9px 0;white-space:pre-wrap}.notehead{font-size:12px;color:var(--muted);font-weight:700;margin-bottom:5px}.note p{margin:0}.status{margin:8px 0 0}.small{font-size:12px;color:var(--muted)}@media(max-width:600px){main{padding:0 12px;margin:12px auto}.top{padding:12px}.brand{font-size:18px}.panel{padding:17px}.hero{display:block}.inputrow{display:block}.inputrow input,.inputrow button{width:100%;margin-bottom:8px}.detailsgrid{grid-template-columns:repeat(2,1fr)}.gallery img{max-height:230px}}
+.hh-auth-options{display:flex;justify-content:space-between;gap:12px;align-items:center;margin:6px 0 12px}
+.login .hh-auth-options button{width:auto;margin:0;padding:7px 11px;font-size:13px}
+.hh-text-button{border:0;background:transparent;color:var(--green);text-decoration:underline;font-weight:650}
+.login #recoveryForm button{margin:7px 0 0}
+.login #recoveryMessage{min-height:38px;line-height:1.5}
+.hh-password-dialog{max-width:min(440px,95vw)}
+.hh-password-form{padding:20px 24px 24px;display:flex;flex-direction:column;gap:15px}
+.hh-password-form>label:not(.hh-password-check){display:flex;flex-direction:column;gap:5px;font-weight:650}
+.hh-password-form input[type=password],.hh-password-form input[type=text]{width:100%;min-height:42px}
+.hh-password-check{display:flex;gap:7px;align-items:center;font-size:13px;color:var(--muted)}
+.hh-password-check input{width:auto}
+.hh-password-form p{min-height:18px;margin:0}
+@media(max-width:500px){.topright{gap:5px}.topright button{padding:7px 9px;font-size:12px}.topright strong{max-width:100%;font-size:12px}.hh-password-form{padding:17px}}
+
+/* Full-size gallery, supports mouse, keyboard and touch navigation. */
+dialog.hh-photo-viewer{width:98vw;max-width:98vw;height:96vh;height:96dvh;max-height:96vh;max-height:96dvh;border-radius:12px;background:#101817;color:white;overflow:hidden}
+dialog.hh-photo-viewer[open]{display:flex;flex-direction:column}
+.hh-photo-top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 16px;background:#202c29}
+.hh-photo-top strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px}
+.hh-photo-controls{display:flex;align-items:center;gap:13px;flex-shrink:0}
+.hh-photo-viewer button{border:1px solid #60736b;background:#243831;color:white;min-width:42px;min-height:42px;padding:7px 12px}
+.hh-photo-stage{min-height:0;flex:1;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px}
+.hh-photo-stage img{min-width:0;max-width:calc(100% - 116px);max-height:100%;width:auto;height:auto;object-fit:contain}
+.hh-photo-viewer .hh-photo-prev,.hh-photo-viewer .hh-photo-next{flex:0 0 46px}
+.hh-photo-hint{font-size:12px;text-align:center;color:#d1d9d4;padding:0 10px 10px}
+.gallery img{cursor:zoom-in}
+@media(max-width:600px){.hh-photo-stage{gap:3px;padding:4px}.hh-photo-stage img{max-width:calc(100% - 78px)}.hh-photo-viewer .hh-photo-prev,.hh-photo-viewer .hh-photo-next{flex-basis:36px;min-width:36px;padding:5px}}
+</style>
+<link rel="stylesheet" href="./comparison.css?v=22">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css'">
+</head><body>
+<header class="top"><div class="brand">⌂ &nbsp;<span>Our House Hunt</span></div><div class="topright"><strong id="who"></strong><span id="hhVersion" title="Current House Hunt site version" style="font-size:11px;color:#72817f">v52</span><button id="refresh" class="secondary" hidden>Refresh</button><button id="changePassword" class="secondary" hidden>Change password</button><button id="logout" class="secondary" hidden>Sign out</button></div></header>
+<main>
+<section id="login" class="panel login" hidden>
+<h1>Welcome home</h1><p>Your shared shortlist, notes and viewings.</p>
+<form id="loginForm">
+<label>Email<input id="email" type="email" required autocomplete="username"></label>
+<label>Password<input id="password" type="password" required autocomplete="current-password"></label>
+<div class="hh-auth-options"><button id="togglePassword" type="button" class="secondary">Show password</button><button type="button" id="forgotPassword" class="hh-text-button">Forgot password?</button></div>
+<button type="submit">Sign in</button><p id="loginError" class="error" role="alert"></p>
+</form>
+<form id="recoveryForm" hidden>
+<p>Enter the email address for your house-hunt account. We'll send a password-reset link.</p>
+<label>Email<input id="recoveryEmail" type="email" required autocomplete="email"></label>
+<button id="sendRecovery" type="submit">Send reset email</button>
+<button id="backToSignIn" type="button" class="secondary">Back to sign in</button>
+<p id="recoveryMessage" class="hint" role="status"></p>
+</form>
+</section>
+<section id="mainApp" hidden>
+
+<section class="panel import"><form id="importForm"><label>Add a property</label><div class="inputrow"><input id="urlInput" type="url" placeholder="Paste a Zoopla or Rightmove listing link" required><button id="importButton">Import house</button></div></form><p id="importMessage" class="hint status">Paste the listing URL. The Chrome extension reads its photographs and details.</p></section>
+<div class="filters"><label>Stage<select id="stageFilter"><option value="all">All active</option><option value="archived">Archived</option><option value="deleted">Deleted</option><option value="">—</option><option value="interested">Interested</option><option value="viewing_booked">Viewing booked</option><option value="viewed">Viewed</option><option value="shortlisted">Shortlisted</option><option value="rejected">Rejected</option><option value="under_offer_sold">Under offer / Sold</option></select></label><label>Sort<select id="sort"><option value="manual">My order (drag to rearrange)</option><option value="newest">Recently added</option><option value="price_asc">Lowest price</option><option value="price_desc">Highest price</option><option value="area_desc">Largest house</option><option value="area_asc">Smallest house</option><option value="station_asc">Closest station (walking)</option><option value="station_desc">Furthest station (walking)</option></select></label><label>Search<input id="search" placeholder="Address or area"></label><div id="count" class="count"></div><button id="archiveToggle" type="button" class="secondary">Archived (0)</button><button id="exportExcel" class="secondary" type="button">Export Excel</button><button id="exportPdf" class="secondary" type="button">Export PDF</button><button id="verifyRoutes" class="secondary" type="button">Verify journeys (Google)</button></div>
+<div id="cards" class="cards"></div><div id="empty" class="empty" hidden>No houses yet. Import your first listing above.</div>
+</section></main>
+<dialog id="dialog"><div class="dialogtop"><h2 id="detailTitle"></h2><button id="close" class="secondary">✕</button></div><div id="gallery" class="gallery"></div><div class="detailbody"><div id="detailFacts" class="facts"></div><div class="detailsgrid"><label>Address<input id="editAddress"></label><label>Price (£)<input id="editPrice" type="number" min="0"></label><label>Bedrooms<input id="editBeds" type="number" min="0"></label><label>Bathrooms<input id="editBaths" type="number" min="0"></label><label>Stage<select id="editStage"><option value="">—</option><option value="interested">Interested</option><option value="viewing_booked">Viewing booked</option><option value="viewed">Viewed</option><option value="shortlisted">Shortlisted</option><option value="rejected">Rejected</option><option value="under_offer_sold">Under offer / Sold</option><option value="archived">Archive (hide)</option><option value="deleted">Delete (move to trash)</option></select></label><label>Viewing date<input id="editViewing" type="datetime-local"></label></div><div class="actions"><button id="save" type="button">Save changes</button><button id="verifyHouse" class="secondary" type="button">Verify this house routes</button><button id="enrich" class="secondary" type="button">Update listing data</button><button id="uploadPlan" class="secondary" type="button">Upload floor plan</button><input type="file" id="floorPlanFile" accept="image/jpeg,image/png,image/webp,image/avif" hidden><button id="remove" class="danger" type="button">Remove house</button><a id="original" target="_blank" rel="noopener noreferrer">Original listing ↗</a></div><hr><h3>Our notes</h3><div id="notes"></div><form id="noteForm"><textarea id="note" rows="3" required placeholder="Write a comment about this property"></textarea><button>Post comment</button></form></div></dialog>
+<dialog id="photoDialog" class="hh-photo-viewer" aria-label="Large property photographs">
+ <div class="hh-photo-top">
+  <strong id="photoTitle"></strong>
+  <div class="hh-photo-controls"><span id="photoCount" aria-live="polite"></span><button id="photoClose" type="button" aria-label="Close photographs">✕</button></div>
+ </div>
+ <div class="hh-photo-stage"><button id="photoPrev" class="hh-photo-prev" type="button" aria-label="Previous photograph">❮</button><img id="photoFull" alt="Property photograph"><button id="photoNext" class="hh-photo-next" type="button" aria-label="Next photograph">❯</button></div>
+ <div class="hh-photo-hint">Swipe or use ← → arrow keys to browse · Esc to close</div>
+</dialog>
+<dialog id="passwordDialog" class="hh-password-dialog">
+<div class="dialogtop"><h2 id="passwordDialogTitle">Change password</h2><button id="closePasswordDialog" type="button" class="secondary">✕</button></div>
+<form id="passwordForm" class="hh-password-form">
+<label>New password<input id="newPassword" type="password" minlength="8" required autocomplete="new-password"></label>
+<label>Confirm new password<input id="confirmPassword" type="password" minlength="8" required autocomplete="new-password"></label>
+<label class="hh-password-check"><input id="showNewPassword" type="checkbox"> Show password</label>
+<button type="submit" id="submitPassword">Save new password</button>
+<p id="passwordError" class="error" role="alert"></p>
+</form>
+</dialog>
+<script type="module">
+import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.49.8';
+import {setupComparison} from './comparison.js?v=50';
+import {setupExports} from './export-tools.js?v=2';
+import {createUniquePhotoStore} from './photo-dedup.js?v=2';
+import {createEditHistory} from './edit-history.js?v=2';
+import {analyzeFloorplan,inspectFloorplanImage} from './floorplan-ocr.js?v=14';
+const sb=createClient('https://ficnuovumurmhzdujjvj.supabase.co','sb_publishable_yrArzwZ2GizO5ATuiAkymg_LdpVZKC9');
+const $=id=>document.getElementById(id);
+const labels={'':'No status',archived:'Archived',deleted:'Deleted',interested:'Interested',viewing_booked:'Viewing booked',viewed:'Viewed',shortlisted:'Shortlisted',rejected:'Rejected',under_offer_sold:'Under offer / Sold'};
+let user=null,people={},homes=[],visibleHomes=[],selected=null;
+let viewingSelections=null;
+const allActiveStatuses=['','interested','viewing_booked','viewed','shortlisted','rejected','under_offer_sold'];
+function selectedViewingStatuses(){
+ if(viewingSelections!==null)return [...viewingSelections];
+ const stage=$('stageFilter').value;
+ return stage==='all'?allActiveStatuses.slice():[stage];
+}
+function applyViewingStatuses(statuses){
+ const values=[...new Set(statuses)];
+ if(values.length===allActiveStatuses.length&&allActiveStatuses.every(x=>values.includes(x)))viewingSelections=null;
+ else viewingSelections=new Set(values);
+ $('stageFilter').value='all';
+ render();
+}
+const pendingJourneyImportIds=new Set();
+const photoCache=new Map();
+const {unique:uniquePhotos}=createUniquePhotoStore(photo);
+let activePhotoProperty=null,activePhotoIndex=0,photoRequest=0;
+async function openPhotoBrowser(p,index=0){
+ const request=++photoRequest;
+ const images=await uniquePhotos(p);if(request!==photoRequest||!images.length)return;
+ const viewer=$('photoDialog');
+ activePhotoProperty=p;
+ activePhotoIndex=((index%images.length)+images.length)%images.length;
+ $('photoTitle').textContent=p.address||'House photographs';
+ $('photoCount').textContent=(activePhotoIndex+1)+' / '+images.length;
+ $('photoFull').removeAttribute('src');
+ $('photoFull').alt='Photograph '+(activePhotoIndex+1)+' of '+images.length+' for '+(p.address||'house');
+ if(!viewer.open)viewer.showModal();
+ try{
+  const url=await photo(images[activePhotoIndex]);
+  if(request!==photoRequest||!viewer.open)return;
+  if(url)$('photoFull').src=url;
+  else $('photoFull').alt='Photograph is unavailable';
+ }catch(e){if(request===photoRequest)console.warn('Large photograph unavailable',e)}
+}
+function movePhoto(delta){if(activePhotoProperty)void openPhotoBrowser(activePhotoProperty,activePhotoIndex+delta)}
+$('photoClose').onclick=()=>$('photoDialog').close();
+$('photoPrev').onclick=()=>movePhoto(-1);
+$('photoNext').onclick=()=>movePhoto(1);
+$('photoDialog').addEventListener('close',()=>{activePhotoProperty=null;photoRequest++});
+$('photoDialog').addEventListener('click',e=>{if(e.target===$('photoDialog'))$('photoDialog').close()});
+document.addEventListener('keydown',e=>{if(!$('photoDialog').open)return;if(e.key==='ArrowLeft'){e.preventDefault();movePhoto(-1)}else if(e.key==='ArrowRight'){e.preventDefault();movePhoto(1)}});
+let photoTouchStart=null;
+$('photoDialog').addEventListener('touchstart',e=>{if(e.touches.length===1)photoTouchStart=e.touches[0].clientX},{passive:true});
+$('photoDialog').addEventListener('touchend',e=>{if(photoTouchStart==null||!e.changedTouches.length)return;const dx=e.changedTouches[0].clientX-photoTouchStart;photoTouchStart=null;if(Math.abs(dx)>50)movePhoto(dx<0?1:-1)},{passive:true}); 
+const fmt=n=>n==null?'Price unavailable':new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP',maximumFractionDigits:0}).format(n);
+const txt=(id,s)=>$(id).textContent=s;
+function report(s,error=false){txt('importMessage',s);$('importMessage').className=error?'error status':'hint status'}
+function listing(u){const x=new URL(u);if(x.protocol!=='https:'||!['zoopla.co.uk','www.zoopla.co.uk','rightmove.co.uk','www.rightmove.co.uk'].includes(x.hostname))throw Error('Paste a Zoopla or Rightmove link');if(!/\/(details|properties)\//.test(x.pathname))throw Error('Please paste an individual property listing');return x.origin+x.pathname.replace(/\/$/,'')}
+async function photo(o){if(!o)return '';if(o.url)return o.url;const k=o.path;if(!k)return '';const hit=photoCache.get(k);if(hit&&hit.exp>Date.now())return hit.url;const r=await sb.storage.from('property-photos').createSignedUrl(k,3600);if(r.error)return '';photoCache.set(k,{url:r.data.signedUrl,exp:Date.now()+3000000});return r.data.signedUrl}
+function extension(action,args,ms=60000){return new Promise((resolve,reject)=>{const id=crypto.randomUUID();const handler=e=>{if(e.source!==window||e.origin!==location.origin||e.data?.source!=='our-house-hunt-extension'||e.data.id!==id)return;clearTimeout(timer);window.removeEventListener('message',handler);e.data.ok?resolve(e.data.data):reject(Error(e.data.error||'Chrome extension error'))};const timer=setTimeout(()=>{window.removeEventListener('message',handler);reject(Error('Chrome importer is not installed or did not answer.'))},ms);window.addEventListener('message',handler);window.postMessage(Object.assign({source:'our-house-hunt-site',id,action},args),location.origin)})}
+async function probeImporter(required=false){
+try{const r=await extension('PING',{},3500);if(!r?.extension)throw Error('Unexpected extension reply');
+const version=Number(String(r.version||'0').split('.')[1]||0);
+if(version<6){const msg='Chrome importer v0.6 or later is required for importing listings.';report(msg,true);if(required)throw Error(msg);return false}
+if(!required)report('Importer connected. Missing details will be checked automatically.');
+return true}catch(e){const msg=/v0\.7|requires|must be updated/i.test(e.message||'')?e.message:'Chrome importer is not responding. Install/update the extension, press Reload at chrome://extensions, then reload this webpage.';report(msg,true);if(required)throw Error(msg);return false}}
+function blob64(base64,mime){const binary=atob(base64),arr=new Uint8Array(binary.length);for(let i=0;i<binary.length;i++)arr[i]=binary.charCodeAt(i);return new Blob([arr],{type:mime})}
+async function perceptualImageHash(blob){
+ if(!blob.type.startsWith('image/'))return null;
+ const bitmap=await createImageBitmap(blob);
+ try{
+  const canvas=document.createElement('canvas');canvas.width=17;canvas.height=16;
+  const ctx=canvas.getContext('2d',{willReadFrequently:true});
+  if(!ctx)return null;
+  ctx.drawImage(bitmap,0,0,17,16);
+  const pix=ctx.getImageData(0,0,17,16).data;
+  let hash='';
+  const bright=(x,y)=>{const i=(y*17+x)*4;return .299*pix[i]+.587*pix[i+1]+.114*pix[i+2]};
+  for(let y=0;y<16;y++)for(let x=0;x<16;x++)hash+=bright(x,y)>=bright(x+1,y)?'1':'0';
+  return hash;
+ }finally{bitmap.close()}
+}
+function hashDistance(a,b){let n=0;for(let i=0;i<a.length;i++)if(a[i]!==b[i])n++;return n}
+async function archive(urls,id,prefix='photo',limit=10,checks=[]){
+ const saved=[],hashes=[],seenUrls=new Set();
+ let index=0;
+ for(const sourceUrl of (urls||[]).slice(0,Math.max(limit*5,50))){
+  if(saved.length>=limit)break;
+  if(typeof sourceUrl!=='string'||seenUrls.has(sourceUrl))continue;
+  seenUrls.add(sourceUrl);
+  if(prefix==='photo'&&/\/(?:logo|avatar|icon|favicon|floor.?plans?)(?:[-._/]|$)/i.test(sourceUrl))continue;
+  const trace=prefix==='source-plan'?{url:sourceUrl.slice(0,480)}:null;
+  try{
+   const data=await extension('FETCH_IMAGE',{url:sourceUrl},25000);
+   const blob=blob64(data.base64,data.mime);
+   if(trace){trace.bytes=blob.size;trace.mime=blob.type}
+   if(blob.size<1300||blob.size>5000000){
+    if(trace){trace.status='invalid-size';checks.push(trace)}continue;
+   }
+   const ext=data.mime==='application/pdf'?'pdf':data.mime==='image/png'?'png':data.mime==='image/webp'?'webp':data.mime==='image/avif'?'avif':'jpg';
+   if(trace){
+    const verdict=await inspectFloorplanImage(blob);
+    trace.validation=verdict;
+    if(!verdict.accepted){
+     // Retain a failed candidate privately for diagnosis, never display it as a verified plan.
+     const qpath=id+'/plan-candidate-'+crypto.randomUUID().slice(0,12)+'.'+ext;
+     const q=await sb.storage.from('property-photos').upload(qpath,blob,{contentType:data.mime,upsert:false});
+     if(!q.error)trace.quarantine_path=qpath;
+     trace.status='validation-rejected';checks.push(trace);
+     console.warn('Source listing image was not a verified plan',verdict,sourceUrl);
+     continue;
+    }
+   }
+   let hash=null;
+   try{hash=await perceptualImageHash(blob)}catch(e){console.warn('Cannot compare picture; preserving image',e)}
+   if(hash&&hashes.some(other=>hashDistance(hash,other)<=12)){
+    if(trace){trace.status='duplicate-plan';checks.push(trace)}continue;
+   }
+   // Unique path on every retry. A previous partial upload cannot block this save.
+   const path=id+'/'+prefix+'-'+crypto.randomUUID().slice(0,12)+'-'+index+'.'+ext;
+   report('Saving '+prefix+' '+(saved.length+1)+'…');
+   const up=await sb.storage.from('property-photos').upload(path,blob,{contentType:data.mime,upsert:false});
+   if(up.error)throw up.error;
+   if(hash)hashes.push(hash);
+   saved.push({path});index++;
+   if(trace){trace.status='saved';trace.path=path;checks.push(trace)}
+  }catch(e){
+   if(trace){trace.status='download-or-storage-error';trace.error=String(e?.message||e).slice(0,300);checks.push(trace)}
+   console.warn('Cannot archive image',sourceUrl,e);
+  }
+ }
+ return saved;
+}
+
+/* Read only counts explicitly stated by the listing; never infer an extra bathroom from room photographs. */
+function listingBathrooms(data){
+ const raw=Number(data.bathrooms);
+ if(data.bathrooms!=null&&data.bathrooms!==''&&Number.isInteger(raw)&&raw>=1&&raw<=8)return raw;
+ const m=String(data.garden_description||'').match(/\b(one|two|three|four|five|[1-8])\s+(?:bathrooms?|baths?)\b/i);
+ const nums={one:1,two:2,three:3,four:4,five:5};
+ return m?(nums[m[1].toLowerCase()]||Number(m[1])):null;
+}
+function listingFloors(data){
+ const raw=Number(data.floors);
+ if(data.floors!=null&&data.floors!==''&&Number.isInteger(raw)&&raw>=1&&raw<=6)return raw;
+ const m=String(data.garden_description||'').match(/\b(?:arranged|spread|set|laid out)\s+(?:over|across|on)\s+(one|two|three|four|[1-4])\s+(?:floors?|storeys?|stories)\b/i);
+ const nums={one:1,two:2,three:3,four:4};
+ return m?(nums[m[1].toLowerCase()]||Number(m[1])):null;
+}
+async function importHouse(raw){
+ await probeImporter(true);
+ const url=listing(raw);
+ const check=await sb.from('properties').select('id,status').eq('url',url).maybeSingle();
+ if(check.error)throw check.error;
+ if(check.data)throw Error(check.data.status==='deleted'?'House is in Deleted. Restore it from the Deleted filter rather than importing a duplicate.':'House already exists in the catalogue');
+ report('Reading listing and photographs…');
+ const data=await extension('IMPORT_URL',{url},70000);
+ if(!data?.images?.length)throw Error('No photographs found. House not added.');
+ const id=crypto.randomUUID();
+ const images=await archive(data.images,id,'photo',24);
+ if(!images.length)throw Error('Photographs could not be downloaded. House not added.');
+ // Reject duplicated URLs; the extension's floor-plan classification still needs a separate visual validation step.
+ const floorplanCandidates=data.floorplans||[];
+ const planChecks=[];
+ const floorplans=await archive(floorplanCandidates,id,'source-plan',5,planChecks);
+ const p={id,url,source:data.source,title:data.title||'',address:data.address||'',price:data.price??null,bedrooms:data.bedrooms??null,bathrooms:listingBathrooms(data),wc_count:data.wc_count??null,floors:listingFloors(data),floor_area_sqm:data.floor_area_sqm??null,garden_area_sqm:null,garden_description:data.garden_description||'',station_name:'',station_distance_miles:null,station_2_name:'',station_2_distance_miles:null,latitude:null,longitude:null,property_type:data.property_type||null,tenure:data.tenure||null,images,floorplans,import_diagnostics:{source:'original-listing',extension_version:data.extension_version||'unknown',status:data.floorplan_status||'unknown',candidates:floorplanCandidates.length,archived:floorplans.length,checks:planChecks,attempted_at:new Date().toISOString()},created_by:user.id,status:''};
+ const r=await sb.from('properties').insert(p);
+ if(r.error)throw r.error;
+ pendingJourneyImportIds.add(id);
+ report('House saved with '+images.length+' photographs. Completing location, stations and floor plan…');
+ await refresh();
+ const failures=[];
+ try { await enrichWalkingStations(p); } catch(e) { failures.push('location/stations'); console.warn('Walking stations not available',e); }
+ try { await analyzeFloorplan({sb,property:p,photo}); } catch(e) { failures.push('floor plan'); console.warn('Automatic floor plan reading unavailable',e); }
+ await refresh(); // Re-render to trigger public-transport journey estimates once coordinates have been saved.
+ const missing=[p.latitude==null?'map point':null,!p.station_name?'stations':null,p.bathrooms==null?'bathrooms':null,p.floors==null?'floors':null,p.floor_area_sqm==null?'floor area':null,!p.floorplans?.length?'floor plan':null].filter(Boolean);
+ if(missing.length){
+  report('House added. Finishing automatic import: '+missing.join(', ')+'.');
+  void finishNewHouseImport(p.id);
+ }else report('House imported with original floor plan, measurements and stations. Journey times are being calculated.');
+}
+// Finish new imports during this browser visit, not on a manual reload.
+// Read fresh DB rows on every pass and preserve any user-specified fields.
+const finishingImports=new Set();
+async function finishNewHouseImport(id){
+ if(finishingImports.has(id))return;
+ finishingImports.add(id);
+ try{
+  for(let attempt=0;attempt<3;attempt++){
+   if(attempt)await new Promise(resolve=>setTimeout(resolve,3500*(attempt+1)));
+   const query=await sb.from('properties').select('*').eq('id',id).single();
+   if(query.error||!query.data)break;
+   const p=query.data;
+   const missingPlan=!(p.floorplans||[]).length;
+   const missingGeo=p.latitude==null||p.longitude==null||!p.station_name||!p.station_2_name||p.station_distance_miles==null||p.station_2_distance_miles==null;
+   const missingFacts=p.floors==null||p.floor_area_sqm==null;
+   if(!missingPlan&&!missingGeo&&!missingFacts){report('Import complete: '+p.address+'.');await refresh();return}
+   report('Completing '+p.address+' automatically (pass '+(attempt+1)+'/3)…');
+   if(missingPlan||missingFacts){
+    try{await enrichProperty(p)}catch(e){console.warn('Original listing retry',p.address,e)}
+   }
+   if(missingGeo){
+    try{await enrichWalkingStations(p)}catch(e){console.warn('Station/geocoding retry',p.address,e)}
+   }
+   if((p.floorplans||[]).length&&(p.floor_area_sqm==null||p.floors==null||p.garden_area_sqm==null)){
+    try{await analyzeFloorplan({sb,property:p,photo})}catch(e){console.warn('Plan recognition retry',p.address,e)}
+   }
+   await refresh();
+  }
+  const q=await sb.from('properties').select('address,floorplans,floors,floor_area_sqm,station_name,station_2_name').eq('id',id).single();
+  if(!q.error&&q.data){
+   const p=q.data,missing=[!p.floorplans?.length?'floor plan':null,p.floors==null?'floors':null,p.floor_area_sqm==null?'floor area':null,!p.station_name||!p.station_2_name?'stations':null].filter(Boolean);
+   report(missing.length?'Imported. Fields unavailable after source checks: '+missing.join(', ')+'.':'Import complete: '+p.address+'.',!!missing.length);
+  }
+ }finally{finishingImports.delete(id)}
+}
+async function enrichProperty(p){
+ let data;
+ try{data=await extension('IMPORT_URL',{url:p.url},70000)}
+ catch(e){
+   // Record the failure so its cause remains inspectable without asking for screenshots.
+   const result={source:'original-listing',status:'extension-error',error:String(e.message||e).slice(0,300),attempted_at:new Date().toISOString()};
+   await sb.from('properties').update({import_diagnostics:result}).eq('id',p.id);
+   throw e;
+ }
+ const details={};
+ p._floorplan_import={status:data.floorplan_status||'unknown',tabFound:!!data.floorplan_diagnostic?.tabFound,tabClicked:!!data.floorplan_diagnostic?.tabClicked,found:(data.floorplans||[]).length,archived:0,error:data.floorplan_diagnostic?.error||null};
+ for(const key of ['bedrooms','floor_area_sqm','garden_description']){
+   if(!p.manual_overrides?.[key]&&(p[key]==null||p[key]==='')&&data[key]!=null&&data[key]!=='')details[key]=data[key];
+ }
+ for(const [key,value] of [['bathrooms',listingBathrooms(data)],['floors',listingFloors(data)]]){
+  if(!p.manual_overrides?.[key]&&(p[key]==null||p[key]==='')&&value!=null)details[key]=value;
+ }
+ // Prefer a plan from the ORIGINAL listing if a legacy record only has a secondary-site viewer link.
+ const hasLegacyExternalViewer=(p.floorplans||[]).some(f=>/^https:\/\/www\.onthemarket\.com\//i.test(f.url||'')||/\/(?:otm-\d+-plan|source-archive-floorplan|agent-original-|[\w-]+-original-agent-floorplan)/i.test(f.path||''));
+ if(((!p.floorplans||!p.floorplans.length)||hasLegacyExternalViewer)&&(data.floorplans||[]).length){
+   const checks=[];
+   const plans=await archive(data.floorplans||[],p.id,'source-plan',5,checks);
+   p._floorplan_import.archived=plans.length;
+   p._floorplan_import.checks=checks;
+   if(plans.length)details.floorplans=plans;
+ }
+ const savedFields=Object.keys(details);
+ details.import_diagnostics={
+   source:'original-listing',version:data.extension_version||'unknown',
+   status:p._floorplan_import.status,tab_found:p._floorplan_import.tabFound,
+   tab_clicked:p._floorplan_import.tabClicked,candidates:p._floorplan_import.found,
+   archived:p._floorplan_import.archived,error:p._floorplan_import.error,
+   checks:p._floorplan_import.checks||[],attempted_at:new Date().toISOString()
+ };
+ const r=await sb.from('properties').update(details).eq('id',p.id);
+ if(r.error)throw r.error;
+ Object.assign(p,details);
+ return savedFields;
+}
+async function updateFromListing(){
+ if(!selected)return;
+ const p=selected,button=$('enrich');
+ button.disabled=true;button.textContent='Reading listing…';
+ try{await probeImporter(true);const changed=await enrichProperty(p);const o=await analyzeFloorplan({sb,property:p,photo});if(o.status==='saved')changed.push(...o.fields);const diagnostic=p._floorplan_import;await refresh();if(changed.length){await openHouse(p);alert('Updated listing details: '+changed.join(', '))}else if(!p.floorplans?.length){const explain=diagnostic?.status==='floorplan-tab-not-found'?'Zoopla floor-plan button could not be found.':diagnostic?.status==='tab-opened-but-image-not-found'?'Zoopla floor-plan tab opened, but its image could not be extracted.':diagnostic?.found&&!diagnostic?.archived?'Floor-plan URL found, but the image was not downloaded or failed floor-plan validation.':'The original listing did not provide an accessible floor-plan image.';alert('Floor plan not imported. '+explain+' Extension reported: '+(diagnostic?.status||'unknown')+(diagnostic?.error?' ('+diagnostic.error+')':''))}else alert('No additional verifiable details were found in this listing.')}
+ catch(e){alert('Could not update listing: '+e.message)}
+ finally{button.disabled=false;button.textContent='Update listing data'}
+}
+
+const routeDelay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+const haversine=(a,b)=>{const toRad=x=>x*Math.PI/180;const dLat=toRad(b.lat-a.lat),dLon=toRad(b.lon-a.lon);return 6371000*2*Math.asin(Math.sqrt(Math.sin(dLat/2)**2+Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*Math.sin(dLon/2)**2))};
+async function enrichWalkingStations(p){
+ if(p.station_name&&p.station_distance_miles!=null&&p.station_2_name&&p.station_2_distance_miles!=null)return false;
+ // A listing's map pin may be approximate. When missing, use the street's map centre and show distances as approximate.
+ let lat=Number(p.latitude),lon=Number(p.longitude);
+ if(!Number.isFinite(lat)||!Number.isFinite(lon)||lat<49||lat>61||lon< -9||lon>3||p.latitude==null||p.longitude==null){
+   const query=String(p.address||'').replace(/^\s*\d+\s*bed(?:room)?s?\s+.*?\s+(?:for sale|to rent)\s*/i,'').replace(/\s*[-|]\s*(?:Zoopla|Rightmove).*$/i,'').trim();
+   if(query.length<8)return false;
+   // Nominatim frequently returns no result when a street name is combined with only an outcode (e.g. TW2).
+   // Retry the same street without the incomplete postcode; never substitute a postcode-area centroid.
+   const withoutOutcode=query.replace(/\s+[A-Z]{1,2}\d[A-Z\d]?(?:\s+\d[A-Z]{2})?\s*$/i,'').replace(/,\s*$/,'').trim();
+   const candidates=[query,...(withoutOutcode!==query?[withoutOutcode]:[])];
+   let coordinate=null,lastGeoError=null;
+   for(const candidate of candidates){
+     try{
+       const u='https://nominatim.openstreetmap.org/search?format=json&addressdetails=0&limit=1&countrycodes=gb&q='+encodeURIComponent(candidate+', UK');
+       const response=await fetch(u,{headers:{Accept:'application/json'}});
+       if(!response.ok)throw Error('Map geocoding '+response.status);
+       const addresses=await response.json();
+       if(addresses?.[0]){coordinate=addresses[0];break}
+     }catch(e){lastGeoError=e;console.warn('Geocoding candidate unavailable',candidate,e)}
+     await routeDelay(1200);
+   }
+   if(!coordinate){if(lastGeoError)throw lastGeoError;return false;}
+   lat=Number(coordinate.lat);lon=Number(coordinate.lon);
+   if(!Number.isFinite(lat)||!Number.isFinite(lon)||lat<49||lat>61||lon< -9||lon>3)return false;
+   // Persist the map point *before* querying stations: a routing failure must not discard a successful geocode.
+   const loc=await sb.from('properties').update({latitude:lat,longitude:lon}).eq('id',p.id).select('id').single();
+   if(loc.error)throw loc.error;
+   p.latitude=lat;p.longitude=lon;
+   await refresh();
+   await routeDelay(1100);
+ }
+ // Standard Overpass QL railway tags quoted to avoid interpreting arbitrary user content as a query.
+ const overpass='[out:json][timeout:15];(node(around:4000,'+lat+','+lon+')['+'"railway"="station"'+'];node(around:4000,'+lat+','+lon+')['+'"railway"="halt"'+'];way(around:4000,'+lat+','+lon+')['+'"railway"="station"'+'];);out center tags;';
+ let data=null,lastError=null;
+ for(const endpoint of ['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter']){
+   try{const res=await fetch(endpoint+'?data='+encodeURIComponent(overpass),{headers:{Accept:'application/json'}});if(!res.ok)throw Error('Station lookup HTTP '+res.status);data=await res.json();break}catch(e){lastError=e}
+ }
+ if(!data)throw lastError||Error('Station lookup unavailable');
+ const seen=new Set(),stations=[];
+ for(const s of (data.elements||[])){
+   const name=String(s.tags?.name||'').trim(),slat=Number(s.lat??s.center?.lat),slon=Number(s.lon??s.center?.lon);
+   if(!name||!/^[\p{L}\d .,&'-]{2,80}$/u.test(name)||!Number.isFinite(slat)||!Number.isFinite(slon))continue;
+   if(seen.has(name.toLowerCase()))continue;
+   const distance=haversine({lat,lon},{lat:slat,lon:slon});
+   if(distance>3800)continue;
+   seen.add(name.toLowerCase());stations.push({name,lat:slat,lon:slon,straight:distance});
+ }
+ stations.sort((a,b)=>a.straight-b.straight);
+ const routed=[];
+ for(const s of stations.slice(0,5)){
+   await routeDelay(1100);
+   try{
+     const u='https://routing.openstreetmap.de/routed-foot/route/v1/driving/'+lon+','+lat+';'+s.lon+','+s.lat+'?overview=false';
+     const r=await fetch(u,{headers:{Accept:'application/json'}});if(!r.ok)continue;
+     const d=await r.json(),metres=Number(d.routes?.[0]?.distance);
+     if(Number.isFinite(metres)&&metres>0&&metres<13000)routed.push({name:s.name,miles:Math.round(metres/1609.344*100)/100})
+   }catch(e){console.warn('Walking route unavailable',e)}
+ }
+ routed.sort((a,b)=>a.miles-b.miles);
+ if(!routed.length)return false;
+ const update={};
+ // Never overwrite an existing named station chosen by either user.
+ const selected=new Set();
+ for(const [nameKey,distanceKey] of [['station_name','station_distance_miles'],['station_2_name','station_2_distance_miles']]){
+   if(!p[nameKey])continue;
+   const match=routed.find(x=>x.name.toLowerCase()===String(p[nameKey]).toLowerCase());
+   if(match){selected.add(match.name.toLowerCase());if(p[distanceKey]==null)update[distanceKey]=match.miles}
+ }
+ const available=routed.filter(x=>!selected.has(x.name.toLowerCase())&&![p.station_name,p.station_2_name].some(v=>String(v||'').toLowerCase()===x.name.toLowerCase()));
+ if(!p.station_name&&available[0]){update.station_name=available[0].name;update.station_distance_miles=available[0].miles;selected.add(available[0].name.toLowerCase())}
+ const remaining=available.filter(x=>!selected.has(x.name.toLowerCase()));
+ if(!p.station_2_name&&remaining[0]){update.station_2_name=remaining[0].name;update.station_2_distance_miles=remaining[0].miles}
+ if(!Object.keys(update).length)return false;
+ const r=await sb.from('properties').update(update).eq('id',p.id);
+ if(r.error)throw r.error;
+ Object.assign(p,update);return true;
+}
+
+// Existing catalogue files from other portals are retained until the original
+// Zoopla/Rightmove import supplies a verified replacement. Never lose a valid plan.
+let autoFillRunning=false,legacyRetryTimer=null;
+const usesLegacyPlan=p=>(p.floorplans||[]).some(f=>/\/(?:otm-\d+-plan|agent-original-|[\w-]+-original-agent-floorplan|source-archive-floorplan)/i.test(f.path||'')||/^https:\/\/www\.onthemarket\.com\//i.test(f.url||''));
+async function autoFillMissing(){
+ if(autoFillRunning||!homes.length)return;
+ autoFillRunning=true;
+ try{
+  const pending=homes.filter(p=>!p.floorplans?.length||p.floor_area_sqm==null||p.bathrooms==null||p.floors==null||usesLegacyPlan(p))
+   .sort((a,b)=>Number(!b.floorplans?.length)-Number(!a.floorplans?.length)||Number(/pauls? close/i.test(b.address))-Number(/pauls? close/i.test(a.address)));
+  let checked=0,changedTotal=0;const unresolved=[];
+  for(const p of pending){
+   const key='hh-details-v11-'+p.id;
+   if(sessionStorage.getItem(key)==='attempted')continue;
+   if(checked>=3)break;
+   // Prevent repeated browser tabs for the same listing in one user session.
+   sessionStorage.setItem(key,'attempted');
+   report('Checking the original listing for '+p.address+'…');
+   try{
+    const changed=await enrichProperty(p);
+    changedTotal+=changed.length;
+    if(!p.floorplans?.length)unresolved.push(p.address+': '+(p._floorplan_import?.status||'plan not located'));
+    ++checked;await refresh();
+   }catch(e){++checked;unresolved.push(p.address+': '+String(e.message||e));console.warn('Source import failed',p.url,e)}
+  }
+  if(checked)report('Original listing checks: '+checked+' houses'+(changedTotal?', '+changedTotal+' fields updated':'')+(unresolved.length?'; '+unresolved.join('; '):'')+'.',!!unresolved.length);
+ }finally{
+  autoFillRunning=false;
+  // Continue legacy plan migration autonomously while the catalogue tab is open.
+  const more=homes.some(p=>usesLegacyPlan(p)&&sessionStorage.getItem('hh-details-v11-'+p.id)!=='attempted');
+  if(more&&!legacyRetryTimer)legacyRetryTimer=setTimeout(()=>{legacyRetryTimer=null;void autoFillMissing()},15000);
+ }
+}
+async function fillGeoMissing(){
+ const pending=homes.filter(p=>p.latitude==null||p.longitude==null||!p.station_name||p.station_distance_miles==null||!p.station_2_name||p.station_2_distance_miles==null);
+ let checked=0;
+ for(const p of pending){
+  if(checked>=3)break;
+  const key='hh-geo-v02-'+p.id;
+  if(sessionStorage.getItem(key))continue;
+  sessionStorage.setItem(key,'attempted');
+  ++checked;
+  try { if(await enrichWalkingStations(p))await refresh(); }
+  catch(e){console.warn('Automatic location or station enrichment unavailable for '+p.address,e)}
+ }
+}
+async function fillPlanMeasurements(){
+ const pending=homes.filter(p=>p.floorplans?.length&&(p.floor_area_sqm==null||p.garden_area_sqm==null||p.floors==null));
+ let filled=0;
+ for(const p of pending){
+   try{
+     const outcome=await analyzeFloorplan({sb,property:p,photo});
+     if(outcome.status==='saved'){filled+=outcome.fields.length;await refresh()}
+   }catch(e){console.warn('Floor plan OCR not available for '+p.address,e)}
+ }
+ if(filled)report('Floor plans: added '+filled+' measurements.');
+}
+async function startAutoFill(){
+ if(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)){
+  report('Catalogue works on mobile. Chrome is required only for importing new listings.');
+ }
+ try{await fillGeoMissing()}catch(e){console.warn('Location enrichment unavailable',e)}
+ if(!/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)){
+  try{if(await probeImporter())await autoFillMissing()}catch(e){console.warn('Listing source enrichment unavailable',e)}
+  try{await fillPlanMeasurements()}catch(e){console.warn('Floor plan OCR unavailable',e)}
+ }
+}
+let reorderBusy=false;
+async function reorderHouses(dragId,targetId,step=0,exactPosition=null){
+ if($('sort').value!=='manual'||$('stageFilter').value!=='all'||viewingSelections!==null||$('search').value.trim()){report('To rearrange: select My order, All active and clear Search or Viewing status filters.',true);return}
+ const active=homes.filter(p=>p.status!=='archived'&&p.status!=='deleted').sort((a,b)=>Number(a.sort_order??0)-Number(b.sort_order??0)||(new Date(b.created_at)-new Date(a.created_at)));
+ const source=active.findIndex(p=>p.id===dragId),destination=active.findIndex(p=>p.id===targetId);
+ if(source<0||destination<0||reorderBusy)return;
+ let index=exactPosition==null?(step?source+step:destination):Number(exactPosition)-1;
+ index=Math.max(0,Math.min(active.length-1,index));
+ if(source===index)return;
+ if(!Number.isInteger(index))return;
+ const before=active.map(p=>p.id);
+ const [item]=active.splice(source,1);
+ active.splice(index,0,item);
+ const after=active.map(p=>p.id);
+ reorderBusy=true;
+ try{
+  const result=await sb.rpc('house_hunt_reorder',{house_ids:after});
+  if(result.error)throw result.error;
+  for(let i=0;i<active.length;i++)active[i].sort_order=(i+1)*1000;
+  history.recordOrder(before,after);
+  render();report('House order saved for both users.');
+ }catch(e){report('Could not move house: '+e.message,true);await refresh()}
+ finally{reorderBusy=false;}
+}
+async function refresh(){const r=await sb.from('properties').select('*').order('created_at',{ascending:false});if(r.error){report('Cannot load houses: '+r.error.message,true);return}homes=r.data||[];render();if(selected){const p=homes.find(x=>x.id===selected.id);if(p){selected=p;await loadNotes()}}}
+async function restoreHouse(p){
+ const r=await history.save(p,{status:'',manual_overrides:{...(p.manual_overrides||{}),status:true}});
+ if(r.error){report('Could not restore house: '+r.error.message,true);return}
+ await refresh();report('Restored '+(p.address||'house')+' to active houses.');
+}
+function render(){let rows=homes.filter(p=>(
+ (viewingSelections!==null?viewingSelections.has(p.status||''):($('stageFilter').value==='all'?p.status!=='archived'&&p.status!=='deleted':p.status===$('stageFilter').value))
+ &&(!$('search').value.trim()||((p.address||'')+' '+(p.title||'')).toLowerCase().includes($('search').value.trim().toLowerCase()))
+ ));if($('sort').value==='manual')rows.sort((a,b)=>Number(a.sort_order??0)-Number(b.sort_order??0)||(new Date(b.created_at)-new Date(a.created_at)));if($('sort').value==='price_asc')rows.sort((a,b)=>(a.price??Infinity)-(b.price??Infinity));if($('sort').value==='price_desc')rows.sort((a,b)=>(b.price??0)-(a.price??0));
+const numeric=(v)=>v==null||v===''?null:Number(v);
+const nearest=(p)=>{const ds=[p.station_distance_miles,p.station_2_distance_miles,p.station_3_distance_miles].map(numeric).filter(v=>Number.isFinite(v)&&v>=0);return ds.length?Math.min(...ds):null};
+const sortNumeric=(measure,asc)=>rows.sort((a,b)=>{const av=measure(a),bv=measure(b);if(av==null||!Number.isFinite(av))return bv==null||!Number.isFinite(bv)?0:1;if(bv==null||!Number.isFinite(bv))return -1;return asc?av-bv:bv-av});
+if($('sort').value==='area_desc')sortNumeric(p=>numeric(p.floor_area_sqm),false);
+if($('sort').value==='area_asc')sortNumeric(p=>numeric(p.floor_area_sqm),true);
+if($('sort').value==='station_asc')sortNumeric(nearest,true);
+if($('sort').value==='station_desc')sortNumeric(nearest,false);visibleHomes=rows.slice();const archiveCount=homes.filter(x=>x.status==='archived').length;const archiveOnly=viewingSelections?.size===1&&viewingSelections.has('archived');txt('count',rows.length+' shown · '+homes.length+' total');$('archiveToggle').textContent=$('stageFilter').value==='archived'||archiveOnly?'Back to active':'Archived ('+archiveCount+')';$('empty').hidden=!!rows.length;$('cards').replaceChildren();for(const p of rows){const card=document.createElement('article');card.className='card';card.tabIndex=0;const frame=document.createElement('div');frame.className='photo';frame.textContent='⌂';photo((p.images||[])[0]).then(u=>{if(!u)return;const im=document.createElement('img');im.src=u;im.alt='House';im.onerror=()=>{frame.textContent='Photo unavailable'};frame.replaceChildren(im);frame.onclick=e=>{e.stopPropagation();openPhotoBrowser(p,0)}});const body=document.createElement('div');body.className='cardtext';for(const [cl,value] of [['address',p.address||p.title||'Address unavailable'],['price',fmt(p.price)],['facts',[p.bedrooms?p.bedrooms+' bedrooms':'',p.bathrooms?p.bathrooms+' bathrooms':'',p.source].filter(Boolean).join(' · ')]]){const d=document.createElement('div');d.className=cl;d.textContent=value;body.appendChild(d)}const foot=document.createElement('div');foot.className='cardfoot';const stage=document.createElement('span');stage.className='pill';stage.textContent=labels[p.status]||p.status;const date=document.createElement('span');date.textContent=new Date(p.created_at).toLocaleDateString('en-GB');foot.append(stage,date);body.append(foot);
+ if(p.status==='archived'){
+  const restore=document.createElement('button');
+  restore.type='button';restore.textContent='Restore to active';restore.className='hh-restore-house';
+  restore.onclick=async e=>{e.stopPropagation();restore.disabled=true;try{await restoreHouse(p)}finally{restore.disabled=false}};
+  body.append(restore);
+ }
+ card.append(frame,body);card.onclick=()=>openHouse(p);card.onkeydown=e=>{if(e.key==='Enter')openHouse(p)};$('cards').append(card)}enhancements.render(rows)}
+async function openHouse(p){selected=p;txt('detailTitle',p.address||p.title||'Property');txt('detailFacts',[fmt(p.price),p.bedrooms?p.bedrooms+' bedrooms':'',p.bathrooms?p.bathrooms+' bathrooms':'',p.property_type,p.tenure].filter(Boolean).join(' · '));$('editAddress').value=p.address||'';$('editPrice').value=p.price??'';$('editBeds').value=p.bedrooms??'';$('editBaths').value=p.bathrooms??'';$('editStage').value=p.status||'';$('editViewing').value=p.viewing_at?p.viewing_at.slice(0,16):'';$('original').href=p.url;$('gallery').textContent='Checking photographs…';const uniqueImages=await uniquePhotos(p);if(selected!==p)return;$('gallery').replaceChildren();for(const [i,it] of uniqueImages.entries()){const u=await photo(it);if(!u)continue;const im=document.createElement('img');im.src=u;im.alt='Property photograph '+(i+1);im.tabIndex=0;im.setAttribute('role','button');im.setAttribute('aria-label','Enlarge photograph '+(i+1));im.onclick=()=>openPhotoBrowser(p,i);im.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openPhotoBrowser(p,i)}};$('gallery').append(im)}if(!$('gallery').children.length)txt('gallery','No photos');$('dialog').showModal();await enhancements.open(p);await loadNotes()}
+async function loadNotes(){if(!selected)return;const r=await sb.from('notes').select('*').eq('property_id',selected.id).order('created_at',{ascending:true});if(r.error)return;$('notes').replaceChildren();for(const n of r.data){const d=document.createElement('div');d.className='note';const h=document.createElement('div');h.className='notehead';h.textContent=(people[n.author_id]||'Member')+' · '+new Date(n.created_at).toLocaleString('en-GB');const t=document.createElement('p');t.textContent=n.body;d.append(h,t);$('notes').append(d)}if(!r.data.length)txt('notes','No notes yet.')}
+
+/* Authentication UI. Passwords are processed by Supabase Auth, not saved in the house database. */
+$('togglePassword').onclick=()=>{
+ const input=$('password'),show=input.type==='password';
+ input.type=show?'text':'password';
+ $('togglePassword').textContent=show?'Hide password':'Show password';
+};
+$('forgotPassword').onclick=()=>{
+ $('loginForm').hidden=true;$('recoveryForm').hidden=false;
+ $('recoveryEmail').value=$('email').value;
+ txt('recoveryMessage','');
+};
+$('backToSignIn').onclick=()=>{
+ $('recoveryForm').hidden=true;$('loginForm').hidden=false;
+ txt('loginError','');
+};
+$('recoveryForm').onsubmit=async e=>{
+ e.preventDefault();
+ const button=$('sendRecovery'),email=$('recoveryEmail').value.trim();
+ if(!email)return;
+ button.disabled=true;txt('recoveryMessage','Sending reset email…');
+ try{
+  const r=await sb.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname});
+  if(r.error)throw r.error;
+  txt('recoveryMessage','If the email belongs to a house-hunt account, a password-reset email will be sent. Check your inbox and spam folder.');
+ }catch(e){txt('recoveryMessage','Unable to send reset email: '+e.message)}
+ finally{button.disabled=false}
+};
+function openPasswordDialog(recovery=false){
+ txt('passwordDialogTitle',recovery?'Set a new password':'Change password');
+ txt('passwordError','');
+ $('newPassword').value='';$('confirmPassword').value='';
+ $('newPassword').type='password';$('confirmPassword').type='password';
+ $('showNewPassword').checked=false;
+ if(!$('passwordDialog').open)$('passwordDialog').showModal();
+}
+$('changePassword').onclick=()=>openPasswordDialog(false);
+$('closePasswordDialog').onclick=()=>$('passwordDialog').close();
+$('showNewPassword').onchange=()=>{
+ const type=$('showNewPassword').checked?'text':'password';
+ $('newPassword').type=type;$('confirmPassword').type=type;
+};
+$('passwordForm').onsubmit=async e=>{
+ e.preventDefault();
+ const pass=$('newPassword').value,again=$('confirmPassword').value;
+ if(pass.length<8){txt('passwordError','Use at least 8 characters.');return}
+ if(pass!==again){txt('passwordError','Passwords do not match.');return}
+ const btn=$('submitPassword');btn.disabled=true;txt('passwordError','');
+ try{
+  const r=await sb.auth.updateUser({password:pass});
+  if(r.error)throw r.error;
+  $('passwordDialog').close();
+  txt('passwordError','');
+  alert('Password changed. You can use it to sign in on your other devices.');
+ }catch(err){txt('passwordError',err.message)}
+ finally{btn.disabled=false}
+};
+sb.auth.onAuthStateChange((event)=>{
+ if(event==='PASSWORD_RECOVERY')setTimeout(()=>openPasswordDialog(true),0);
+});
+
+async function show(){const r=await sb.from('members').select('id,display_name');if(r.error){txt('loginError','Unable to check membership: '+r.error.message);return}people=Object.fromEntries(r.data.map(x=>[x.id,x.display_name]));if(!people[user.id]){txt('loginError','This account is not registered as a household member');return}$('login').hidden=true;$('mainApp').hidden=false;$('logout').hidden=false;$('refresh').hidden=false;$('changePassword').hidden=false;txt('who',people[user.id]);await refresh()}
+$('loginForm').onsubmit=async e=>{e.preventDefault();txt('loginError','');const r=await sb.auth.signInWithPassword({email:$('email').value,password:$('password').value});if(r.error){txt('loginError',r.error.message);return}user=r.data.user;await show()};
+$('logout').onclick=async()=>{await sb.auth.signOut();location.reload()};
+$('refresh').onclick=async()=>{await refresh();report('Saved data refreshed from Supabase. No original listings checked.');};
+
+let verifyingAll=false,abortVerification=false;
+async function verifyRoutesFor(p){
+ const r=await sb.functions.invoke('house-hunt-verified-routes',{body:{id:p.id}});
+ if(r.error){
+  let detail=r.data;
+  if(!detail&&r.error.context?.json)try{detail=await r.error.context.json()}catch{}
+  throw Error(detail?.diagnostic?.error||detail?.error||r.error.message||'Google route service unavailable');
+ }
+ if(!r.data?.saved)throw Error(r.data?.error||'No validated journeys saved');
+ return r.data;
+}
+$('verifyHouse').onclick=async()=>{
+ if(!selected)return;
+ const button=$('verifyHouse'),p=selected;button.disabled=true;button.textContent='Checking address and routes…';
+ try{
+  const result=await verifyRoutesFor(p);
+  await refresh();
+  report('Google checked '+p.address+': '+result.verified_destinations+' journeys, '+result.errors.length+' unavailable. No manual corrections changed.',!!result.errors.length);
+ }catch(e){report(p.address+': '+String(e.message||e),true)}
+ finally{button.disabled=false;button.textContent='Verify this house routes'}
+};
+$('verifyRoutes').onclick=async()=>{
+ if(verifyingAll){abortVerification=true;return}
+ const list=homes.slice();
+ if(!list.length)return;
+ if(!confirm('Verify routes for '+list.length+' houses with Google Maps API? Google may charge for geocoding and route requests. Existing manual corrections and addresses will remain unchanged.'))return;
+ verifyingAll=true;abortVerification=false;
+ const button=$('verifyRoutes');button.textContent='Stop verification';
+ let saved=0,failed=0,partly=0,lastError='';
+ try{
+  for(const p of list){
+   if(abortVerification)break;
+   report('Checking address and Google journeys: '+p.address+' ('+(saved+failed+1)+'/'+list.length+')');
+   try{
+    const result=await verifyRoutesFor(p);
+    saved++;
+    if(result.errors?.length)partly++;
+   }catch(e){
+    failed++;lastError=p.address+': '+String(e.message||e);
+    if(/key is not configured|google_api_key_not_configured/i.test(lastError))break;
+   }
+  }
+  await refresh();
+  report('Google route verification: '+saved+' saved ('+partly+' partial), '+failed+' unverified'+(abortVerification?' · stopped':'')+(lastError?' · '+lastError:'')+'.',!!failed);
+ }finally{verifyingAll=false;button.textContent='Verify journeys (Google)'}
+};
+
+$('importForm').onsubmit=async e=>{e.preventDefault();$('importButton').disabled=true;try{await importHouse($('urlInput').value.trim());$('urlInput').value=''}catch(err){report(err.message,true)}finally{$('importButton').disabled=false}};
+for(const id of ['stageFilter','sort','search'])$(id).addEventListener(id==='search'?'input':'change',id==='stageFilter'?()=>{viewingSelections=null;render()}:render);
+$('archiveToggle').onclick=()=>{const inArchive=$('stageFilter').value==='archived'||viewingSelections?.size===1&&viewingSelections.has('archived');viewingSelections=null;$('stageFilter').value=inArchive?'all':'archived';$('search').value='';render();};
+$('close').onclick=()=>$('dialog').close();
+$('save').onclick=async()=>{if(!selected)return;const payload={address:$('editAddress').value.trim(),price:$('editPrice').value?Number($('editPrice').value):null,bedrooms:$('editBeds').value?Number($('editBeds').value):null,bathrooms:$('editBaths').value?Number($('editBaths').value):null,status:$('editStage').value,viewing_at:$('editViewing').value?new Date($('editViewing').value).toISOString():null,...enhancements.edited()};if(payload.status==='deleted'&&!confirm('Move this house to Deleted?'))return;const overrides={...(selected.manual_overrides||{})};for(const [k,v] of Object.entries(payload)){if(String(selected[k]??'')!==String(v??''))overrides[k]=true;}payload.manual_overrides=overrides;const r=await history.save(selected,payload);if(r.error){alert(r.error.message);return}await refresh();$('dialog').close()};
+$('enrich').onclick=updateFromListing;
+$('remove').onclick=async()=>{if(!selected||!confirm('Move this house to Deleted? You can restore it later.'))return;const r=await history.save(selected,{status:'deleted'});if(r.error){alert(r.error.message);return}$('dialog').close();selected=null;await refresh()};
+$('noteForm').onsubmit=async e=>{e.preventDefault();if(!selected)return;const body=$('note').value.trim();if(!body)return;const r=await sb.from('notes').insert({property_id:selected.id,author_id:user.id,body});if(r.error){alert(r.error.message);return}$('note').value='';await loadNotes()};
+window.hhOpenFloorplanUpload=p=>{if(!p?.id)return;selected=p;$('floorPlanFile').click()};
+$('uploadPlan').onclick=()=>{if(selected)$('floorPlanFile').click()};
+$('floorPlanFile').onchange=async()=>{
+ const f=$('floorPlanFile').files?.[0],p=selected;
+ if(!f||!p)return;
+ $('floorPlanFile').value='';
+ const button=$('uploadPlan');button.disabled=true;button.textContent='Reading plan…';
+ try{
+  if(!/^image\/(?:jpeg|png|webp|avif)$/.test(f.type)||f.size<1300||f.size>5000000)throw Error('Choose a JPEG/PNG/WebP image under 5 MB.');
+  const check=await inspectFloorplanImage(f);
+  if(!check.accepted&&!confirm('Automatic recognition is uncertain. Is this the original floor plan for '+p.address+'?'))return;
+  const ext=f.type==='image/png'?'png':f.type==='image/webp'?'webp':f.type==='image/avif'?'avif':'jpg';
+  const path=p.id+'/source-plan-manual-'+crypto.randomUUID().slice(0,12)+'.'+ext;
+  const upload=await sb.storage.from('property-photos').upload(path,f,{contentType:f.type,upsert:false});
+  if(upload.error)throw upload.error;
+  const plans=[{path},...(p.floorplans||[])];
+  const update=await sb.from('properties').update({floorplans:plans,import_diagnostics:{...(p.import_diagnostics||{}),manual_floorplan_saved_at:new Date().toISOString(),manual_floorplan_validation:check}}).eq('id',p.id);
+  if(update.error)throw update.error;
+  p.floorplans=plans;
+  const read=await analyzeFloorplan({sb,property:p,photo});
+  await refresh();
+  await openHouse(homes.find(x=>x.id===p.id)||p);
+  alert('Original floor plan saved'+(read.status==='saved'?' and dimensions updated: '+read.fields.join(', '):'. You can open it in the Floor plan section.') );
+ }catch(e){alert('Unable to save floor plan: '+(e?.message||e))}
+ finally{button.disabled=false;button.textContent='Upload floor plan'}
+};
+const history=createEditHistory({sb,onRestored:async()=>{const wasOpen=$('dialog').open;if(wasOpen)$('dialog').close();await refresh();if(wasOpen&&selected)await openHouse(selected)}});
+const enhancements=setupComparison({sb,history,photo,uniquePhotos,openHouse,openPhotoBrowser,onReorder:reorderHouses,canReorder:()=> viewingSelections===null&&$('sort').value==='manual'&&$('stageFilter').value==='all'&&!$('search').value.trim(),getStatusSelection:selectedViewingStatuses,onStatusFilterChange:applyViewingStatuses,onStatusChange:async()=>{await refresh()},shouldAutoCalculate:()=>false,onRestore:restoreHouse});
+setupExports({getVisible:()=>visibleHomes.slice(),getAll:()=>homes.slice(),photo});
+const session=await sb.auth.getSession();user=session.data.session?.user||null;if(user){await show();}else $('login').hidden=false;
+// No automatic polling: properties are read at sign-in and upon explicit Refresh or a saved edit.
+</script></body></html>
