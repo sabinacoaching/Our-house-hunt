@@ -8,6 +8,17 @@ export function manualJourney(previous,minutes,updatedAt){
 export function setStatusChecks(checks,mode){
  for(const [key,input] of checks)input.checked=mode==='all'||(mode==='active'&&key!=='archived'&&key!=='deleted');
 }
+// Signed storage links expire. Resolve the plan on each click rather than
+// keeping the URL generated when the table was first rendered.
+export async function openFloorPlan(plan,photo,win=window){
+ const tab=win.open('about:blank','_blank');
+ if(tab)try{tab.opener=null}catch{}
+ try{
+  const url=await photo(plan);
+  if(!url)throw Error('Floor plan could not be opened');
+  if(tab)tab.location.replace(url);else win.location.assign(url);
+ }catch(error){if(tab)tab.close();throw error}
+}
 export function setupComparison({sb,history,photo,displayPhoto,uniquePhotos,openHouse,openPhotoBrowser,onReorder,canReorder,onStatusChange,shouldAutoCalculate,onRestore,getStatusSelection,onStatusFilterChange}){
 const stationAccess=setupStationAccess({sb,history,shouldAutoCalculate});
 const $=id=>document.getElementById(id),node=(tag,cls='',content)=>{const x=document.createElement(tag);x.className=cls;if(content!==undefined)x.textContent=content;return x};
@@ -263,8 +274,7 @@ function render(list){
    const planUpload=node('button','hh-inline-plan-upload',(p.floorplans||[]).length?'Add / replace floor plan':'Upload floor plan');planUpload.type='button';planUpload.onclick=()=>window.hhOpenFloorplanUpload?.(p);floorArea.append(planUpload);
   if((p.floorplans||[]).length){
     const plan=node('a','hh-plan-link','Floor plan ↗');plan.href='#';plan.target='_blank';plan.rel='noopener noreferrer';plan.title='Open the original floor plan';
-    photo(p.floorplans[0]).then(u=>{if(u)plan.href=u}).catch(()=>{});
-    plan.addEventListener('click',e=>{if(plan.getAttribute('href')==='#'){e.preventDefault();openHouse(p)}});
+    plan.addEventListener('click',e=>{e.preventDefault();void openFloorPlan(p.floorplans[0],photo).catch(err=>flash(err.message,true))});
     floorArea.append(plan);
   }
   tr.append(cell(floorArea));
