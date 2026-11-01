@@ -18,7 +18,8 @@
   "content_scripts": [
     {
       "matches": [
-        "https://sabinacoaching.github.io/our-house-hunt/*"
+        "https://sabinacoaching.github.io/our-house-hunt/*",
+        "https://sabinacoaching.github.io/Our-house-hunt/*"
       ],
       "js": [
         "bridge.js"

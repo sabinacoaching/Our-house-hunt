@@ -380,7 +380,7 @@ async function fetchImage(url){
  return {base64:btoa(binary),mime};
 }
 chrome.runtime.onMessage.addListener((req,sender,sendResponse)=>{
- if(!sender.url?.startsWith('https://sabinacoaching.github.io/our-house-hunt/'))return false;
+ if(!/^https:\/\/sabinacoaching\.github\.io\/(?:our-house-hunt|Our-house-hunt)\//.test(sender.url||''))return false;
  if(req.action==='PING'){sendResponse({ok:true,data:{extension:'Our House Hunt',version:'0.9.0'}});return false;}
  if(!['IMPORT_URL','FETCH_IMAGE'].includes(req.action))return false;
  (async()=>{try{const data=req.action==='IMPORT_URL'?await extract(req.url):await fetchImage(req.url);sendResponse({ok:true,data})}catch(e){sendResponse({ok:false,error:e.message})}})();
