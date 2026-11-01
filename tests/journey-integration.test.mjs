@@ -4,14 +4,14 @@ import {readFileSync} from 'node:fs';
 import {selectJourney,matchesOrigin,matchesDestination,verifiedLocation,nearLocation} from '../server/house-hunt-journeys/select.js';
 const original=readFileSync(new URL('../server/house-hunt-journeys/index.ts',import.meta.url),'utf8');
 const code=original.replace(/^import .*;\s*$/gm,'').replace(/\)!/g,')').replace(/:(?:unknown|Request|any)\b/g,'');
-function setup({conflict=false,wrongOrigin=false,verified=false,farOrigin=false}={}){
+function setup({conflict=false,wrongOrigin=false,verified=false,farOrigin=false,geoConflict=false}={}){
  const id='00000000-0000-4000-8000-000000000001';
  const manual={minutes:55,manual_override:true};
  let row={id,address:'37 Longford Road, Twickenham',latitude:51.45,longitude:-.2,journey_estimates:{dancelab:manual}},handler,requests=0;
  if(verified)row.import_diagnostics={geocode_verified:{source:'nominatim',address_input:row.address,latitude:51.45,longitude:-.2,house_number:'37',road:'Longford Road'}};
  const urls=[];
  const admin={auth:{getUser:async()=>({data:{user:{id:'member'}}})},from(table){
-  let patch=null;return {select(){return patch?Promise.resolve(conflict?{data:[],error:null}:(row={...row,...patch},{data:[{id}],error:null})):this},eq(){return this},update(x){patch=x;return this},single:async()=>({data:row,error:null}),maybeSingle:async()=>({data:{id:'member'},error:null})};
+  let patch=null,locationChecked=false;return {select(){return patch?Promise.resolve(conflict||(geoConflict&&locationChecked)?{data:[],error:null}:(row={...row,...patch},{data:[{id}],error:null})):this},eq(key){if(key==='latitude')locationChecked=true;return this},update(x){patch=x;return this},single:async()=>({data:row,error:null}),maybeSingle:async()=>({data:{id:'member'},error:null})};
  }};
  const fetch=async url=>{requests++;urls.push(String(url));const u=new URL(url),d=u.searchParams.get('date'),t=u.searchParams.get('time');
   const day=`${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}T${t.slice(0,2)}:${t.slice(2)}:00Z`;
@@ -35,6 +35,10 @@ test('automatically routes from an independently verified building when TfL name
 test('verified coordinates do not allow a journey starting far away',async()=>{
  const a=setup({verified:true,farOrigin:true}),response=await a.run(),data=await response.json();
  assert.equal(data.errors.length,2);assert.deepEqual(Object.keys(a.row().journey_estimates),['dancelab']);
+});
+test('a concurrently changed verified location aborts the route save',async()=>{
+ const a=setup({verified:true,geoConflict:true}),response=await a.run();
+ assert.equal(response.status,409);assert.deepEqual(Object.keys(a.row().journey_estimates),['dancelab']);
 });
 test('concurrent route edits stop the save',async()=>{
  const a=setup({conflict:true}),response=await a.run();assert.equal(response.status,409);assert.deepEqual(Object.keys(a.row().journey_estimates),['dancelab']);
