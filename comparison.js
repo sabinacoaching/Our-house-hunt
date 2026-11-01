@@ -1,4 +1,10 @@
 import {setupStationAccess} from './station-commutes.js?v=19';
+export function manualJourney(previous,minutes,updatedAt){
+ const old=previous||{};
+ const {arrival,departure,arrival_gap_minutes,date,calculated_at,audit_version,calculation_version,...rest}=old;
+ const history=old.manual_override===true?old.previous_automatic_route:previous;
+ return {...rest,minutes,source:'manual',manual_override:true,manual_updated_at:updatedAt,...(history?{previous_automatic_route:history}:{})};
+}
 export function setupComparison({sb,history,photo,uniquePhotos,openHouse,openPhotoBrowser,onReorder,canReorder,onStatusChange,shouldAutoCalculate,onRestore,getStatusSelection,onStatusFilterChange}){
 const stationAccess=setupStationAccess({sb,history,shouldAutoCalculate});
 const $=id=>document.getElementById(id),node=(tag,cls='',content)=>{const x=document.createElement(tag);x.className=cls;if(content!==undefined)x.textContent=content;return x};
@@ -115,7 +121,7 @@ function travelCell(p){
     const commit=async()=>{if(busy)return;busy=true;
      const n=Number(input.value);
      if(input.value.trim()===''||!Number.isFinite(n)||n<0){flash('Invalid journey minutes',true);line.replaceChildren(title,minutes);return}
-     const data={...(p.journey_estimates||{}),[d.id]:{...(p.journey_estimates?.[d.id]||{}),minutes:n,origin:p.latitude+','+p.longitude,calculated_at:new Date().toISOString(),manual_override:true}};
+     const data={...(p.journey_estimates||{}),[d.id]:manualJourney(p.journey_estimates?.[d.id],n,new Date().toISOString())};
      const r=await history.save(p,{journey_estimates:data});
      if(r.error)flash(r.error.message,true);else{minutes.textContent=Math.round(n)+' min';flash('Saved')}
      line.replaceChildren(title,minutes);
