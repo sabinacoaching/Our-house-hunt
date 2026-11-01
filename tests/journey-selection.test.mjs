@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {selectJourney} from '../server/house-hunt-journeys/select.js';
+import {selectJourney,matchesOrigin,matchesDestination} from '../server/house-hunt-journeys/select.js';
 const target=Date.parse('2026-11-03T18:40:00Z');
 const j=(start,end,duration)=>({startDateTime:'2026-11-03T'+start+':00Z',arrivalDateTime:'2026-11-03T'+end+':00Z',duration,legs:[{mode:{id:'national-rail'}}]});
 test('shortest journey within five minutes wins',()=>{
@@ -20,4 +20,15 @@ test('real TfL response uses the journey within the arrival window',()=>{
  const trips=[j('17:45','18:28',43),j('17:50','18:34',44),j('17:53','18:36',43)];
  for(const x of trips){x.startDateTime=x.startDateTime.replace('Z','');x.arrivalDateTime=x.arrivalDateTime.replace('Z','')}
  assert.equal(selectJourney(trips,target),trips[2]);
+});
+test('London summer time is applied when a route has an explicit UTC offset',()=>{
+ const j={startDateTime:'2026-07-07T16:40:00Z',arrivalDateTime:'2026-07-07T17:38:00Z',duration:58,legs:[{mode:{id:'tube'}}]};
+ assert.equal(selectJourney([j],Date.parse('2026-07-07T18:40:00Z')),j);
+});
+test('route endpoints must match the numbered house and requested destination',()=>{
+ assert.equal(matchesOrigin('110 Dunston Road, Battersea',{commonName:'44 DUNSTON ROAD, London'}),false);
+ assert.equal(matchesOrigin('110 Dunston Road, Battersea',{commonName:'110 DUNSTON ROAD, London'}),true);
+ assert.equal(matchesOrigin('Dunston Road, Battersea',{commonName:'110 DUNSTON ROAD, London'}),false);
+ assert.equal(matchesDestination('dancelab',{commonName:'63 UPPER RICHMOND ROAD, Wandsworth'}),true);
+ assert.equal(matchesDestination('dancelab',{commonName:'64 UPPER RICHMOND ROAD, Wandsworth'}),false);
 });
