@@ -5,11 +5,14 @@ export function manualJourney(previous,minutes,updatedAt){
  const history=old.manual_override===true?old.previous_automatic_route:previous;
  return {...rest,minutes,source:'manual',manual_override:true,manual_updated_at:updatedAt,...(history?{previous_automatic_route:history}:{})};
 }
+export function setStatusChecks(checks,mode){
+ for(const [key,input] of checks)input.checked=mode==='all'||(mode==='active'&&key!=='archived'&&key!=='deleted');
+}
 export function setupComparison({sb,history,photo,displayPhoto,uniquePhotos,openHouse,openPhotoBrowser,onReorder,canReorder,onStatusChange,shouldAutoCalculate,onRestore,getStatusSelection,onStatusFilterChange}){
 const stationAccess=setupStationAccess({sb,history,shouldAutoCalculate});
 const $=id=>document.getElementById(id),node=(tag,cls='',content)=>{const x=document.createElement(tag);x.className=cls;if(content!==undefined)x.textContent=content;return x};
 const statuses={'':'—',interested:'Interested',viewing_booked:'Viewing booked',viewed:'Viewed',shortlisted:'Shortlisted',rejected:'Rejected',under_offer_sold:'Under offer / Sold',archived:'Archive (hide)',deleted:'Delete (move to trash)'};
-const labels=['House','Price','Bedrooms','Bathrooms / WC','Floors','Total floor area','Garden','Nearest station','Journey times','Sabina comments','David comments','Viewing status','Viewing date'];
+const labels=['House','Price','Bedrooms','Bathrooms / WC','Floors','Total floor area','Garden','Nearest station','Journey times','Sabina comments','David comments','Viewing status','Viewing date','Agency / email'];
 const extras=[['title','Listing title','text'],['url','Original listing URL','text'],['property_type','Property type','text'],['tenure','Tenure','text'],['latitude','Latitude','number'],['longitude','Longitude','number'],['wc_count','Separate WC','number'],['floors','Floors','number'],['floor_area_sqm','Floor area (m²)','number'],['garden_area_sqm','Garden area (m²)','number'],['garden_description','Garden description','textarea'],['station_name','Nearest station 1','text'],['station_distance_miles','Walking distance 1 (miles)','number'],['station_2_name','Nearest station 2','text'],['station_2_distance_miles','Walking distance 2 (miles)','number'],['station_3_name','Nearest station 3','text'],['station_3_distance_miles','Walking distance 3 (miles)','number'],['comment_sabina','Sabina comments','textarea'],['comment_david','David comments','textarea']];
 const nums=new Set(['latitude','longitude','bedrooms','bathrooms','wc_count','floors','floor_area_sqm','garden_area_sqm','station_distance_miles','station_2_distance_miles','station_3_distance_miles']);
 const money=p=>p==null?'—':new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP',maximumFractionDigits:0}).format(p);
@@ -166,11 +169,12 @@ function render(list){
     options.append(option);checks.set(status,input);
    }
    const quick=node('div','hh-status-filter-quick');
-   const active=node('button','','All active'),all=node('button','','All statuses');
-   active.type=all.type='button';
-   active.onclick=()=>{for(const [key,input] of checks)input.checked=key!=='archived'&&key!=='deleted'};
-   all.onclick=()=>{for(const input of checks.values())input.checked=true};
-   quick.append(active,all);
+   const active=node('button','','All active'),all=node('button','','All statuses'),none=node('button','','Clear all');
+   active.type=all.type=none.type='button';
+   active.onclick=()=>setStatusChecks(checks,'active');
+   all.onclick=()=>setStatusChecks(checks,'all');
+   none.onclick=()=>setStatusChecks(checks,'none');
+   quick.append(active,all,none);
    const actions=node('div','hh-status-filter-actions');
    const cancel=node('button','','Cancel'),apply=node('button','','Apply');
    cancel.type=apply.type='button';
@@ -300,6 +304,9 @@ function render(list){
   tr.append(cell(editor(p,'comment_david','textarea')));
   tr.append(cell(editor(p,'status','select')));
   const view=node('input');view.type='datetime-local';view.value=p.viewing_at?p.viewing_at.slice(0,16):'';view.setAttribute('aria-label','Viewing date '+(p.address||p.title));view.onchange=async()=>{const v=view.value?new Date(view.value).toISOString():null;const r=await history.save(p,{viewing_at:v,manual_overrides:{...(p.manual_overrides||{}),viewing_at:true}});if(r.error)flash(r.error.message,true);else flash('Saved')};tr.append(cell(view));
+  const agency=node('div','hh-stack');
+  agency.append(labelledEditor(p,'Agency','agency_name'),labelledEditor(p,'Email','agency_email'));
+  tr.append(cell(agency));
   if(tr.cells.length!==labels.length)throw Error('Comparison column count mismatch');
   body.append(tr);
   }catch(e){

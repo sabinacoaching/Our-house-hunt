@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {selectJourney,matchesOrigin,matchesDestination,verifiedLocation,nearLocation} from '../server/house-hunt-journeys/select.js';
 const original=readFileSync(new URL('../server/house-hunt-journeys/index.ts',import.meta.url),'utf8');
 const code=original.replace(/^import .*;\s*$/gm,'').replace(/\)!/g,')').replace(/:(?:unknown|Request|any)\b/g,'');
-function setup({conflict=false,wrongOrigin=false,verified=false,farOrigin=false,geoConflict=false}={}){
+function setup({conflict=false,wrongOrigin=false,verified=false,farOrigin=false,geoConflict=false,failOne=false}={}){
  const id='00000000-0000-4000-8000-000000000001';
  const manual={minutes:55,manual_override:true};
  let row={id,address:'37 Longford Road, Twickenham',latitude:51.45,longitude:-.2,journey_estimates:{dancelab:manual}},handler,requests=0;
@@ -13,7 +13,7 @@ function setup({conflict=false,wrongOrigin=false,verified=false,farOrigin=false,
  const admin={auth:{getUser:async()=>({data:{user:{id:'member'}}})},from(table){
   let patch=null,locationChecked=false;return {select(){return patch?Promise.resolve(conflict||(geoConflict&&locationChecked)?{data:[],error:null}:(row={...row,...patch},{data:[{id}],error:null})):this},eq(key){if(key==='latitude')locationChecked=true;return this},update(x){patch=x;return this},single:async()=>({data:row,error:null}),maybeSingle:async()=>({data:{id:'member'},error:null})};
  }};
- const fetch=async url=>{requests++;urls.push(String(url));const u=new URL(url),d=u.searchParams.get('date'),t=u.searchParams.get('time');
+ const fetch=async url=>{requests++;urls.push(String(url));if(failOne&&requests===1)throw Error('TfL temporarily unavailable');const u=new URL(url),d=u.searchParams.get('date'),t=u.searchParams.get('time');
   const day=`${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}T${t.slice(0,2)}:${t.slice(2)}:00Z`;
   const arrival=new Date(Date.parse(day)-4*60000),departure=new Date(arrival.getTime()-50*60000);
   const destination=u.pathname.includes('910GWATRLMN')?'London Waterloo Rail Station':'21 PICCADILLY, Westminster (London)';
@@ -23,9 +23,16 @@ function setup({conflict=false,wrongOrigin=false,verified=false,farOrigin=false,
  return {run:()=>handler(new Request('https://example.com',{method:'POST',headers:{authorization:'Bearer test','content-type':'application/json'},body:JSON.stringify({id})})),row:()=>row,requests:()=>requests,manual,urls};
 }
 test('route endpoint saves new results and preserves a manual correction',async()=>{
- const a=setup(),response=await a.run();assert.equal(response.status,200);assert.equal(a.requests(),6);
+ const a=setup(),response=await a.run();assert.equal(response.status,200);assert.equal(a.requests(),18);
+ assert.ok(a.urls.some(url=>new URL(url).searchParams.get('time')==='0750'));
  assert.deepEqual(a.row().journey_estimates.dancelab,a.manual);
  assert.equal(a.row().journey_estimates.waterloo.minutes,50);assert.equal(a.row().journey_estimates.dilly.minutes,50);
+});
+test('does not save a journey when one of its alternative requests fails',async()=>{
+ const a=setup({failOne:true}),response=await a.run(),data=await response.json();
+ assert.equal(data.errors.length,1);
+ assert.equal(a.row().journey_estimates[data.errors[0].id],undefined);
+ assert.deepEqual(a.row().journey_estimates.dancelab,a.manual);
 });
 test('automatically routes from an independently verified building when TfL names a different nearby point',async()=>{
  const a=setup({verified:true,wrongOrigin:true}),response=await a.run();assert.equal(response.status,200);

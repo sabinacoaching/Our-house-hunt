@@ -33,12 +33,20 @@ Deno.serve(async(req:Request)=>{
   if(previous[d.id]?.manual_override===true)return {id:d.id,manual:true};
   if(previous[d.id]?.origin_input===address&&previous[d.id]?.calculation_version==='arrival-window-v4'&&Number.isFinite(Number(previous[d.id]?.minutes)))return {id:d.id,cached:true};
   try{
-   const payloads=await Promise.all(["leasttime","leastwalking","leastinterchange"].map(async preference=>{
-    const url="https://api.tfl.gov.uk/Journey/JourneyResults/"+encodeURIComponent(queryAddress)+"/to/"+encodeURIComponent(d.destination)+"?"+new URLSearchParams({date,time:d.arrival,timeIs:"arriving",journeyPreference:preference,alternative:"true"});
+   // TfL returns a small set of journeys for each request. Ask for several
+   // nearby arrival deadlines as well as route preferences; a single response
+   // can omit a journey in the requested five-minute window.
+   const minutes=Number(d.arrival.slice(0,2))*60+Number(d.arrival.slice(2));
+   const times=[0,5,10].map(offset=>String(Math.floor((minutes+offset)/60)).padStart(2,'0')+String((minutes+offset)%60).padStart(2,'0'));
+   const queries=times.flatMap(time=>["leasttime","leastwalking","leastinterchange"].map(preference=>({time,preference})));
+   const settled=await Promise.allSettled(queries.map(async ({time,preference})=>{
+    const url="https://api.tfl.gov.uk/Journey/JourneyResults/"+encodeURIComponent(queryAddress)+"/to/"+encodeURIComponent(d.destination)+"?"+new URLSearchParams({date,time,timeIs:"arriving",journeyPreference:preference,alternative:"true"});
     const res=await fetch(url,{headers:{"Accept":"application/json"},signal:AbortSignal.timeout(20000)});
     if(!res.ok)throw Error("TfL HTTP "+res.status);
     return await res.json();
    }));
+   const payloads=settled.flatMap(x=>x.status==='fulfilled'?[x.value]:[]);
+   if(payloads.length!==queries.length)throw Error('TfL did not return all requested journey alternatives');
    const journeys=payloads.flatMap(payload=>payload.journeys||[]).filter((j:any)=>{
     const legs=j.legs||[],first=legs[0]?.departurePoint,last=legs[legs.length-1]?.arrivalPoint;
     const lat=Number(first?.lat),lon=Number(first?.lon);
