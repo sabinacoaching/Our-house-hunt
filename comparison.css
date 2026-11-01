@@ -7,7 +7,7 @@
 .hh-table th{white-space:normal;text-align:left;background:#eff3ef;color:#405f50;font-size:12px;font-weight:750;padding:11px 10px;border-bottom:1px solid #d3dfd6;position:sticky;top:0;z-index:3;vertical-align:middle}
 .hh-table td{padding:11px 10px;border-bottom:1px solid #e8eee9;vertical-align:top;min-width:80px}
 .hh-table tr:hover td{background:#f8faf7}
-.hh-table th:first-child,.hh-table td:first-child{position:sticky;left:0;z-index:2;background:#fff;min-width:300px;max-width:340px;width:320px;box-shadow:3px 0 8px #21382c10}
+.hh-table th:first-child,.hh-table td:first-child{position:sticky;left:0;z-index:2;background:#fff;min-width:300px;max-width:340px;width:320px;border-right:1px solid #e8eee9}
 .hh-table th:first-child{background:#eff3ef;z-index:4}
 .hh-table th:nth-child(2){min-width:112px}
 .hh-table th:nth-child(3){min-width:85px}

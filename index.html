@@ -34,7 +34,7 @@ dialog.hh-photo-viewer[open]{display:flex;flex-direction:column}
 .gallery img{cursor:zoom-in}
 @media(max-width:600px){.hh-photo-stage{gap:3px;padding:4px}.hh-photo-stage img{max-width:calc(100% - 78px)}.hh-photo-viewer .hh-photo-prev,.hh-photo-viewer .hh-photo-next{flex-basis:36px;min-width:36px;padding:5px}}
 </style>
-<link rel="stylesheet" href="./comparison.css?v=22">
+<link rel="stylesheet" href="./comparison.css?v=23">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css'">
 </head><body>
 <header class="top"><div class="brand">⌂ &nbsp;<span>Our House Hunt</span></div><div class="topright"><strong id="who"></strong><span id="hhVersion" title="Current House Hunt site version" style="font-size:11px;color:#72817f">v52</span><button id="refresh" class="secondary" hidden>Refresh</button><button id="changePassword" class="secondary" hidden>Change password</button><button id="logout" class="secondary" hidden>Sign out</button></div></header>
@@ -82,9 +82,9 @@ dialog.hh-photo-viewer[open]{display:flex;flex-direction:column}
 </dialog>
 <script type="module">
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.49.8';
-import {setupComparison} from './comparison.js?v=53';
+import {setupComparison} from './comparison.js?v=54';
 import {setupExports} from './export-tools.js?v=2';
-import {createUniquePhotoStore,photoDigest} from './photo-dedup.js?v=3';
+import {createUniquePhotoStore,photoDigest} from './photo-dedup.js?v=4';
 import {canonicalListing,importChanges,validateGeocode} from './import-utils.js?v=2';
 import {reconcileOne,mediaRevision} from './reconcile-media.js?v=1';
 import {createEditHistory} from './edit-history.js?v=2';
@@ -109,19 +109,28 @@ function applyViewingStatuses(statuses){
 }
 const pendingJourneyImportIds=new Set();
 const photoCache=new Map();
-const {unique:uniquePhotos}=createUniquePhotoStore(photo);
+const photoPending=new Map();let photoMetadataRequest=null;
+async function photoMetadata(){
+ if(!photoMetadataRequest)photoMetadataRequest=sb.rpc('house_hunt_photo_fingerprints').then(({data,error})=>{
+  if(error)throw error;return new Map((data||[]).map(x=>[x.path,x.fingerprint]));
+ }).catch(e=>{console.warn('Photo metadata unavailable',e);return new Map()});
+ return photoMetadataRequest;
+}
+const {unique:uniquePhotos}=createUniquePhotoStore(photo,photoMetadata);
 let activePhotoProperty=null,activePhotoIndex=0,photoRequest=0;
 async function openPhotoBrowser(p,index=0){
  const request=++photoRequest;
- const images=await uniquePhotos(p);if(request!==photoRequest||!images.length)return;
  const viewer=$('photoDialog');
  activePhotoProperty=p;
- activePhotoIndex=((index%images.length)+images.length)%images.length;
  $('photoTitle').textContent=p.address||'House photographs';
- $('photoCount').textContent=(activePhotoIndex+1)+' / '+images.length;
- $('photoFull').removeAttribute('src');
- $('photoFull').alt='Photograph '+(activePhotoIndex+1)+' of '+images.length+' for '+(p.address||'house');
+ $('photoCount').textContent='';
+ $('photoFull').removeAttribute('src');$('photoFull').alt='Loading photographs';
  if(!viewer.open)viewer.showModal();
+ const images=await uniquePhotos(p);if(request!==photoRequest||!viewer.open)return;
+ if(!images.length){$('photoFull').alt='Photograph is unavailable';return}
+ activePhotoIndex=((index%images.length)+images.length)%images.length;
+ $('photoCount').textContent=(activePhotoIndex+1)+' / '+images.length;
+ $('photoFull').alt='Photograph '+(activePhotoIndex+1)+' of '+images.length+' for '+(p.address||'house');
  try{
   const url=await photo(images[activePhotoIndex]);
   if(request!==photoRequest||!viewer.open)return;
@@ -143,7 +152,13 @@ const fmt=n=>n==null?'Price unavailable':new Intl.NumberFormat('en-GB',{style:'c
 const txt=(id,s)=>$(id).textContent=s;
 function report(s,error=false){txt('importMessage',s);$('importMessage').className=error?'error status':'hint status'}
 function listing(u){return canonicalListing(u)}
-async function photo(o){if(!o)return '';if(o.url)return o.url;const k=o.path;if(!k)return '';const hit=photoCache.get(k);if(hit&&hit.exp>Date.now())return hit.url;const r=await sb.storage.from('property-photos').createSignedUrl(k,3600);if(r.error)return '';photoCache.set(k,{url:r.data.signedUrl,exp:Date.now()+3000000});return r.data.signedUrl}
+async function photo(o){if(!o)return '';if(o.url)return o.url;const k=o.path;if(!k)return '';const hit=photoCache.get(k);if(hit&&hit.exp>Date.now())return hit.url;if(photoPending.has(k))return photoPending.get(k);const promise=(async()=>{const r=await sb.storage.from('property-photos').createSignedUrl(k,3600);if(r.error)return '';photoCache.set(k,{url:r.data.signedUrl,exp:Date.now()+3000000});return r.data.signedUrl})();photoPending.set(k,promise);try{return await promise}finally{photoPending.delete(k)}}
+const lazyPhotos=typeof IntersectionObserver==='function'?new IntersectionObserver(entries=>{for(const e of entries)if(e.isIntersecting){lazyPhotos.unobserve(e.target);const load=e.target._loadHousePhoto;delete e.target._loadHousePhoto;if(load)void load()}},{rootMargin:'300px'}):null;
+function displayPhoto(img,item){
+ img.loading='lazy';img.decoding='async';
+ const load=async()=>{try{const url=await photo(item);if(url)img.src=url;else img.classList.add('hh-photo-missing')}catch(e){img.classList.add('hh-photo-missing')}};
+ if(lazyPhotos){img._loadHousePhoto=load;lazyPhotos.observe(img)}else void load();
+}
 function extension(action,args,ms=60000){return new Promise((resolve,reject)=>{const id=crypto.randomUUID();const handler=e=>{if(e.source!==window||e.origin!==location.origin||e.data?.source!=='our-house-hunt-extension'||e.data.id!==id)return;clearTimeout(timer);window.removeEventListener('message',handler);e.data.ok?resolve(e.data.data):reject(Error(e.data.error||'Chrome extension error'))};const timer=setTimeout(()=>{window.removeEventListener('message',handler);reject(Error('Chrome importer is not installed or did not answer.'))},ms);window.addEventListener('message',handler);window.postMessage(Object.assign({source:'our-house-hunt-site',id,action},args),location.origin)})}
 async function probeImporter(required=false){
 try{const r=await extension('PING',{},3500);if(!r?.extension)throw Error('Unexpected extension reply');
@@ -197,7 +212,7 @@ async function archive(urls,id,prefix='photo',limit=Infinity,checks=[],sourcePla
    if(stored.error||!stored.data)throw stored.error||Error('Stored image could not be read');
    if(hash&&await photoDigest(stored.data)!==hash)throw Error('Stored image does not match the source');
    if(hash)hashes.push(hash);
-   saved.push({path});index++;
+   saved.push(hash?{path,sha256:hash}:{path});index++;
    if(trace){trace.status='saved';trace.path=path;checks.push(trace)}
   }catch(e){
    if(trace){trace.status='download-or-storage-error';trace.error=String(e?.message||e).slice(0,300);checks.push(trace)}
@@ -230,8 +245,7 @@ async function importHouse(raw){
  if(check.error)throw check.error;
  if(check.data){
   if(check.data.status==='deleted')throw Error('House is in Deleted. Restore it from the Deleted filter rather than importing a duplicate.');
-  const changed=await enrichProperty(check.data);await refresh();
-  report(changed.length?'Existing house updated: '+changed.join(', '):'Existing house already present; user edits were preserved.');
+  report('This house is already in the catalogue.');
   return;
  }
  report('Reading listing and photographs…');
@@ -586,7 +600,7 @@ const sortNumeric=(measure,asc)=>rows.sort((a,b)=>{const av=measure(a),bv=measur
 if($('sort').value==='area_desc')sortNumeric(p=>numeric(p.floor_area_sqm),false);
 if($('sort').value==='area_asc')sortNumeric(p=>numeric(p.floor_area_sqm),true);
 if($('sort').value==='station_asc')sortNumeric(nearest,true);
-if($('sort').value==='station_desc')sortNumeric(nearest,false);visibleHomes=rows.slice();const archiveCount=homes.filter(x=>x.status==='archived').length;const archiveOnly=viewingSelections?.size===1&&viewingSelections.has('archived');txt('count',rows.length+' shown · '+homes.length+' total');$('archiveToggle').textContent=$('stageFilter').value==='archived'||archiveOnly?'Back to active':'Archived ('+archiveCount+')';$('empty').hidden=!!rows.length;$('cards').replaceChildren();for(const p of rows){const card=document.createElement('article');card.className='card';card.tabIndex=0;const frame=document.createElement('div');frame.className='photo';frame.textContent='⌂';photo((p.images||[])[0]).then(u=>{if(!u)return;const im=document.createElement('img');im.src=u;im.alt='House';im.onerror=()=>{frame.textContent='Photo unavailable'};frame.replaceChildren(im);frame.onclick=e=>{e.stopPropagation();openPhotoBrowser(p,0)}});const body=document.createElement('div');body.className='cardtext';for(const [cl,value] of [['address',p.address||p.title||'Address unavailable'],['price',fmt(p.price)],['facts',[p.bedrooms?p.bedrooms+' bedrooms':'',p.bathrooms?p.bathrooms+' bathrooms':'',p.source].filter(Boolean).join(' · ')]]){const d=document.createElement('div');d.className=cl;d.textContent=value;body.appendChild(d)}const foot=document.createElement('div');foot.className='cardfoot';const stage=document.createElement('span');stage.className='pill';stage.textContent=labels[p.status]||p.status;const date=document.createElement('span');date.textContent=new Date(p.created_at).toLocaleDateString('en-GB');foot.append(stage,date);body.append(foot);
+if($('sort').value==='station_desc')sortNumeric(nearest,false);visibleHomes=rows.slice();const archiveCount=homes.filter(x=>x.status==='archived').length;const archiveOnly=viewingSelections?.size===1&&viewingSelections.has('archived');txt('count',rows.length+' shown · '+homes.length+' total');$('archiveToggle').textContent=$('stageFilter').value==='archived'||archiveOnly?'Back to active':'Archived ('+archiveCount+')';$('empty').hidden=!!rows.length;$('cards').replaceChildren();for(const p of rows){const card=document.createElement('article');card.className='card';card.tabIndex=0;const frame=document.createElement('div');frame.className='photo';frame.textContent='⌂';if((p.images||[])[0]){const im=document.createElement('img');im.alt='House';im.onerror=()=>{frame.textContent='Photo unavailable'};frame.replaceChildren(im);displayPhoto(im,p.images[0]);frame.onclick=e=>{e.stopPropagation();openPhotoBrowser(p,0)}}const body=document.createElement('div');body.className='cardtext';for(const [cl,value] of [['address',p.address||p.title||'Address unavailable'],['price',fmt(p.price)],['facts',[p.bedrooms?p.bedrooms+' bedrooms':'',p.bathrooms?p.bathrooms+' bathrooms':'',p.source].filter(Boolean).join(' · ')]]){const d=document.createElement('div');d.className=cl;d.textContent=value;body.appendChild(d)}const foot=document.createElement('div');foot.className='cardfoot';const stage=document.createElement('span');stage.className='pill';stage.textContent=labels[p.status]||p.status;const date=document.createElement('span');date.textContent=new Date(p.created_at).toLocaleDateString('en-GB');foot.append(stage,date);body.append(foot);
  if(p.status==='archived'){
   const restore=document.createElement('button');
   restore.type='button';restore.textContent='Restore to active';restore.className='hh-restore-house';
@@ -594,7 +608,19 @@ if($('sort').value==='station_desc')sortNumeric(nearest,false);visibleHomes=rows
   body.append(restore);
  }
  card.append(frame,body);card.onclick=()=>openHouse(p);card.onkeydown=e=>{if(e.key==='Enter')openHouse(p)};$('cards').append(card)}enhancements.render(rows)}
-async function openHouse(p){selected=p;txt('detailTitle',p.address||p.title||'Property');txt('detailFacts',[fmt(p.price),p.bedrooms?p.bedrooms+' bedrooms':'',p.bathrooms?p.bathrooms+' bathrooms':'',p.property_type,p.tenure].filter(Boolean).join(' · '));$('editAddress').value=p.address||'';$('editPrice').value=p.price??'';$('editBeds').value=p.bedrooms??'';$('editBaths').value=p.bathrooms??'';$('editStage').value=p.status||'';$('editViewing').value=p.viewing_at?p.viewing_at.slice(0,16):'';$('original').href=p.url;$('gallery').textContent='Checking photographs…';const uniqueImages=await uniquePhotos(p);if(selected!==p)return;$('gallery').replaceChildren();for(const [i,it] of uniqueImages.entries()){const u=await photo(it);if(!u)continue;const im=document.createElement('img');im.src=u;im.alt='Property photograph '+(i+1);im.tabIndex=0;im.setAttribute('role','button');im.setAttribute('aria-label','Enlarge photograph '+(i+1));im.onclick=()=>openPhotoBrowser(p,i);im.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openPhotoBrowser(p,i)}};$('gallery').append(im)}if(!$('gallery').children.length)txt('gallery','No photos');$('dialog').showModal();await enhancements.open(p);await loadNotes()}
+async function openHouse(p){
+ selected=p;txt('detailTitle',p.address||p.title||'Property');txt('detailFacts',[fmt(p.price),p.bedrooms?p.bedrooms+' bedrooms':'',p.bathrooms?p.bathrooms+' bathrooms':'',p.property_type,p.tenure].filter(Boolean).join(' · '));
+ $('editAddress').value=p.address||'';$('editPrice').value=p.price??'';$('editBeds').value=p.bedrooms??'';$('editBaths').value=p.bathrooms??'';$('editStage').value=p.status||'';$('editViewing').value=p.viewing_at?p.viewing_at.slice(0,16):'';$('original').href=p.url;
+ $('gallery').textContent='Loading photographs…';if(!$('dialog').open)$('dialog').showModal();
+ const uniqueImages=await uniquePhotos(p);if(selected!==p)return;
+ $('gallery').replaceChildren();
+ for(const [i,it] of uniqueImages.entries()){
+  const im=document.createElement('img');im.alt='Property photograph '+(i+1);im.tabIndex=0;im.setAttribute('role','button');im.setAttribute('aria-label','Enlarge photograph '+(i+1));im.onclick=()=>openPhotoBrowser(p,i);im.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openPhotoBrowser(p,i)}};
+  $('gallery').append(im);displayPhoto(im,it);
+ }
+ if(!$('gallery').children.length)txt('gallery','No photos');
+ await enhancements.open(p);await loadNotes();
+}
 async function loadNotes(){if(!selected)return;const r=await sb.from('notes').select('*').eq('property_id',selected.id).order('created_at',{ascending:true});if(r.error)return;$('notes').replaceChildren();for(const n of r.data){const d=document.createElement('div');d.className='note';const h=document.createElement('div');h.className='notehead';h.textContent=(people[n.author_id]||'Member')+' · '+new Date(n.created_at).toLocaleString('en-GB');const t=document.createElement('p');t.textContent=n.body;d.append(h,t);$('notes').append(d)}if(!r.data.length)txt('notes','No notes yet.')}
 
 /* Authentication UI. Passwords are processed by Supabase Auth, not saved in the house database. */
@@ -679,7 +705,7 @@ async function repairExistingMedia(){
  }finally{mediaRepairRunning=false}
 }
 async function resumePendingRoutes(){for(const p of homes.filter(x=>x.import_diagnostics?.route_pending===true)){if(!user)break;pendingJourneyImportIds.add(p.id);await finishNewHouseImport(p.id)}}
-async function show(){const r=await sb.from('members').select('id,display_name');if(r.error){txt('loginError','Unable to check membership: '+r.error.message);return}people=Object.fromEntries(r.data.map(x=>[x.id,x.display_name]));if(!people[user.id]){txt('loginError','This account is not registered as a household member');return}$('login').hidden=true;$('mainApp').hidden=false;$('logout').hidden=false;$('refresh').hidden=false;$('changePassword').hidden=false;txt('who',people[user.id]);await refresh();void repairExistingMedia();void resumePendingRoutes()}
+async function show(){const r=await sb.from('members').select('id,display_name');if(r.error){txt('loginError','Unable to check membership: '+r.error.message);return}people=Object.fromEntries(r.data.map(x=>[x.id,x.display_name]));if(!people[user.id]){txt('loginError','This account is not registered as a household member');return}$('login').hidden=true;$('mainApp').hidden=false;$('logout').hidden=false;$('refresh').hidden=false;$('changePassword').hidden=false;txt('who',people[user.id]);await refresh()}
 $('loginForm').onsubmit=async e=>{e.preventDefault();txt('loginError','');const r=await sb.auth.signInWithPassword({email:$('email').value,password:$('password').value});if(r.error){txt('loginError',r.error.message);return}user=r.data.user;await show()};
 $('logout').onclick=async()=>{await sb.auth.signOut();location.reload()};
 $('refresh').onclick=async()=>{await refresh();report('Saved data refreshed from Supabase. No original listings checked.');};
@@ -688,7 +714,7 @@ $('importForm').onsubmit=async e=>{e.preventDefault();$('importButton').disabled
 for(const id of ['stageFilter','sort','search'])$(id).addEventListener(id==='search'?'input':'change',id==='stageFilter'?()=>{viewingSelections=null;render()}:render);
 $('archiveToggle').onclick=()=>{const inArchive=$('stageFilter').value==='archived'||viewingSelections?.size===1&&viewingSelections.has('archived');viewingSelections=null;$('stageFilter').value=inArchive?'all':'archived';$('search').value='';render();};
 $('close').onclick=()=>$('dialog').close();
-$('save').onclick=async()=>{if(!selected)return;const payload={address:$('editAddress').value.trim(),price:$('editPrice').value?Number($('editPrice').value):null,bedrooms:$('editBeds').value?Number($('editBeds').value):null,bathrooms:$('editBaths').value?Number($('editBaths').value):null,status:$('editStage').value,viewing_at:$('editViewing').value?new Date($('editViewing').value).toISOString():null,...enhancements.edited()};if(payload.status==='deleted'&&!confirm('Move this house to Deleted?'))return;const retryNewAddress=selected.latitude==null&&selected.longitude==null&&payload.address!==selected.address&&!!payload.address;const savedId=selected.id;const overrides={...(selected.manual_overrides||{})};for(const [k,v] of Object.entries(payload)){if(String(selected[k]??'')!==String(v??''))overrides[k]=true;}payload.manual_overrides=overrides;const r=await history.save(selected,payload);if(r.error){alert(r.error.message);return}await refresh();$('dialog').close();if(retryNewAddress){pendingJourneyImportIds.add(savedId);void finishNewHouseImport(savedId)}};
+$('save').onclick=async()=>{if(!selected)return;const payload={address:$('editAddress').value.trim(),price:$('editPrice').value?Number($('editPrice').value):null,bedrooms:$('editBeds').value?Number($('editBeds').value):null,bathrooms:$('editBaths').value?Number($('editBaths').value):null,status:$('editStage').value,viewing_at:$('editViewing').value?new Date($('editViewing').value).toISOString():null,...enhancements.edited()};if(payload.status==='deleted'&&!confirm('Move this house to Deleted?'))return;const overrides={...(selected.manual_overrides||{})};for(const [k,v] of Object.entries(payload)){if(String(selected[k]??'')!==String(v??''))overrides[k]=true;}payload.manual_overrides=overrides;const r=await history.save(selected,payload);if(r.error){alert(r.error.message);return}await refresh();$('dialog').close()};
 $('enrich').onclick=updateFromListing;
 $('remove').onclick=async()=>{if(!selected||!confirm('Move this house to Deleted? You can restore it later.'))return;const r=await history.save(selected,{status:'deleted'});if(r.error){alert(r.error.message);return}$('dialog').close();selected=null;await refresh()};
 $('noteForm').onsubmit=async e=>{e.preventDefault();if(!selected)return;const body=$('note').value.trim();if(!body)return;const r=await sb.from('notes').insert({property_id:selected.id,author_id:user.id,body});if(r.error){alert(r.error.message);return}$('note').value='';await loadNotes()};
@@ -719,7 +745,7 @@ $('floorPlanFile').onchange=async()=>{
  finally{button.disabled=false;button.textContent='Upload floor plan'}
 };
 const history=createEditHistory({sb,onRestored:async()=>{const wasOpen=$('dialog').open;if(wasOpen)$('dialog').close();await refresh();if(wasOpen&&selected)await openHouse(selected)}});
-const enhancements=setupComparison({sb,history,photo,uniquePhotos,openHouse,openPhotoBrowser,onReorder:reorderHouses,canReorder:()=> viewingSelections===null&&$('sort').value==='manual'&&$('stageFilter').value==='all'&&!$('search').value.trim(),getStatusSelection:selectedViewingStatuses,onStatusFilterChange:applyViewingStatuses,onStatusChange:async()=>{await refresh()},shouldAutoCalculate:()=>false,onRestore:restoreHouse});
+const enhancements=setupComparison({sb,history,photo,displayPhoto,uniquePhotos,openHouse,openPhotoBrowser,onReorder:reorderHouses,canReorder:()=> viewingSelections===null&&$('sort').value==='manual'&&$('stageFilter').value==='all'&&!$('search').value.trim(),getStatusSelection:selectedViewingStatuses,onStatusFilterChange:applyViewingStatuses,onStatusChange:async()=>{await refresh()},shouldAutoCalculate:()=>false,onRestore:restoreHouse});
 setupExports({getVisible:()=>visibleHomes.slice(),getAll:()=>homes.slice(),photo});
 const session=await sb.auth.getSession();user=session.data.session?.user||null;if(user){await show();}else $('login').hidden=false;
 // No automatic polling: properties are read at sign-in and upon explicit Refresh or a saved edit.

@@ -5,7 +5,7 @@ export function manualJourney(previous,minutes,updatedAt){
  const history=old.manual_override===true?old.previous_automatic_route:previous;
  return {...rest,minutes,source:'manual',manual_override:true,manual_updated_at:updatedAt,...(history?{previous_automatic_route:history}:{})};
 }
-export function setupComparison({sb,history,photo,uniquePhotos,openHouse,openPhotoBrowser,onReorder,canReorder,onStatusChange,shouldAutoCalculate,onRestore,getStatusSelection,onStatusFilterChange}){
+export function setupComparison({sb,history,photo,displayPhoto,uniquePhotos,openHouse,openPhotoBrowser,onReorder,canReorder,onStatusChange,shouldAutoCalculate,onRestore,getStatusSelection,onStatusFilterChange}){
 const stationAccess=setupStationAccess({sb,history,shouldAutoCalculate});
 const $=id=>document.getElementById(id),node=(tag,cls='',content)=>{const x=document.createElement(tag);x.className=cls;if(content!==undefined)x.textContent=content;return x};
 const statuses={'':'—',interested:'Interested',viewing_booked:'Viewing booked',viewed:'Viewed',shortlisted:'Shortlisted',rejected:'Rejected',under_offer_sold:'Under offer / Sold',archived:'Archive (hide)',deleted:'Delete (move to trash)'};
@@ -53,8 +53,7 @@ async function distinctPhotos(p,container){
     img.setAttribute('aria-label','Enlarge photograph '+(i+1)+' of '+p.address);
     img.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openPhotoBrowser(p,i)}};
     container.append(img);
-    try{const url=await photo(photos[i]);if(url)img.src=url;else img.classList.add('hh-photo-missing')}
-    catch(e){img.classList.add('hh-photo-missing')}
+    displayPhoto(img,photos[i]);
   }
 }
 function labelledEditor(p,label,key,type='text'){
