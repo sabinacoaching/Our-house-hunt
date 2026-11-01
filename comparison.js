@@ -77,7 +77,7 @@ function journeySummary(p,d){
    const label=v.manual_override===true?'manual':verified?'Google':'';
    return Math.round(v.minutes)+' min'+(label?' · '+label:'');
  }
- return 'Not verified';
+ return '—';
 }
 async function drainJourneyQueue(){
  if(travelProcessing)return;travelProcessing=true;
