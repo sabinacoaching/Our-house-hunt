@@ -2,7 +2,7 @@ import {createClient} from "npm:@supabase/supabase-js@2.49.8";
 const root=Deno.env.get("SUPABASE_URL")!;
 const admin=createClient(root,Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,{auth:{persistSession:false,autoRefreshToken:false}});
 const reply=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{"Content-Type":"application/json","Cache-Control":"no-store","Access-Control-Allow-Origin":"https://sabinacoaching.github.io","Access-Control-Allow-Headers":"authorization,apikey,content-type,x-client-info","Access-Control-Allow-Methods":"POST,OPTIONS"}});
-const times=["0730","1000","1230","1500","1730"];
+const times=["0730"];
 const distance=(a:any,b:any)=>{
  const rad=Math.PI/180,dy=(Number(b.lat)-a.lat)*rad,dx=(Number(b.lon)-a.lon)*rad;
  const z=Math.sin(dy/2)**2+Math.cos(a.lat*rad)*Math.cos(Number(b.lat)*rad)*Math.sin(dx/2)**2;
@@ -43,12 +43,17 @@ async function sample(origin:any,station:any,date:string,time:string){
   const data=await r.json();
   const list=(data.journeys||[]).filter((j:any)=>{
    if(!Number.isFinite(Number(j.duration))||Number(j.duration)<=0)return false;
+   const parse=(x:any)=>{const s=String(x||"");return Date.parse(/(?:Z|[+-]\d\d:\d\d)$/.test(s)?s:s+"Z")};
+   const start=parse(j.startDateTime),end=parse(j.arrivalDateTime);
+   if(!Number.isFinite(start)||!Number.isFinite(end)||Math.abs((end-start)/60000-Number(j.duration))>1)return false;
+   const last=(j.legs||[]).at(-1)?.arrivalPoint;
+   if(!last||last.lat==null||last.lon==null||!Number.isFinite(Number(last.lat))||!Number.isFinite(Number(last.lon))||distance(station,last)>300)return false;
    return (j.legs||[]).some((l:any)=>!["walking","cycle"].includes(l.mode?.id)&&!!l.mode?.id);
-  });
+  }).sort((a:any,b:any)=>Number(a.duration)-Number(b.duration));
   const walks=(data.journeys||[]).filter((j:any)=>(j.legs||[]).length>0&&(j.legs||[]).every((l:any)=>l.mode?.id==="walking")).sort((a:any,b:any)=>a.duration-b.duration);
   const foot=walks[0],metres=foot?(foot.legs||[]).reduce((a:number,l:any)=>a+Number(l.distance||0),0):null;
-  const fastest=list.length?Math.min(...list.map((j:any)=>Number(j.duration))):null;
-  return {time,minutes:fastest,walk_minutes:foot?.duration??null,walk_meters:metres>0?metres:null};
+  const fastest=list[0];
+  return {time,minutes:fastest?Number(fastest.duration):null,departure:fastest?.startDateTime??null,arrival:fastest?.arrivalDateTime??null,walk_minutes:foot?.duration??null,walk_meters:metres>0?metres:null};
  }catch(e){return {time,minutes:null,reason:String(e)}}
 }
 Deno.serve(async(req:Request)=>{
@@ -84,16 +89,16 @@ Deno.serve(async(req:Request)=>{
     const walkingSample=samples.find(x=>x.walk_meters!=null&&x.walk_minutes!=null);
     let walking_miles=walkingSample?.walk_meters!=null?Math.round(walkingSample.walk_meters/1609.344*100)/100:null;
     let walking_minutes=walkingSample?.walk_minutes??null;
+    let walking_source=walking_miles!=null?"TfL Journey Planner":null;
     if(walking_miles==null){
       try{
         const u="https://routing.openstreetmap.de/routed-foot/route/v1/driving/"+origin.lon+","+origin.lat+";"+destination.lon+","+destination.lat+"?overview=false";
         const rr=await fetch(u,{signal:AbortSignal.timeout(12000)});
-        if(rr.ok){const route=(await rr.json()).routes?.[0];if(route){walking_miles=Math.round(Number(route.distance)/1609.344*100)/100;walking_minutes=Math.round(Number(route.duration)/60)}}
+        if(rr.ok){const route=(await rr.json()).routes?.[0];if(route){walking_miles=Math.round(Number(route.distance)/1609.344*100)/100;walking_minutes=Math.round(Number(route.duration)/60);walking_source="OpenStreetMap walking route"}}
       }catch(e){console.warn("Walking route unavailable",String(e))}
     }
-    const good=samples.filter(s=>Number.isFinite(s.minutes)&&s.minutes!=null).map(s=>Number(s.minutes));
-    const avg=good.length>=2?Math.round(good.reduce((a,b)=>a+b,0)/good.length):null;
-    result.push({name,station_id:destination.id,station_name:destination.name,lat:destination.lat,lon:destination.lon,avg_minutes:avg,walking_miles,walking_minutes,samples,google_walking:googleWalk,source:"TfL Journey Planner",note:good.length<2?"No reliable public-transport route":null});
+    const actual=samples.find(s=>Number.isFinite(s.minutes)&&s.minutes!=null);
+    result.push({name,station_id:destination.id,station_name:destination.name,lat:destination.lat,lon:destination.lon,avg_minutes:null,pt_minutes:actual?.minutes??null,pt_departure:actual?.departure??null,pt_arrival:actual?.arrival??null,walking_miles,walking_minutes,walking_source,samples,google_walking:googleWalk,source:"TfL Journey Planner",note:actual?null:"No reliable public-transport route"});
    }catch(e){result.push({name,avg_minutes:null,samples:[],error:String(e)})}
   }
   const availableStations=result.filter(x=>x.name);
