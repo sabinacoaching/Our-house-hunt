@@ -96,7 +96,8 @@ Deno.serve(async(req:Request)=>{
     result.push({name,station_id:destination.id,station_name:destination.name,lat:destination.lat,lon:destination.lon,avg_minutes:avg,walking_miles,walking_minutes,samples,google_walking:googleWalk,source:"TfL Journey Planner",note:good.length<2?"No reliable public-transport route":null});
    }catch(e){result.push({name,avg_minutes:null,samples:[],error:String(e)})}
   }
-  const completed=result.every(x=>x.walking_miles!=null&&x.walking_minutes!=null);
+  const availableStations=result.filter(x=>x.name);
+  const completed=availableStations.length>0&&availableStations.every(x=>x.walking_miles!=null&&x.walking_minutes!=null);
   const final={version:"tfl-v3",complete:completed,origin:origin.lat+","+origin.lon,names,date,times,results:result,calculated_at:new Date().toISOString(),source:"TfL Journey Planner"};
   const oldResults=cache.results||[];
   const merged=result.map((x:any,i:number)=>({...oldResults[i],...x,walking_miles:x.walking_miles??oldResults[i]?.walking_miles??null,walking_minutes:x.walking_minutes??oldResults[i]?.walking_minutes??null}));

@@ -245,6 +245,7 @@ async function importHouse(raw){
  const planChecks=[];
  const floorplans=await archive(floorplanCandidates,id,'source-plan',Infinity,planChecks,Number(String(data.extension_version||'0').split('.')[1])>=9);
  const p={id,url,source:data.source,title:data.title||'',address:data.address||'',price:data.price??null,bedrooms:data.bedrooms??null,bathrooms:listingBathrooms(data),wc_count:data.wc_count??null,floors:listingFloors(data),floor_area_sqm:data.floor_area_sqm??null,garden_area_sqm:data.garden_area_sqm??null,garden_description:data.garden_description||'',station_name:'',station_distance_miles:null,station_2_name:'',station_2_distance_miles:null,latitude:null,longitude:null,property_type:data.property_type||null,tenure:data.tenure||null,images,floorplans,import_diagnostics:{source:'original-listing',extension_version:data.extension_version||'unknown',status:data.floorplan_status||'unknown',candidates:floorplanCandidates.length,archived:floorplans.length,checks:planChecks,attempted_at:new Date().toISOString(),media_source_revision:mediaRevision,media_source_result:'completed',source_values:{price:data.price??null,bedrooms:data.bedrooms??null,bathrooms:listingBathrooms(data),wc_count:data.wc_count??null,floors:listingFloors(data),floor_area_sqm:data.floor_area_sqm??null,garden_area_sqm:data.garden_area_sqm??null,garden_description:data.garden_description||'',property_type:data.property_type||null,tenure:data.tenure||null}},created_by:user.id,status:''};
+ p.import_diagnostics.route_pending=true;
  const r=await sb.from('properties').insert(p);
  if(r.error)throw r.error;
  pendingJourneyImportIds.add(id);
@@ -264,19 +265,40 @@ async function importHouse(raw){
 }
 async function calculateImportRoutes(p){
  if(!pendingJourneyImportIds.has(p.id))return [];
- if(p.latitude==null||p.longitude==null)return ['precise address for journeys'];
  const errors=[];
  for(const name of ['house-hunt-journeys','house-hunt-station-commutes']){
+  if(name==='house-hunt-station-commutes'&&(p.latitude==null||p.longitude==null)){errors.push('precise address for station times');continue}
   try{
    const result=await sb.functions.invoke(name,{body:{id:p.id}});
-   if(result.error||result.data?.error||result.data?.saveError||result.data?.errors?.length)throw result.error||Error(result.data?.error||result.data?.saveError||'Some journeys were unavailable');
+   if(result.error||result.data?.error||result.data?.saveError)throw result.error||Error(result.data?.error||result.data?.saveError);
+   if(name==='house-hunt-journeys'&&p.latitude==null&&p.longitude==null){
+    const verified=Object.values(result.data?.journeys||{}).find(x=>x?.calculation_version==='arrival-window-v4'&&x.origin_input===p.address&&typeof x.origin==='string');
+    if(verified){
+     const [lat,lon]=verified.origin.split(',').map(Number);
+     if(Number.isFinite(lat)&&Number.isFinite(lon)&&lat>49&&lat<61&&lon> -9&&lon<3){
+      const saved=await sb.from('properties').update({latitude:lat,longitude:lon}).eq('id',p.id).eq('address',p.address).is('latitude',null).is('longitude',null).select('id').maybeSingle();
+      if(saved.error)throw saved.error;
+      if(saved.data){p.latitude=lat;p.longitude=lon;await enrichWalkingStations(p)}
+     }
+    }
+   }
+   if(result.data?.errors?.length)throw Error('Some journeys were unavailable');
+   if(name==='house-hunt-station-commutes'&&!result.data?.commutes?.tfl_final?.complete)throw Error('Station walking routes incomplete');
   }catch(e){errors.push(name==='house-hunt-journeys'?'journey times':'station times');console.warn('Automatic journey calculation unavailable',name,e)}
  }
- if(!errors.length)pendingJourneyImportIds.delete(p.id);
+ if(!errors.length){
+  const current=await sb.from('properties').select('import_diagnostics').eq('id',p.id).single();
+  if(current.error||!current.data)errors.push('save completion');
+  else {
+   const before=current.data.import_diagnostics||{},updated={...before,route_pending:false};
+   const saved=await sb.from('properties').update({import_diagnostics:updated}).eq('id',p.id).eq('import_diagnostics',JSON.stringify(before)).select('id');
+   if(saved.error||!saved.data?.length)errors.push('save completion');
+   else pendingJourneyImportIds.delete(p.id);
+  }
+ }
  return errors;
 }
-// Finish new imports during this browser visit, not on a manual reload.
-// Read fresh DB rows on every pass and preserve any user-specified fields.
+// Resume only imports that did not finish; completed homes are not recalculated.
 const finishingImports=new Set();
 async function finishNewHouseImport(id){
  if(finishingImports.has(id))return;
@@ -651,7 +673,8 @@ async function repairExistingMedia(){
   if(old.length){await refresh();report('Original photos updated for '+saved+' houses'+(unavailable?'; '+unavailable+' original listings were unavailable.':'.'),!!unavailable)}
  }finally{mediaRepairRunning=false}
 }
-async function show(){const r=await sb.from('members').select('id,display_name');if(r.error){txt('loginError','Unable to check membership: '+r.error.message);return}people=Object.fromEntries(r.data.map(x=>[x.id,x.display_name]));if(!people[user.id]){txt('loginError','This account is not registered as a household member');return}$('login').hidden=true;$('mainApp').hidden=false;$('logout').hidden=false;$('refresh').hidden=false;$('changePassword').hidden=false;txt('who',people[user.id]);await refresh();void repairExistingMedia()}
+async function resumePendingRoutes(){for(const p of homes.filter(x=>x.import_diagnostics?.route_pending===true)){if(!user)break;pendingJourneyImportIds.add(p.id);await finishNewHouseImport(p.id)}}
+async function show(){const r=await sb.from('members').select('id,display_name');if(r.error){txt('loginError','Unable to check membership: '+r.error.message);return}people=Object.fromEntries(r.data.map(x=>[x.id,x.display_name]));if(!people[user.id]){txt('loginError','This account is not registered as a household member');return}$('login').hidden=true;$('mainApp').hidden=false;$('logout').hidden=false;$('refresh').hidden=false;$('changePassword').hidden=false;txt('who',people[user.id]);await refresh();void repairExistingMedia();void resumePendingRoutes()}
 $('loginForm').onsubmit=async e=>{e.preventDefault();txt('loginError','');const r=await sb.auth.signInWithPassword({email:$('email').value,password:$('password').value});if(r.error){txt('loginError',r.error.message);return}user=r.data.user;await show()};
 $('logout').onclick=async()=>{await sb.auth.signOut();location.reload()};
 $('refresh').onclick=async()=>{await refresh();report('Saved data refreshed from Supabase. No original listings checked.');};
