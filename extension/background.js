@@ -360,17 +360,52 @@ async function readPropertyFromPage(){
   const value=String(anchor.getAttribute('href')||'').replace(/^mailto:/i,'').split('?')[0].trim();
   if(/^[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(value)){agency_email=value;break}
  }
- // These addresses are verified official agency sites; use an exact agency
- // name so similarly named businesses cannot be substituted.
- const knownSites=new Map([["Oakhill","https://oakhillagents.co.uk/contact/"],["Oakhill, Isleworth","https://oakhillagents.co.uk/contact/"],["Dexters - Isleworth","https://www.dexters.co.uk/contact-us/our-offices"],["Dexters - Teddington","https://www.dexters.co.uk/contact-us/our-offices/dexters-teddington-estate-agents"],["Dexters - St Margarets","https://www.dexters.co.uk/contact-us/our-offices/dexters-st-margarets-estate-agents"],["Shaw & Co","https://www.shawandcoestates.com/branches/whitton"],["Stirling Ackroyd - Whitton","https://www.stirlingackroyd.com/our-branches/whitton/"],["Andrews - Morden","https://www.andrewsonline.co.uk/about/offices/morden"],["Chase Buchanan, Isleworth","https://www.chasebuchanan.co.uk/branches/isleworth"],["Curchods - New Malden","https://curchods.com/estate-agents/new-malden/"],["Hunters - Brentford","https://www.hunters.com/office/brentford/"],["Barnard Marcus - Morden","https://www.barnardmarcus.co.uk/estate-agents/morden"],["John D Wood & Co. - Richmond Sales","https://www.johndwood.co.uk/branches/richmond/"],["eXp World UK","https://exp.uk.com/"]]);
- let agency_website=knownSites.get(agency_name)||null;
- if(!agency_website&&agentBlock){
-  for(const a of agentBlock.querySelectorAll('a[href]')){
-   if(!/\b(?:agent website|visit website|agency website)\b/i.test(a.textContent||a.getAttribute('aria-label')||''))continue;
-   try{const u=new URL(a.href,location.href);if(u.protocol==='https:'&&!/(^|\.)(zoopla\.co\.uk|rightmove\.co\.uk)$/.test(u.hostname)){agency_website=u.href;break}}catch{}
-  }
+ // Obtain the estate agent’s branch, not the house address. Both portals link
+ // the agency card to a branch profile; its address is read below when needed.
+ const agentProfile=document.querySelector('a[href*="/find-agents/branch/"],a[href*="/estate-agents/agent/"]');
+ const agency_profile_url=agentProfile?.href||null;
+ const textAddress=agentBlock?.querySelector?.('address,[itemprop="address"],[data-testid*="address" i]')?.innerText||'';
+ let agency_address=/\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b/i.test(textAddress)?textAddress.trim().slice(0,250):null;
+ if(!agency_address&&source==='Rightmove'&&agency_name){
+  const marker=mainText.indexOf('About '+agency_name);
+  const segment=marker>=0?mainText.slice(marker,marker+500):'';
+  const postcode=segment.match(/\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b/i);
+  if(postcode)agency_address=segment.slice(('About '+agency_name).length,postcode.index+postcode[0].length).trim().replace(/\s+/g,' ');
  }
- return {listing_id:location.pathname.match(/\/(?:details|properties)\/(\d+)/)?.[1]||null,source,title,address,agency_name,agency_email,agency_website,price,bedrooms,bathrooms,wc_count:wcs,floors,floor_area_sqm:area,garden_area_sqm:gardenArea,garden_description:gardenDescription,station_name:stationName,station_distance_miles:stationMiles,station_2_name:station2Name,station_2_distance_miles:station2Miles,latitude,longitude,property_type:propertyType,tenure,images:gallery,floorplans:plans,floorplan_status:plans.length?'found-in-original-listing':clickedPlanTab?'tab-opened-but-image-not-found':floorTab?'floorplan-tab-click-failed':'floorplan-tab-not-found',floorplan_diagnostic:{tabFound:!!floorTab,tabClicked:clickedPlanTab,candidateCount:plans.length,error:planTabError},extension_version:'0.10.0'};
+ const agency_website=null;
+ return {listing_id:location.pathname.match(/\/(?:details|properties)\/(\d+)/)?.[1]||null,source,title,address,agency_name,agency_email,agency_website,agency_address,agency_profile_url,price,bedrooms,bathrooms,wc_count:wcs,floors,floor_area_sqm:area,garden_area_sqm:gardenArea,garden_description:gardenDescription,station_name:stationName,station_distance_miles:stationMiles,station_2_name:station2Name,station_2_distance_miles:station2Miles,latitude,longitude,property_type:propertyType,tenure,images:gallery,floorplans:plans,floorplan_status:plans.length?'found-in-original-listing':clickedPlanTab?'tab-opened-but-image-not-found':floorTab?'floorplan-tab-click-failed':'floorplan-tab-not-found',floorplan_diagnostic:{tabFound:!!floorTab,tabClicked:clickedPlanTab,candidateCount:plans.length,error:planTabError},extension_version:'0.11.0'};
+}
+async function readAgencyProfile(expectedName){
+ const normalize=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+ const brand=normalize(String(expectedName||'').split(/\s+[-–]\s+|,/)[0]);
+ const heading=normalize(document.querySelector('h1')?.innerText||document.querySelector('h1')?.textContent||document.title);
+ const branch=normalize(String(expectedName||'').split(/\s+[-–]\s+|,/)[1]||'');
+ if(!brand||!heading.includes(brand)||(branch&&!heading.includes(branch)))return null;
+ const selectors='address,[itemprop="address"],[data-testid*="address" i],h1 + h2';
+ const candidates=[...document.querySelectorAll(selectors)].map(x=>x.innerText||x.textContent||'');
+ // Some profiles render the address as plain text directly after the heading.
+ const text=document.body?.innerText||'';
+ const anchor=text.toLowerCase().indexOf(String(expectedName||'').toLowerCase());
+ if(anchor>=0)candidates.push(text.slice(anchor,anchor+450));
+ for(const value of candidates){
+  const text=String(value||'').replace(/\s+/g,' ').trim();
+  const match=text.match(/\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b/i);
+  if(match&&/\b\d+[a-z]?\b/i.test(text.slice(0,match.index)))return text.slice(0,match.index+match[0].length).slice(0,250);
+ }
+ return null;
+}
+async function readBranchAddress(profileUrl,agencyName){
+ let tab;
+ try{
+  const u=new URL(profileUrl);
+  if(u.protocol!=='https:'||!['www.zoopla.co.uk','zoopla.co.uk','www.rightmove.co.uk','rightmove.co.uk'].includes(u.hostname)||!/^\/(?:find-agents\/branch\/|estate-agents\/agent\/)/i.test(u.pathname))return null;
+  tab=await chrome.tabs.create({url:u.href,active:false});await waitForLoad(tab.id,12000);
+  const final=new URL((await chrome.tabs.get(tab.id)).url||'https://invalid.example/');
+  if(final.hostname!==u.hostname||final.pathname.replace(/\/$/,'')!==u.pathname.replace(/\/$/,''))return null;
+  const result=await chrome.scripting.executeScript({target:{tabId:tab.id},func:readAgencyProfile,args:[agencyName]});
+  return result?.[0]?.result||null;
+ }catch(e){console.warn('Agency branch address unavailable',String(e));return null}
+ finally{if(tab?.id)await chrome.tabs.remove(tab.id).catch(()=>{})}
 }
 async function extract(url){
  if(!validListing(url))throw new Error('URL must be a Zoopla or Rightmove individual property listing');
@@ -386,6 +421,7 @@ async function extract(url){
   const result=await chrome.scripting.executeScript({target:{tabId:tab.id},func:readPropertyFromPage});
   const data=result?.[0]?.result,expected=new URL(url).pathname.match(/\/(?:details|properties)\/(\d+)/)?.[1];
   if(!data||!expected||data.listing_id!==expected)throw Error('The original listing is unavailable or redirected to another page');
+  if(data.agency_name&&!data.agency_address&&data.agency_profile_url)data.agency_address=await readBranchAddress(data.agency_profile_url,data.agency_name);
   return data;
  }finally{if(tab?.id)await chrome.tabs.remove(tab.id).catch(()=>{})}
 }
@@ -404,7 +440,7 @@ async function fetchImage(url){
 }
 chrome.runtime.onMessage.addListener((req,sender,sendResponse)=>{
  if(!/^https:\/\/sabinacoaching\.github\.io\/(?:our-house-hunt|Our-house-hunt)\//.test(sender.url||''))return false;
- if(req.action==='PING'){sendResponse({ok:true,data:{extension:'Our House Hunt',version:'0.10.0'}});return false;}
+ if(req.action==='PING'){sendResponse({ok:true,data:{extension:'Our House Hunt',version:'0.11.0'}});return false;}
  if(!['IMPORT_URL','FETCH_IMAGE'].includes(req.action))return false;
  (async()=>{try{const data=req.action==='IMPORT_URL'?await extract(req.url):await fetchImage(req.url);sendResponse({ok:true,data})}catch(e){sendResponse({ok:false,error:e.message})}})();
  return true;
