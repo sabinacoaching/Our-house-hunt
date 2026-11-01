@@ -18,11 +18,11 @@ function run({sourceSite,description='',email=null,withLogo=true}){
 }
 test('Zoopla imports the listing agent and an email explicitly in its agent section',async()=>{
  const p=await run({sourceSite:'Zoopla',email:'homes@example.com'});
- assert.equal(p.agency_name,'Example Estate Agents');assert.equal(p.agency_email,'homes@example.com');
+ assert.equal(p.agency_name,'Example Estate Agents');assert.equal(p.agency_email,'homes@example.com');assert.equal(p.agency_website,null);
 });
 test('Rightmove imports the agent named in its listing description without inventing an email',async()=>{
  const p=await run({sourceSite:'Rightmove',description:'2 bedroom house. Marketed by Oakhill, Isleworth'});
- assert.equal(p.agency_name,'Oakhill, Isleworth');assert.equal(p.agency_email,null);
+ assert.equal(p.agency_name,'Oakhill, Isleworth');assert.equal(p.agency_email,null);assert.equal(p.agency_website,'https://oakhillagents.co.uk/contact/');
 });
 test('missing Zoopla agent section does not invent a name or an email',async()=>{
  const p=await run({sourceSite:'Zoopla',withLogo:false});

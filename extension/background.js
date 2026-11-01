@@ -360,7 +360,17 @@ async function readPropertyFromPage(){
   const value=String(anchor.getAttribute('href')||'').replace(/^mailto:/i,'').split('?')[0].trim();
   if(/^[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(value)){agency_email=value;break}
  }
- return {listing_id:location.pathname.match(/\/(?:details|properties)\/(\d+)/)?.[1]||null,source,title,address,agency_name,agency_email,price,bedrooms,bathrooms,wc_count:wcs,floors,floor_area_sqm:area,garden_area_sqm:gardenArea,garden_description:gardenDescription,station_name:stationName,station_distance_miles:stationMiles,station_2_name:station2Name,station_2_distance_miles:station2Miles,latitude,longitude,property_type:propertyType,tenure,images:gallery,floorplans:plans,floorplan_status:plans.length?'found-in-original-listing':clickedPlanTab?'tab-opened-but-image-not-found':floorTab?'floorplan-tab-click-failed':'floorplan-tab-not-found',floorplan_diagnostic:{tabFound:!!floorTab,tabClicked:clickedPlanTab,candidateCount:plans.length,error:planTabError},extension_version:'0.10.0'};
+ // These addresses are verified official agency sites; use an exact agency
+ // name so similarly named businesses cannot be substituted.
+ const knownSites=new Map([["Oakhill","https://oakhillagents.co.uk/contact/"],["Oakhill, Isleworth","https://oakhillagents.co.uk/contact/"],["Dexters - Isleworth","https://www.dexters.co.uk/contact-us/our-offices"],["Dexters - Teddington","https://www.dexters.co.uk/contact-us/our-offices/dexters-teddington-estate-agents"],["Dexters - St Margarets","https://www.dexters.co.uk/contact-us/our-offices/dexters-st-margarets-estate-agents"],["Shaw & Co","https://www.shawandcoestates.com/branches/whitton"],["Stirling Ackroyd - Whitton","https://www.stirlingackroyd.com/our-branches/whitton/"],["Andrews - Morden","https://www.andrewsonline.co.uk/about/offices/morden"],["Chase Buchanan, Isleworth","https://www.chasebuchanan.co.uk/branches/isleworth"],["Curchods - New Malden","https://curchods.com/estate-agents/new-malden/"],["Hunters - Brentford","https://www.hunters.com/office/brentford/"],["Barnard Marcus - Morden","https://www.barnardmarcus.co.uk/estate-agents/morden"],["John D Wood & Co. - Richmond Sales","https://www.johndwood.co.uk/branches/richmond/"],["eXp World UK","https://exp.uk.com/"]]);
+ let agency_website=knownSites.get(agency_name)||null;
+ if(!agency_website&&agentBlock){
+  for(const a of agentBlock.querySelectorAll('a[href]')){
+   if(!/\b(?:agent website|visit website|agency website)\b/i.test(a.textContent||a.getAttribute('aria-label')||''))continue;
+   try{const u=new URL(a.href,location.href);if(u.protocol==='https:'&&!/(^|\.)(zoopla\.co\.uk|rightmove\.co\.uk)$/.test(u.hostname)){agency_website=u.href;break}}catch{}
+  }
+ }
+ return {listing_id:location.pathname.match(/\/(?:details|properties)\/(\d+)/)?.[1]||null,source,title,address,agency_name,agency_email,agency_website,price,bedrooms,bathrooms,wc_count:wcs,floors,floor_area_sqm:area,garden_area_sqm:gardenArea,garden_description:gardenDescription,station_name:stationName,station_distance_miles:stationMiles,station_2_name:station2Name,station_2_distance_miles:station2Miles,latitude,longitude,property_type:propertyType,tenure,images:gallery,floorplans:plans,floorplan_status:plans.length?'found-in-original-listing':clickedPlanTab?'tab-opened-but-image-not-found':floorTab?'floorplan-tab-click-failed':'floorplan-tab-not-found',floorplan_diagnostic:{tabFound:!!floorTab,tabClicked:clickedPlanTab,candidateCount:plans.length,error:planTabError},extension_version:'0.10.0'};
 }
 async function extract(url){
  if(!validListing(url))throw new Error('URL must be a Zoopla or Rightmove individual property listing');

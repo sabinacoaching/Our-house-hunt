@@ -315,7 +315,14 @@ function render(list){
   tr.append(cell(editor(p,'status','select')));
   const view=node('input');view.type='datetime-local';view.value=p.viewing_at?p.viewing_at.slice(0,16):'';view.setAttribute('aria-label','Viewing date '+(p.address||p.title));view.onchange=async()=>{const v=view.value?new Date(view.value).toISOString():null;const r=await history.save(p,{viewing_at:v,manual_overrides:{...(p.manual_overrides||{}),viewing_at:true}});if(r.error)flash(r.error.message,true);else flash('Saved')};tr.append(cell(view));
   const agency=node('div','hh-stack');
-  agency.append(labelledEditor(p,'Agency','agency_name'),labelledEditor(p,'Email','agency_email'));
+  try{
+   const linkUrl=new URL(p.agency_website);
+   if(linkUrl.protocol==='https:'||linkUrl.protocol==='http:'){
+    const link=node('a','hh-agency-link',(p.agency_name||'Agency website')+' ↗');
+    link.href=linkUrl.href;link.target='_blank';link.rel='noopener noreferrer';agency.append(link);
+   }
+  }catch{}
+  agency.append(labelledEditor(p,'Agency','agency_name'),labelledEditor(p,'Agency website','agency_website'),labelledEditor(p,'Email','agency_email'));
   tr.append(cell(agency));
   if(tr.cells.length!==labels.length)throw Error('Comparison column count mismatch');
   body.append(tr);
