@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Our House Hunt - Zoopla & Rightmove Import",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Reliable Zoopla floorplan capture using DOM and newly loaded image resources; original listing only.",
   "permissions": [
     "tabs",

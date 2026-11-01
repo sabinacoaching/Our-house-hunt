@@ -238,6 +238,14 @@ function listingFloors(data){
  const nums={one:1,two:2,three:3,four:4};
  return m?(nums[m[1].toLowerCase()]||Number(m[1])):null;
 }
+async function lookupAgencyWebsite(data){
+ if(!data?.agency_name||!data?.agency_address)return data?.agency_website||null;
+ try{
+  const result=await sb.functions.invoke('house-hunt-agency-search',{body:{name:data.agency_name,address:data.agency_address}});
+  if(result.error||result.data?.error)throw result.error||Error(result.data.error);
+  return result.data?.website||data.agency_website||null;
+ }catch(e){console.warn('Agency website search unavailable',e);return data.agency_website||null}
+}
 async function importHouse(raw){
  await probeImporter(true);
  const url=listing(raw);
@@ -251,6 +259,7 @@ async function importHouse(raw){
  report('Reading listing and photographs…');
  const data=await extension('IMPORT_URL',{url},70000);
  if(!data?.images?.length)throw Error('No photographs found. House not added.');
+ data.agency_website=await lookupAgencyWebsite(data);
  const id=crypto.randomUUID();
  const images=await archive(data.images,id,'photo');
  if(!images.length)throw Error('Photographs could not be downloaded. House not added.');
