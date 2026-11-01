@@ -6,9 +6,9 @@ export async function photoDigest(blob) {
  return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');
 }
 
-export function createUniquePhotoStore(photo) {
+export function createUniquePhotoStore(photo,loadMetadata=async()=>new Map()) {
  const perImage=new Map(),perProperty=new Map();
- const signature=p=>(p.images||[]).map(x=>x.path||x.url||'').join('|');
+ const signature=p=>(p.images||[]).map(x=>(x.path||x.url||'')+':'+(x.sha256||'')).join('|');
  async function fingerprint(item){
   const key=item.path||item.url||'';
   if(!key)return null;
@@ -29,14 +29,24 @@ export function createUniquePhotoStore(photo) {
   const state=perProperty.get(key);
   const compute=async()=>{
    const items=p.images||[];
+   const nonempty=items.filter(x=>x.path||x.url);
+   const haveHashes=nonempty.every(x=>/^[a-f0-9]{64}$/i.test(x.sha256||''));
+   let metadata=new Map();
+   if(!haveHashes){try{metadata=await loadMetadata()}catch(e){console.warn('Photo metadata unavailable',e)}}
+   const haveMetadata=nonempty.every(x=>x.path&&metadata.has(x.path));
+   const getHash=haveHashes?async item=>'sha256:'+item.sha256.toLowerCase():haveMetadata?async item=>metadata.get(item.path):fingerprint;
    while(state.cursor<items.length&&state.items.length<limit){
-    const item=items[state.cursor++],path=item.path||item.url||'';
-    if(!path||state.paths.has(path))continue;
-    state.paths.add(path);
-    const hash=await fingerprint(item);
-    if(hash&&state.hashes.has(hash))continue;
-    if(hash)state.hashes.add(hash);
-    state.items.push(item);
+    const batch=[];
+    while(state.cursor<items.length&&batch.length<8){
+     const item=items[state.cursor++],path=item.path||item.url||'';
+     if(!path||state.paths.has(path))continue;
+     state.paths.add(path);batch.push(item);
+    }
+    const hashes=await Promise.all(batch.map(getHash));
+    for(let i=0;i<batch.length;i++){
+     const hash=hashes[i];if(hash&&state.hashes.has(hash))continue;
+     if(hash)state.hashes.add(hash);state.items.push(batch[i]);
+    }
    }
    return state.items.slice(0,limit);
   };
