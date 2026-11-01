@@ -85,7 +85,7 @@ import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.49.8';
 import {setupComparison} from './comparison.js?v=53';
 import {setupExports} from './export-tools.js?v=2';
 import {createUniquePhotoStore,photoDigest} from './photo-dedup.js?v=3';
-import {canonicalListing,importChanges,validateGeocode} from './import-utils.js?v=1';
+import {canonicalListing,importChanges,validateGeocode} from './import-utils.js?v=2';
 import {reconcileOne,mediaRevision} from './reconcile-media.js?v=1';
 import {createEditHistory} from './edit-history.js?v=2';
 import {analyzeFloorplan,inspectFloorplanImage} from './floorplan-ocr.js?v=15';
@@ -411,9 +411,14 @@ async function enrichWalkingStations(p){
    lat=Number(coordinate.lat);lon=Number(coordinate.lon);
    if(!Number.isFinite(lat)||!Number.isFinite(lon)||lat<49||lat>61||lon< -9||lon>3)return false;
    // Persist the map point *before* querying stations: a routing failure must not discard a successful geocode.
-   const loc=await sb.from('properties').update({latitude:lat,longitude:lon}).eq('id',p.id).is('latitude',null).is('longitude',null).select('id').single();
-   if(loc.error)throw loc.error;
-   p.latitude=lat;p.longitude=lon;
+   const before=p.import_diagnostics||{};
+   const verified={source:'nominatim',address_input:p.address,latitude:lat,longitude:lon,house_number:coordinate.address.house_number,road:coordinate.address.road,postcode:coordinate.address.postcode||null};
+   const diagnostics={...before,geocode_verified:verified};
+   let save=sb.from('properties').update({latitude:lat,longitude:lon,import_diagnostics:diagnostics}).eq('id',p.id).eq('address',p.address).is('latitude',null).is('longitude',null);
+   save=p.import_diagnostics==null?save.is('import_diagnostics',null):save.eq('import_diagnostics',JSON.stringify(before));
+   const loc=await save.select('id').maybeSingle();
+   if(loc.error||!loc.data)throw loc.error||Error('Address or location changed during geocoding');
+   p.latitude=lat;p.longitude=lon;p.import_diagnostics=diagnostics;
    await refresh();
    await routeDelay(1100);
  }

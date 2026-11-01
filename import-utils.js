@@ -23,5 +23,13 @@ export function validateGeocode(address,place){
  const road=String(place.address.road||'').toLowerCase().replace(/[^a-z0-9]/g,'');
  const wanted=String(address).replace(/^\s*\d+[a-z]?\s*/i,'').split(',')[0].toLowerCase().replace(/[^a-z0-9]/g,'');
  const norm=s=>s.replace(/road$/,'rd').replace(/street$/,'st').replace(/avenue$/,'ave');
- return !!road&&!!wanted&&norm(road)===norm(wanted);
+ if(!road||!wanted||norm(road)!==norm(wanted))return false;
+ // A full postcode, if supplied, must refer to the same building. Never
+ // substitute another town's identically numbered street.
+ const postcode=String(address).match(/\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b/i)?.[0];
+ const foundPostcode=place.address.postcode;
+ if(postcode&&(!foundPostcode||postcode.replace(/\s/g,'').toUpperCase()!==String(foundPostcode).replace(/\s/g,'').toUpperCase()))return false;
+ const locality=String(address).split(',')[1]?.trim().replace(/\s+[A-Z]{1,2}\d[A-Z\d]?(?:\s+\d[A-Z]{2})?$/i,'').trim();
+ if(locality&&place.display_name&&!String(place.display_name).toLowerCase().includes(locality.toLowerCase()))return false;
+ return true;
 }

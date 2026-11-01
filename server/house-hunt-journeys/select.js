@@ -12,6 +12,24 @@ export function matchesDestination(id,point){
  if(id==='dancelab')return /^63 UPPER RICHMOND ROAD\b/.test(name);
  return false;
 }
+// The browser can supply an independently geocoded building, but only when
+// the saved proof still describes the current address and current coordinates.
+export function verifiedLocation(p){
+ const v=p?.import_diagnostics?.geocode_verified;
+ if(v?.source!=='nominatim'||v.address_input!==p.address||v.house_number==null||!v.road)return null;
+ const input=String(p.address||'').replace(/\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b/ig,'').trim();
+ if(!matchesOrigin(input,{commonName:String(v.house_number)+' '+String(v.road)}))return null;
+ const postcode=String(p.address||'').match(/\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b/i)?.[0];
+ if(postcode&&postcode.replace(/\s/g,'').toUpperCase()!==String(v.postcode||'').replace(/\s/g,'').toUpperCase())return null;
+ const lat=Number(v.latitude),lon=Number(v.longitude);
+ if(v.latitude==null||v.longitude==null||p.latitude==null||p.longitude==null||!Number.isFinite(lat)||!Number.isFinite(lon)||lat<49||lat>61||lon< -9||lon>3||Math.abs(lat-Number(p.latitude))>1e-7||Math.abs(lon-Number(p.longitude))>1e-7)return null;
+ return {lat,lon};
+}
+export function nearLocation(point,origin){
+ if(point?.lat==null||point?.lon==null||!Number.isFinite(Number(point.lat))||!Number.isFinite(Number(point.lon)))return false;
+ const dy=(Number(point.lat)-origin.lat)*111195,dx=(Number(point.lon)-origin.lon)*111195*Math.cos(origin.lat*Math.PI/180);
+ return Math.hypot(dx,dy)<=100;
+}
 // TfL normally returns London wall times without an offset. Explicit offsets
 // are converted to London wall time before comparing the arrival deadline.
 function londonWallTime(value){
