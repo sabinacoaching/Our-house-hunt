@@ -35,7 +35,9 @@ async function findStation(name:string,origin:{lat:number,lon:number}){
  return {id:chosen.id,name:chosen.name,lat:chosen.lat,lon:chosen.lon,km:chosen.km};
 }
 async function sample(origin:any,station:any,date:string,time:string){
- const url="https://api.tfl.gov.uk/Journey/JourneyResults/"+origin.lat+","+origin.lon+"/to/"+station.id+"?"+new URLSearchParams({date,time,timeIs:"departing",journeyPreference:"leasttime"});
+ // A station ID can resolve to a nearby bus stop and omit the walk to the
+ // station. Routing to its coordinates makes TfL include that final walk.
+ const url="https://api.tfl.gov.uk/Journey/JourneyResults/"+origin.lat+","+origin.lon+"/to/"+station.lat+","+station.lon+"?"+new URLSearchParams({date,time,timeIs:"departing",journeyPreference:"leasttime"});
  try{
   let r=await fetch(url,{signal:AbortSignal.timeout(20000),headers:{"Accept":"application/json"}});
   if(r.status===429){await new Promise(done=>setTimeout(done,1800));r=await fetch(url,{signal:AbortSignal.timeout(20000),headers:{"Accept":"application/json"}})}
@@ -47,10 +49,10 @@ async function sample(origin:any,station:any,date:string,time:string){
    const start=parse(j.startDateTime),end=parse(j.arrivalDateTime);
    if(!Number.isFinite(start)||!Number.isFinite(end)||Math.abs((end-start)/60000-Number(j.duration))>1)return false;
    const last=(j.legs||[]).at(-1)?.arrivalPoint;
-   if(!last||last.lat==null||last.lon==null||!Number.isFinite(Number(last.lat))||!Number.isFinite(Number(last.lon))||distance(station,last)>300)return false;
+   if(!last||last.lat==null||last.lon==null||!Number.isFinite(Number(last.lat))||!Number.isFinite(Number(last.lon))||distance(station,last)>30)return false;
    return (j.legs||[]).some((l:any)=>!["walking","cycle"].includes(l.mode?.id)&&!!l.mode?.id);
   }).sort((a:any,b:any)=>Number(a.duration)-Number(b.duration));
-  const walks=(data.journeys||[]).filter((j:any)=>(j.legs||[]).length>0&&(j.legs||[]).every((l:any)=>l.mode?.id==="walking")).sort((a:any,b:any)=>a.duration-b.duration);
+  const walks=(data.journeys||[]).filter((j:any)=>{const legs=j.legs||[],last=legs.at(-1)?.arrivalPoint;return legs.length>0&&legs.every((l:any)=>l.mode?.id==="walking")&&last?.lat!=null&&last?.lon!=null&&Number.isFinite(Number(last.lat))&&Number.isFinite(Number(last.lon))&&distance(station,last)<=30}).sort((a:any,b:any)=>a.duration-b.duration);
   const foot=walks[0],metres=foot?(foot.legs||[]).reduce((a:number,l:any)=>a+Number(l.distance||0),0):null;
   const fastest=list[0];
   return {time,minutes:fastest?Number(fastest.duration):null,departure:fastest?.startDateTime??null,arrival:fastest?.arrivalDateTime??null,walk_minutes:foot?.duration??null,walk_meters:metres>0?metres:null};
