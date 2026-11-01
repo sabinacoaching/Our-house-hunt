@@ -381,7 +381,7 @@ async function readAgencyProfile(expectedName){
  const heading=normalize(document.querySelector('h1')?.innerText||document.querySelector('h1')?.textContent||document.title);
  const branch=normalize(String(expectedName||'').split(/\s+[-–]\s+|,/)[1]||'');
  if(!brand||!heading.includes(brand)||(branch&&!heading.includes(branch)))return null;
- const selectors='address,[itemprop="address"],[data-testid*="address" i],h1 + h2';
+ const selectors='h1 + h2,h1 + address,[itemprop="address"],[data-testid*="branch-address" i],[data-testid*="agent-address" i]';
  const candidates=[...document.querySelectorAll(selectors)].map(x=>x.innerText||x.textContent||'');
  // Some profiles render the address as plain text directly after the heading.
  const text=document.body?.innerText||'';
