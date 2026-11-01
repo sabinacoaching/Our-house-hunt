@@ -53,6 +53,11 @@ Deno.serve(async(req:Request)=>{
  }));
  for(const x of results){if(!('error' in x)&&!('manual' in x)&&!('cached' in x))out[x.id]=x}
  const successful=results.filter(x=>!('error' in x)&&!('manual' in x)&&!('cached' in x));
- if(successful.length){const r=await admin.from("properties").update({journey_estimates:out}).eq("id",id).eq("address",address).eq("journey_estimates",JSON.stringify(previous)).select('id');if(r.error||!r.data?.length)return respond({errors:results.filter(x=>"error" in x),saveError:r.error?.message||'Journey data changed while calculating'},409)}
+ if(successful.length){
+  let update=admin.from("properties").update({journey_estimates:out}).eq("id",id).eq("address",address).eq("journey_estimates",JSON.stringify(previous));
+  // Do not save a route based on a location that was changed while TfL ran.
+  if(verified)update=update.eq("latitude",p.latitude).eq("longitude",p.longitude).eq("import_diagnostics",JSON.stringify(p.import_diagnostics));
+  const r=await update.select('id');if(r.error||!r.data?.length)return respond({errors:results.filter(x=>"error" in x),saveError:r.error?.message||'Journey data changed while calculating'},409)
+ }
  return respond({journeys:out,errors:results.filter(x=>"error" in x),cached:false});
 });
