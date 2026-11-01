@@ -315,9 +315,8 @@ async function enrichProperty(p){
  let data;
  try{data=await extension('IMPORT_URL',{url:p.url},70000)}
  catch(e){
-   // Record the failure so its cause remains inspectable without asking for screenshots.
-   const result={source:'original-listing',status:'extension-error',error:String(e.message||e).slice(0,300),attempted_at:new Date().toISOString()};
-   await sb.from('properties').update({import_diagnostics:result}).eq('id',p.id);
+   // Do not replace source snapshots or reconciliation state when a read fails.
+   console.warn('Original listing could not be read',e);
    throw e;
  }
  const current=await sb.from('properties').select('*').eq('id',p.id).single();
