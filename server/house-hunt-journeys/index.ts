@@ -1,4 +1,4 @@
-import {selectJourney,matchesOrigin,matchesDestination} from './select.js';
+import {selectJourney,matchesOrigin,matchesDestination,verifiedLocation,nearLocation} from './select.js';
 import {createClient} from "npm:@supabase/supabase-js@2.49.8";
 const root=Deno.env.get("SUPABASE_URL")!;
 const admin=createClient(root,Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,{auth:{persistSession:false,autoRefreshToken:false}});
@@ -20,11 +20,12 @@ Deno.serve(async(req:Request)=>{
  let id="";
  try{id=(await req.json()).id}catch{return respond({error:"Invalid request"},400)}
  if(typeof id!=="string"||!/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(id))return respond({error:"Invalid house"},400);
- const result=await admin.from("properties").select("id,address,latitude,longitude,journey_estimates").eq("id",id).single();
+ const result=await admin.from("properties").select("id,address,latitude,longitude,journey_estimates,import_diagnostics").eq("id",id).single();
  if(result.error||!result.data)return respond({error:"House not found"},404);
  const p=result.data,address=String(p.address||"").trim();
  if(!/^\d+[a-z]?\s+/i.test(address))return respond({error:"A precise numbered address is required for journeys"},422);
- const queryAddress=address.split(',').slice(0,2).join(',').trim();
+ const verified=verifiedLocation(p);
+ const queryAddress=verified?verified.lat+','+verified.lon:address;
  const previous=p.journey_estimates||{},date=dateForTuesday(),out={...previous};
  const fresh=destinations.every(d=>previous[d.id]?.manual_override===true||(previous[d.id]?.origin_input===address&&Number.isFinite(Number(previous[d.id]?.minutes))&&previous[d.id]?.calculation_version==='arrival-window-v4'));
  if(fresh)return respond({journeys:out,cached:true});
@@ -41,13 +42,13 @@ Deno.serve(async(req:Request)=>{
    const journeys=payloads.flatMap(payload=>payload.journeys||[]).filter((j:any)=>{
     const legs=j.legs||[],first=legs[0]?.departurePoint,last=legs[legs.length-1]?.arrivalPoint;
     const lat=Number(first?.lat),lon=Number(first?.lon);
-    return matchesOrigin(address,first)&&matchesDestination(d.id,last)&&first?.lat!=null&&first?.lon!=null&&Number.isFinite(lat)&&Number.isFinite(lon)&&lat>49&&lat<61&&lon> -9&&lon<3;
+    return (verified?nearLocation(first,verified):matchesOrigin(address,first))&&matchesDestination(d.id,last)&&first?.lat!=null&&first?.lon!=null&&Number.isFinite(lat)&&Number.isFinite(lon)&&lat>49&&lat<61&&lon> -9&&lon<3;
    });
    const target=Date.parse(date.slice(0,4)+'-'+date.slice(4,6)+'-'+date.slice(6,8)+'T'+d.arrival.slice(0,2)+':'+d.arrival.slice(2)+':00Z');
    const best=selectJourney(journeys,target);
    if(!best)throw Error("No route with the exact house, destination and a consistent arrival was returned");
    const legs=best.legs,first=legs[0].departurePoint,last=legs[legs.length-1].arrivalPoint;
-   return {id:d.id,minutes:Number(best.duration),arrival:best.arrivalDateTime,departure:best.startDateTime,date,origin:first.lat+','+first.lon,origin_input:address,origin_address:first.commonName,destination_address:last.commonName,calculated_at:new Date().toISOString(),source:'TfL Journey Planner',calculation_version:'arrival-window-v4',desired_arrival:d.arrival,destination:d.destination};
+   return {id:d.id,minutes:Number(best.duration),arrival:best.arrivalDateTime,departure:best.startDateTime,date,origin:verified?verified.lat+','+verified.lon:first.lat+','+first.lon,origin_input:address,origin_address:first.commonName,origin_source:verified?'Nominatim confirmed address':'TfL confirmed address',destination_address:last.commonName,calculated_at:new Date().toISOString(),source:'TfL Journey Planner',calculation_version:'arrival-window-v4',desired_arrival:d.arrival,destination:d.destination};
   }catch(e){return{id:d.id,error:String(e)}}
  }));
  for(const x of results){if(!('error' in x)&&!('manual' in x)&&!('cached' in x))out[x.id]=x}

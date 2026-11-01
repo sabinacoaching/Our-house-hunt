@@ -15,4 +15,6 @@ test('geocoding rejects a different house or street and missing number',()=>{
  assert.equal(validateGeocode('110 Dunston Road, Battersea',candidate('110','Dunston Avenue')),false);
  assert.equal(validateGeocode('Dunston Road, Battersea',candidate('110','Dunston Road')),false);
  assert.equal(validateGeocode('110 Dunston Road, Battersea',candidate('110','Dunston Rd')),true);
+ assert.equal(validateGeocode('110 Dunston Road, Battersea SW11 5YB',{address:{house_number:'110',road:'Dunston Road',postcode:'SW11 5QU'},display_name:'110 Dunston Road, Battersea, London'}),false);
+ assert.equal(validateGeocode('110 Dunston Road, Battersea',{address:{house_number:'110',road:'Dunston Road'},display_name:'110 Dunston Road, Newcastle'}),false);
 });
