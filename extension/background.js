@@ -347,7 +347,20 @@ async function readPropertyFromPage(){
  address=address.replace(/^\s*\d+\s*bed(?:room)?s?\s+.*?\s+(?:for sale|to rent)\s*/i,'').replace(/^\s*property\s+for\s+sale\s*/i,'').replace(/\s*[-|]\s*(?:Zoopla|Rightmove).*$/i,'').trim();
  if(address.length>160)address=title.slice(0,160);
  if(!gallery.length)throw new Error('Listing loaded but house photographs were not found');
- return {listing_id:location.pathname.match(/\/(?:details|properties)\/(\d+)/)?.[1]||null,source,title,address,price,bedrooms,bathrooms,wc_count:wcs,floors,floor_area_sqm:area,garden_area_sqm:gardenArea,garden_description:gardenDescription,station_name:stationName,station_distance_miles:stationMiles,station_2_name:station2Name,station_2_distance_miles:station2Miles,latitude,longitude,property_type:propertyType,tenure,images:gallery,floorplans:plans,floorplan_status:plans.length?'found-in-original-listing':clickedPlanTab?'tab-opened-but-image-not-found':floorTab?'floorplan-tab-click-failed':'floorplan-tab-not-found',floorplan_diagnostic:{tabFound:!!floorTab,tabClicked:clickedPlanTab,candidateCount:plans.length,error:planTabError},extension_version:'0.9.0'};
+ // Identify only the agent named by this listing; the portals often provide an
+ // enquiry form without disclosing the agent's actual email address.
+ const logo=[...document.querySelectorAll('img[alt^="Logo of "]')][0];
+ const logoName=String(logo?.alt||'').replace(/^Logo of\s+/i,'').trim();
+ const disclaimer=mainText.match(/marketing materials provided by\s*[-–:]\s*(.+?)\.\s*Zoopla\b/i)?.[1]?.trim();
+ const rightmoveAgent=description.match(/\bMarketed by\s+(.+?)(?:[.!]|$)/i)?.[1]?.trim();
+ const agency_name=(source==='Zoopla'?(logoName||disclaimer):rightmoveAgent)||null;
+ let agency_email=null;
+ const agentBlock=logo?.closest?.('[data-testid*="agent" i],aside,section')||[...document.querySelectorAll('[data-testid*="agent" i],aside')].find(el=>agency_name&&(el.innerText||el.textContent||'').includes(agency_name));
+ for(const anchor of agentBlock?.querySelectorAll?.('a[href^="mailto:"]')||[]){
+  const value=String(anchor.getAttribute('href')||'').replace(/^mailto:/i,'').split('?')[0].trim();
+  if(/^[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(value)){agency_email=value;break}
+ }
+ return {listing_id:location.pathname.match(/\/(?:details|properties)\/(\d+)/)?.[1]||null,source,title,address,agency_name,agency_email,price,bedrooms,bathrooms,wc_count:wcs,floors,floor_area_sqm:area,garden_area_sqm:gardenArea,garden_description:gardenDescription,station_name:stationName,station_distance_miles:stationMiles,station_2_name:station2Name,station_2_distance_miles:station2Miles,latitude,longitude,property_type:propertyType,tenure,images:gallery,floorplans:plans,floorplan_status:plans.length?'found-in-original-listing':clickedPlanTab?'tab-opened-but-image-not-found':floorTab?'floorplan-tab-click-failed':'floorplan-tab-not-found',floorplan_diagnostic:{tabFound:!!floorTab,tabClicked:clickedPlanTab,candidateCount:plans.length,error:planTabError},extension_version:'0.10.0'};
 }
 async function extract(url){
  if(!validListing(url))throw new Error('URL must be a Zoopla or Rightmove individual property listing');
@@ -381,7 +394,7 @@ async function fetchImage(url){
 }
 chrome.runtime.onMessage.addListener((req,sender,sendResponse)=>{
  if(!/^https:\/\/sabinacoaching\.github\.io\/(?:our-house-hunt|Our-house-hunt)\//.test(sender.url||''))return false;
- if(req.action==='PING'){sendResponse({ok:true,data:{extension:'Our House Hunt',version:'0.9.0'}});return false;}
+ if(req.action==='PING'){sendResponse({ok:true,data:{extension:'Our House Hunt',version:'0.10.0'}});return false;}
  if(!['IMPORT_URL','FETCH_IMAGE'].includes(req.action))return false;
  (async()=>{try{const data=req.action==='IMPORT_URL'?await extract(req.url):await fetchImage(req.url);sendResponse({ok:true,data})}catch(e){sendResponse({ok:false,error:e.message})}})();
  return true;
