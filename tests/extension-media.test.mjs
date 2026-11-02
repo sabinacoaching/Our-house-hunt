@@ -5,7 +5,7 @@ import {readFileSync} from 'node:fs';
 const source=readFileSync(new URL('../extension/background.js',import.meta.url),'utf8');
 function runPage({host,path,body,script='',buttons=[],query=()=>null}){
  const h1={textContent:'2 bedroom house for sale Test Road, London',closest:()=>null};
- const document={body:{innerText:body},title:'2 bedroom house for sale Test Road, London',querySelector:s=>s==='h1'?h1:query(s),querySelectorAll:s=>s==='script'?[{textContent:script}]:s==='button'?buttons:s.startsWith('button,')?buttons.filter(b=>b.floor):[]};
+ const document={body:{innerText:body},title:'2 bedroom house for sale Test Road, London',querySelector:s=>s==='h1'?h1:query(s),querySelectorAll:s=>s==='script'?[{textContent:script}]:s==='button'?buttons:s==='button,[role="tab"]'?buttons:s.startsWith('button,')?buttons.filter(b=>b.floor):[]};
  const c=vm.createContext({document,location:{hostname:host,pathname:path},URL,console,performance:{getEntriesByType:()=>[]},setTimeout:fn=>{fn();return 1},clearTimeout(){},chrome:{runtime:{onMessage:{addListener(){}}}}});
  return vm.runInContext(source+';readPropertyFromPage()',c);
 }
@@ -32,4 +32,12 @@ test('Zoopla reads the original listing media model without opening a gallery',a
  const result=await runPage({host:'www.zoopla.co.uk',path:'/for-sale/details/123',body:'£500,000\n2 bedroom house',script});
  assert.deepEqual(Array.from(result.images),['https://lid.zoocdn.com/u/1200/900/first.jpg','https://lid.zoocdn.com/u/1200/900/second.jpg']);
  assert.deepEqual(Array.from(result.floorplans),['https://lid.zoocdn.com/u/1200/900/plan.jpg']);
+});
+test('Zoopla reads location and address from the listing Street View panel',async()=>{
+ const listing={listingId:123,propertyImage:[{filename:'first.jpg'}],floorPlan:{image:[{filename:'plan.jpg'}]}};
+ const script='self.__next_f.push('+JSON.stringify([1,'7d:'+JSON.stringify(['$', 'div',null,{children:listing}])+'\n'])+')';
+ let open=false;const street={textContent:'Street view',innerText:'Street view',click(){open=true},getAttribute:()=>''};
+ const panel={querySelector:s=>s.includes('short-address')?{textContent:'88 Sussex Ave'}:s.includes('long-address')?{textContent:'Isleworth, England'}:s.includes('address-link')?{href:'https://www.google.com/maps/@51.4681168,-0.3424992,0a,73.7y'}:null};
+ const result=await runPage({host:'www.zoopla.co.uk',path:'/for-sale/details/123',body:'£500,000\n2 bedroom house',script,buttons:[street],query:s=>s.includes('-content-street_view')&&open?panel:null});
+ assert.equal(result.location_hint.source,'listing-street-view');assert.equal(result.location_hint.address,'88 Sussex Ave, Isleworth, England');assert.equal(result.location_hint.latitude,51.4681168);
 });
