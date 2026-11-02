@@ -17,7 +17,7 @@ function setup(candidate=building){
  return {p,enrich,saved:()=>saved};
 }
 test('new import stores a confirmed address point that the journey endpoint can use',async()=>{
- const x=setup();await x.enrich(x.p);
+ const x=setup();await assert.rejects(x.enrich(x.p),/Station lookup unavailable/);
  assert.equal(x.saved().import_diagnostics.route_pending,true);
  assert.deepEqual(verifiedLocation(x.p),{lat:51.4457332,lon:-0.3675938});
 });
