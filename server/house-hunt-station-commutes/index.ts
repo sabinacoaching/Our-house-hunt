@@ -109,7 +109,15 @@ Deno.serve(async(req:Request)=>{
   const oldResults=cache.results||[];
   const merged=result.map((x:any,i:number)=>({...oldResults[i],...x,walking_miles:x.walking_miles??oldResults[i]?.walking_miles??null,walking_minutes:x.walking_minutes??oldResults[i]?.walking_minutes??null}));
   const out={...cache,origin:final.origin,names,date,times,results:merged,tfl_final:final,calculated_at:final.calculated_at,source:"TfL Journey Planner"};
-  const update=await admin.from("properties").update({station_commutes:out}).eq("id",id).eq("station_commutes",JSON.stringify(cache)).select("id");
+  // Only save results for the location and station names actually routed.
+  // Tolerate PostgREST's rounding of double precision coordinates.
+  let request=admin.from("properties").update({station_commutes:out}).eq("id",id).eq("station_commutes",JSON.stringify(cache))
+   .gte("latitude",origin.lat-1e-9).lte("latitude",origin.lat+1e-9)
+   .gte("longitude",origin.lon-1e-9).lte("longitude",origin.lon+1e-9);
+  for(const key of ["station_name","station_2_name","station_3_name"]){
+   request=p[key]==null?request.is(key,null):request.eq(key,p[key]);
+  }
+  const update=await request.select("id");
   if(update.error||!update.data?.length)return reply({error:"Station data changed during calculation",details:update.error?.message},409);
   return reply({commutes:out,cached:false});
  }catch(e){return reply({error:String(e)},500)}
