@@ -34,6 +34,10 @@ async function readPropertyFromPage(){
     const model=nodes[nodes[0].propertyData];
     const expected=location.pathname.match(/\/properties\/(\d+)/)?.[1];
     if(String(nodes[model.id])!==expected)throw Error('Rightmove listing ID mismatch');
+    // Only use the map point of the property whose listing ID was verified.
+    const locationData=nodes[model.location];
+    const lat=Number(nodes[locationData?.latitude]),lon=Number(nodes[locationData?.longitude]);
+    if(locationData?.latitude!=null&&locationData?.longitude!=null&&Number.isFinite(lat)&&Number.isFinite(lon)&&lat>49&&lat<61&&lon> -9&&lon<3)listingMapPoint={source:'listing-map',latitude:lat,longitude:lon,address:null};
     const media=key=>{
      const arr=nodes[model[key]];
      if(!Array.isArray(arr))return [];
@@ -47,14 +51,14 @@ async function readPropertyFromPage(){
  if(source==='Zoopla'){
   const expected=location.pathname.match(/\/details\/(\d+)/)?.[1];
   for(const script of scripts){
-   if(!script.includes('self.__next_f.push')||!script.includes('propertyImage')||!script.includes('floorPlan'))continue;
+   if(!script.includes('self.__next_f.push')||!script.includes('propertyImage'))continue;
    try{
     const payload=JSON.parse(script.slice(script.indexOf('['),script.lastIndexOf(']')+1))[1];
     const root=JSON.parse(payload.slice(payload.indexOf(':')+1));
     let listing=null;
     const visit=x=>{
      if(!x||typeof x!=='object'||listing)return;
-     if(String(x.listingId)===expected&&Array.isArray(x.propertyImage)&&x.floorPlan){listing=x;return}
+     if(String(x.listingId)===expected&&Array.isArray(x.propertyImage)){listing=x;return}
      for(const value of Object.values(x))visit(value);
     };
     visit(root);
@@ -64,7 +68,7 @@ async function readPropertyFromPage(){
     const media=items=>(items||[]).map(x=>x.filename).filter(x=>typeof x==='string'&&/^[a-z0-9_-]+\.(?:jpg|jpeg|png|webp|gif|avif)$/i.test(x)).map(x=>'https://lid.zoocdn.com/u/1200/900/'+x);
     const photosFromSource=media(listing.propertyImage);
     if(photosFromSource.length!==listing.propertyImage.length)continue;
-    authoritativePhotos=photosFromSource;authoritativePlans=media(listing.floorPlan.image);
+    authoritativePhotos=photosFromSource;authoritativePlans=Array.isArray(listing.floorPlan?.image)?media(listing.floorPlan.image):null;
     break;
    }catch(e){console.warn('Zoopla media model unavailable',String(e))}
   }
@@ -394,7 +398,7 @@ async function readPropertyFromPage(){
   if(postcode)agency_address=segment.slice(('About '+agency_name).length,postcode.index+postcode[0].length).trim().replace(/\s+/g,' ');
  }
  const agency_website=null;
- return {listing_id:location.pathname.match(/\/(?:details|properties)\/(\d+)/)?.[1]||null,source,title,address,agency_name,agency_email,agency_website,agency_address,agency_profile_url,price,bedrooms,bathrooms,wc_count:wcs,floors,floor_area_sqm:area,garden_area_sqm:gardenArea,garden_description:gardenDescription,station_name:stationName,station_distance_miles:stationMiles,station_2_name:station2Name,station_2_distance_miles:station2Miles,latitude,longitude,location_hint,property_type:propertyType,tenure,images:gallery,floorplans:plans,floorplan_status:plans.length?'found-in-original-listing':clickedPlanTab?'tab-opened-but-image-not-found':floorTab?'floorplan-tab-click-failed':'floorplan-tab-not-found',floorplan_diagnostic:{tabFound:!!floorTab,tabClicked:clickedPlanTab,candidateCount:plans.length,error:planTabError},extension_version:'0.13.0'};
+ return {listing_id:location.pathname.match(/\/(?:details|properties)\/(\d+)/)?.[1]||null,source,title,address,agency_name,agency_email,agency_website,agency_address,agency_profile_url,price,bedrooms,bathrooms,wc_count:wcs,floors,floor_area_sqm:area,garden_area_sqm:gardenArea,garden_description:gardenDescription,station_name:stationName,station_distance_miles:stationMiles,station_2_name:station2Name,station_2_distance_miles:station2Miles,latitude,longitude,location_hint,property_type:propertyType,tenure,images:gallery,floorplans:plans,floorplan_status:plans.length?'found-in-original-listing':clickedPlanTab?'tab-opened-but-image-not-found':floorTab?'floorplan-tab-click-failed':'floorplan-tab-not-found',floorplan_diagnostic:{tabFound:!!floorTab,tabClicked:clickedPlanTab,candidateCount:plans.length,error:planTabError},extension_version:'0.14.0'};
 }
 async function readAgencyProfile(expectedName){
  const normalize=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
@@ -461,7 +465,7 @@ async function fetchImage(url){
 }
 chrome.runtime.onMessage.addListener((req,sender,sendResponse)=>{
  if(!/^https:\/\/sabinacoaching\.github\.io\/(?:our-house-hunt|Our-house-hunt)\//.test(sender.url||''))return false;
- if(req.action==='PING'){sendResponse({ok:true,data:{extension:'Our House Hunt',version:'0.13.0'}});return false;}
+ if(req.action==='PING'){sendResponse({ok:true,data:{extension:'Our House Hunt',version:'0.14.0'}});return false;}
  if(!['IMPORT_URL','FETCH_IMAGE'].includes(req.action))return false;
  (async()=>{try{const data=req.action==='IMPORT_URL'?await extract(req.url):await fetchImage(req.url);sendResponse({ok:true,data})}catch(e){sendResponse({ok:false,error:e.message})}})();
  return true;
