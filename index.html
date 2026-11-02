@@ -268,6 +268,12 @@ async function importHouse(raw){
  const planChecks=[];
  const floorplans=await archive(floorplanCandidates,id,'source-plan',Infinity,planChecks,Number(String(data.extension_version||'0').split('.')[1])>=9);
  const p={id,url,source:data.source,title:data.title||'',address:data.address||'',agency_name:data.agency_name||null,agency_email:data.agency_email||null,agency_website:data.agency_website||null,price:data.price??null,bedrooms:data.bedrooms??null,bathrooms:listingBathrooms(data),wc_count:data.wc_count??null,floors:listingFloors(data),floor_area_sqm:data.floor_area_sqm??null,garden_area_sqm:data.garden_area_sqm??null,garden_description:data.garden_description||'',station_name:'',station_distance_miles:null,station_2_name:'',station_2_distance_miles:null,latitude:null,longitude:null,property_type:data.property_type||null,tenure:data.tenure||null,images,floorplans,import_diagnostics:{source:'original-listing',extension_version:data.extension_version||'unknown',status:data.floorplan_status||'unknown',candidates:floorplanCandidates.length,archived:floorplans.length,checks:planChecks,attempted_at:new Date().toISOString(),media_source_revision:mediaRevision,media_source_result:'completed',source_values:{agency_name:data.agency_name||null,agency_email:data.agency_email||null,agency_website:data.agency_website||null,price:data.price??null,bedrooms:data.bedrooms??null,bathrooms:listingBathrooms(data),wc_count:data.wc_count??null,floors:listingFloors(data),floor_area_sqm:data.floor_area_sqm??null,garden_area_sqm:data.garden_area_sqm??null,garden_description:data.garden_description||'',property_type:data.property_type||null,tenure:data.tenure||null}},created_by:user.id,status:''};
+ const hint=data.location_hint;
+ if(hint?.source==='listing-street-view'&&Number.isFinite(Number(hint.latitude))&&Number.isFinite(Number(hint.longitude))&&Number(hint.latitude)>49&&Number(hint.latitude)<61&&Number(hint.longitude)>-9&&Number(hint.longitude)<3){
+  if(/^\s*\d+[a-z]?\s+/i.test(hint.address||'')&&!/^\s*\d+[a-z]?\s+/i.test(p.address))p.address=hint.address;
+  p.latitude=Number(hint.latitude);p.longitude=Number(hint.longitude);
+  p.import_diagnostics.source_location={source:'listing-street-view',listing_url:url,address_input:p.address,latitude:p.latitude,longitude:p.longitude,display_address:hint.address||null};
+ }
  p.import_diagnostics.route_pending=true;
  const r=await sb.from('properties').insert(p);
  if(r.error)throw r.error;
@@ -715,7 +721,7 @@ async function repairExistingMedia(){
  }finally{mediaRepairRunning=false}
 }
 async function resumePendingRoutes(id=null){
- const pending=homes.filter(p=>(!id||p.id===id)&&p.status!=='deleted'&&p.import_diagnostics?.route_pending===true&&/^\s*\d+[a-z]?\s+/i.test(p.address||''));
+ const pending=homes.filter(p=>(!id||p.id===id)&&p.status!=='deleted'&&p.import_diagnostics?.route_pending===true&&(/^\s*\d+[a-z]?\s+/i.test(p.address||'')||(p.import_diagnostics?.source_location?.source==='listing-street-view'&&p.latitude!=null&&p.longitude!=null)));
  for(const p of pending){if(!user)break;pendingJourneyImportIds.add(p.id);await finishNewHouseImport(p.id)}
  return pending.length;
 }
