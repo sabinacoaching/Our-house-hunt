@@ -16,3 +16,7 @@ test('a numbered original address is not replaced and invalid coordinates are ig
  assert.equal(run({source:'listing-street-view',latitude:0,longitude:0,address:'88 Sussex Ave'}).latitude,null);
  assert.equal(run({source:'unrelated',latitude:51.46,longitude:-0.34,address:'88 Sussex Ave'}).latitude,null);
 });
+test('a location from the listing map can route without guessing a house number',()=>{
+ const p=run({source:'listing-map',latitude:51.48116,longitude:-0.356191});
+ assert.equal(p.address,'Sussex Avenue, Isleworth TW7');assert.equal(p.import_diagnostics.source_location.source,'listing-map');
+});
