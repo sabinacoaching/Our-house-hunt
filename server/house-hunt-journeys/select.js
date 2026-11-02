@@ -15,6 +15,11 @@ export function matchesDestination(id,point){
 // The browser can supply an independently geocoded building, but only when
 // the saved proof still describes the current address and current coordinates.
 export function verifiedLocation(p){
+ const hint=p?.import_diagnostics?.source_location;
+ if(hint?.source==='listing-street-view'&&hint.listing_url===p.url&&hint.address_input===p.address&&hint.latitude!=null&&hint.longitude!=null&&p.latitude!=null&&p.longitude!=null){
+  const lat=Number(hint.latitude),lon=Number(hint.longitude);
+  if(Number.isFinite(lat)&&Number.isFinite(lon)&&lat>49&&lat<61&&lon> -9&&lon<3&&Math.abs(lat-Number(p.latitude))<1e-7&&Math.abs(lon-Number(p.longitude))<1e-7)return {lat,lon};
+ }
  const v=p?.import_diagnostics?.geocode_verified;
  if(v?.source!=='nominatim'||v.address_input!==p.address||v.house_number==null||!v.road)return null;
  const input=String(p.address||'').replace(/\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b/ig,'').trim();
