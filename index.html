@@ -455,7 +455,16 @@ async function enrichWalkingStations(p){
  const overpass='[out:json][timeout:15];(node(around:4000,'+lat+','+lon+')['+'"railway"="station"'+'];node(around:4000,'+lat+','+lon+')['+'"railway"="halt"'+'];way(around:4000,'+lat+','+lon+')['+'"railway"="station"'+'];);out center tags;';
  let data=null,lastError=null;
  for(const endpoint of ['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter']){
-   try{const res=await fetch(endpoint+'?data='+encodeURIComponent(overpass),{headers:{Accept:'application/json'}});if(!res.ok)throw Error('Station lookup HTTP '+res.status);data=await res.json();break}catch(e){lastError=e}
+   try{const res=await fetch(endpoint+'?data='+encodeURIComponent(overpass),{headers:{Accept:'application/json'},signal:AbortSignal.timeout(12000)});if(!res.ok)throw Error('Station lookup HTTP '+res.status);data=await res.json();break}catch(e){lastError=e}
+ }
+ if(!data){
+  try{
+   const query=new URLSearchParams({lat:String(lat),lon:String(lon),stopTypes:'NaptanRailStation,NaptanMetroStation',radius:'4000',returnLines:'false'});
+   const res=await fetch('https://api.tfl.gov.uk/StopPoint?'+query,{headers:{Accept:'application/json'},signal:AbortSignal.timeout(12000)});
+   if(!res.ok)throw Error('TfL station lookup HTTP '+res.status);
+   const result=await res.json();
+   data={elements:(result.stopPoints||[]).filter(s=>s.modes?.some(m=>['national-rail','overground','tube','tram','dlr','elizabeth-line'].includes(m))).map(s=>({lat:s.lat,lon:s.lon,tags:{name:String(s.commonName||'').replace(/\s+(?:rail|underground)\s+station$/i,m=>/underground/i.test(m)?' Underground':'')}}))};
+  }catch(e){lastError=e}
  }
  if(!data)throw lastError||Error('Station lookup unavailable');
  const seen=new Set(),stations=[];
