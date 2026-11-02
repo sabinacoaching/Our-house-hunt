@@ -26,12 +26,13 @@ test('Zoopla captures the gallery panel and its specifically labelled plan',asyn
  assert.deepEqual(Array.from(result.images),[a,b]);assert.deepEqual(Array.from(result.floorplans),[plan]);
 });
 test('Zoopla reads the original listing media model without opening a gallery',async()=>{
- const listing={listingId:123,propertyImage:[{filename:'first.jpg'},{filename:'second.jpg'}],floorPlan:{image:[{filename:'plan.jpg'}]}};
+ const listing={listingId:123,location:{coordinates:{latitude:51.48116,longitude:-0.356191}},propertyImage:[{filename:'first.jpg'},{filename:'second.jpg'}],floorPlan:{image:[{filename:'plan.jpg'}]}};
  const rsc='7d:'+JSON.stringify(['$', 'div',null,{children:listing}])+'\n';
  const script='self.__next_f.push('+JSON.stringify([1,rsc])+')';
  const result=await runPage({host:'www.zoopla.co.uk',path:'/for-sale/details/123',body:'£500,000\n2 bedroom house',script});
  assert.deepEqual(Array.from(result.images),['https://lid.zoocdn.com/u/1200/900/first.jpg','https://lid.zoocdn.com/u/1200/900/second.jpg']);
  assert.deepEqual(Array.from(result.floorplans),['https://lid.zoocdn.com/u/1200/900/plan.jpg']);
+ assert.equal(result.location_hint.source,'listing-map');assert.equal(result.location_hint.latitude,51.48116);
 });
 test('Zoopla reads location and address from the listing Street View panel',async()=>{
  const listing={listingId:123,propertyImage:[{filename:'first.jpg'}],floorPlan:{image:[{filename:'plan.jpg'}]}};

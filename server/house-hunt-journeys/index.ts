@@ -56,7 +56,7 @@ Deno.serve(async(req:Request)=>{
    const best=selectJourney(journeys,target);
    if(!best)throw Error("No route with the exact house, destination and a consistent arrival was returned");
    const legs=best.legs,first=legs[0].departurePoint,last=legs[legs.length-1].arrivalPoint;
-   return {id:d.id,minutes:Number(best.duration),arrival:best.arrivalDateTime,departure:best.startDateTime,date,origin:verified?verified.lat+','+verified.lon:first.lat+','+first.lon,origin_input:address,origin_address:first.commonName,origin_source:verified?(p.import_diagnostics?.source_location?.source==='listing-street-view'?'Listing Street View':'Nominatim confirmed address'):'TfL confirmed address',destination_address:last.commonName,calculated_at:new Date().toISOString(),source:'TfL Journey Planner',calculation_version:'arrival-window-v4',desired_arrival:d.arrival,destination:d.destination};
+   return {id:d.id,minutes:Number(best.duration),arrival:best.arrivalDateTime,departure:best.startDateTime,date,origin:verified?verified.lat+','+verified.lon:first.lat+','+first.lon,origin_input:address,origin_address:first.commonName,origin_source:verified?(p.import_diagnostics?.source_location?.source==='listing-map'?'Listing map':p.import_diagnostics?.source_location?.source==='listing-street-view'?'Listing Street View':'Nominatim confirmed address'):'TfL confirmed address',destination_address:last.commonName,calculated_at:new Date().toISOString(),source:'TfL Journey Planner',calculation_version:'arrival-window-v4',desired_arrival:d.arrival,destination:d.destination};
   }catch(e){return{id:d.id,error:String(e)}}
  }));
  for(const x of results){if(!('error' in x)&&!('manual' in x)&&!('cached' in x))out[x.id]=x}
