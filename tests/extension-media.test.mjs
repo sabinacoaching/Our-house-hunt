@@ -17,6 +17,13 @@ test('Rightmove media come from the matching listing model in source order',asyn
  const result=await runPage({host:'www.rightmove.co.uk',path:'/properties/12345',body:'£550,000\n2 bedroom house',script});
  assert.deepEqual(Array.from(result.images),[a,b]);assert.deepEqual(Array.from(result.floorplans),[plan]);
 });
+test('Rightmove uses the matched listing map point for automatic journeys',async()=>{
+ // Model shape and coordinates from a real Rightmove property page; no house is imported.
+ const nodes=[{propertyData:1},{id:2,images:3,floorplans:4,location:5},'93918057',[6],[8],{latitude:10,longitude:11,pinType:12},{url:7},'https://media.rightmove.co.uk/property-photo/a.jpeg',{url:9},'https://media.rightmove.co.uk/floorplan/p.jpeg',51.479742,-0.338502,'ACCURATE_POINT'];
+ const script='window.__PAGE_MODEL = '+JSON.stringify({data:JSON.stringify(nodes)})+';';
+ const result=await runPage({host:'www.rightmove.co.uk',path:'/properties/93918057',body:'£550,000\n4 bedroom house',script});
+ assert.equal(result.location_hint.source,'listing-map');assert.equal(result.location_hint.latitude,51.479742);assert.equal(result.location_hint.longitude,-0.338502);
+});
 test('Zoopla captures the gallery panel and its specifically labelled plan',async()=>{
  const a='https://lid.zoocdn.com/u/1200/900/a.jpg',b='https://lid.zoocdn.com/u/1200/900/b.jpg',plan='https://lid.zoocdn.com/u/1200/900/p.jpg';
  let panel='';const photo={textContent:'2 Photos',innerText:'2 Photos',click(){panel='images'},getAttribute:()=>''};
@@ -33,6 +40,12 @@ test('Zoopla reads the original listing media model without opening a gallery',a
  assert.deepEqual(Array.from(result.images),['https://lid.zoocdn.com/u/1200/900/first.jpg','https://lid.zoocdn.com/u/1200/900/second.jpg']);
  assert.deepEqual(Array.from(result.floorplans),['https://lid.zoocdn.com/u/1200/900/plan.jpg']);
  assert.equal(result.location_hint.source,'listing-map');assert.equal(result.location_hint.latitude,51.48116);
+});
+test('Zoopla location is available even when the listing provides no floor plan',async()=>{
+ const listing={listingId:123,location:{coordinates:{latitude:51.48116,longitude:-0.356191}},propertyImage:[{filename:'first.jpg'}]};
+ const script='self.__next_f.push('+JSON.stringify([1,'7d:'+JSON.stringify(['$', 'div',null,{children:listing}])+'\n'])+')';
+ const result=await runPage({host:'www.zoopla.co.uk',path:'/for-sale/details/123',body:'£500,000\n2 bedroom house',script});
+ assert.equal(result.location_hint.source,'listing-map');assert.equal(result.location_hint.latitude,51.48116);assert.deepEqual(Array.from(result.floorplans),[]);
 });
 test('Zoopla reads location and address from the listing Street View panel',async()=>{
  const listing={listingId:123,propertyImage:[{filename:'first.jpg'}],floorPlan:{image:[{filename:'plan.jpg'}]}};
