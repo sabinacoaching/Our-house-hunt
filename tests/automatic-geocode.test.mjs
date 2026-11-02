@@ -36,7 +36,7 @@ test('Street View coordinates belong to the same listing and current address',()
 test('nearby stations still load from TfL when both Overpass servers fail',async()=>{
  const p={id:'house',address:'88 Sussex Ave, Isleworth',latitude:51.4681168,longitude:-0.3424992,manual_overrides:{},station_commutes:{},import_diagnostics:{route_pending:true}};
  let patch=null;
- const sb={from(){const c={select(){return this},eq(){return this},is(){return this},single:async()=>({data:{...p}}),update(x){patch=x;return this},then(resolve){resolve({data:[{id:p.id}]})}};return c}};
+ const sb={from(){const c={select(){return this},eq(){return this},gte(){return this},lte(){return this},is(){return this},single:async()=>({data:{...p}}),update(x){patch=x;return this},then(resolve){resolve({data:[{id:p.id}]})}};return c}};
  const fetch=async url=>{
   if(String(url).includes('overpass'))throw Error('offline');
   if(String(url).includes('api.tfl.gov.uk/StopPoint?'))return {ok:true,json:async()=>({stopPoints:[{commonName:'Isleworth Rail Station',lat:51.474763,lon:-0.336907,modes:['national-rail']},{commonName:'Hounslow East Underground Station',lat:51.473213,lon:-0.356474,modes:['tube']}]})};

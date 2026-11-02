@@ -20,7 +20,7 @@ function setup(complete=true){
    then(resolve){if(patch?.import_diagnostics)diagnostics=patch.import_diagnostics;resolve({data:[{id:p.id}]})}
   };return chain}
  };
- const enrich=async()=>{stationsFound=true};
+ const enrich=async()=>{stationsFound=true;p.station_name='Isleworth'};
  const calculate=new Function('pendingJourneyImportIds','sb','enrichWalkingStations',code+';return calculateImportRoutes')(pending,sb,enrich);
  return {p,pending,calls,calculate,diagnostics:()=>diagnostics,stationsFound:()=>stationsFound};
 }
@@ -34,4 +34,9 @@ test('new import derives a confirmed point, saves station routes and marks compl
 test('incomplete station routes remain pending for a later retry',async()=>{
  const x=setup(false);assert.ok((await x.calculate(x.p)).includes('station times'));
  assert.equal(x.pending.has(x.p.id),true);assert.equal(x.diagnostics().route_pending,true);
+});
+test('does not ask for station journeys when no station has been found',async()=>{
+ const x=setup();x.p.latitude=51.4;x.p.longitude=-0.2;
+ assert.ok((await x.calculate(x.p)).includes('stations'));
+ assert.deepEqual(x.calls,['house-hunt-journeys']);assert.equal(x.pending.has(x.p.id),true);
 });

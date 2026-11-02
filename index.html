@@ -297,6 +297,7 @@ async function calculateImportRoutes(p){
  const errors=[];
  for(const name of ['house-hunt-journeys','house-hunt-station-commutes']){
   if(name==='house-hunt-station-commutes'&&(p.latitude==null||p.longitude==null)){errors.push('precise address for station times');continue}
+  if(name==='house-hunt-station-commutes'&&!p.station_name){errors.push('stations');continue}
   try{
    const result=await sb.functions.invoke(name,{body:{id:p.id}});
    if(result.error||result.data?.error||result.data?.saveError)throw result.error||Error(result.data?.error||result.data?.saveError);
@@ -355,9 +356,9 @@ async function finishNewHouseImport(id){
    await calculateImportRoutes(p);
    await refresh();
   }
-  const q=await sb.from('properties').select('address,latitude,longitude,floorplans,floors,floor_area_sqm,station_name,station_2_name').eq('id',id).single();
+  const q=await sb.from('properties').select('address,latitude,longitude,floorplans,floors,floor_area_sqm,station_name,station_2_name,journey_estimates').eq('id',id).single();
   if(!q.error&&q.data){
-   const p=q.data,missing=[p.latitude==null||p.longitude==null?'verified map point':null,!p.floorplans?.length?'floor plan':null,p.floors==null?'floors':null,p.floor_area_sqm==null?'floor area':null,!p.station_name||!p.station_2_name?'stations':null,pendingJourneyImportIds.has(id)?'journeys':null].filter(Boolean);
+   const p=q.data,missing=[p.latitude==null||p.longitude==null?'map point':null,!p.floorplans?.length?'floor plan':null,p.floors==null?'floors':null,p.floor_area_sqm==null?'floor area':null,!p.station_name||!p.station_2_name?'stations':null,['waterloo','dilly','dancelab'].some(k=>p.journey_estimates?.[k]?.minutes==null)?'journeys':null].filter(Boolean);
    report(missing.length?'Imported. Fields unavailable after source checks: '+missing.join(', ')+'.':'Import complete: '+p.address+'.',!!missing.length);
   }
  }finally{finishingImports.delete(id);if(importsRequestedAgain.delete(id)){await refresh();void resumePendingRoutes(id)}}
@@ -495,7 +496,8 @@ async function enrichWalkingStations(p){
  // Re-read after external calls so another user's edit stays authoritative.
  const fresh=await sb.from('properties').select('*').eq('id',p.id).single();
  if(fresh.error||!fresh.data)throw fresh.error||Error('House not found');
- if(fresh.data.address!==p.address||Number(fresh.data.latitude)!==lat||Number(fresh.data.longitude)!==lon)throw Error('Address or location changed during station lookup');
+ if(fresh.data.address!==p.address||Math.abs(Number(fresh.data.latitude)-lat)>1e-9||Math.abs(Number(fresh.data.longitude)-lon)>1e-9)throw Error('Address or location changed during station lookup');
+ lat=Number(fresh.data.latitude);lon=Number(fresh.data.longitude);
  Object.assign(p,fresh.data);
  const update={},names=['station_name','station_2_name','station_3_name'],distances=['station_distance_miles','station_2_distance_miles','station_3_distance_miles'];
  const used=new Set(names.map(k=>String(p[k]||'').toLowerCase()).filter(Boolean));
@@ -507,11 +509,11 @@ async function enrichWalkingStations(p){
    if(chosen&&!p.manual_overrides?.[names[i]]){update[names[i]]=chosen.name;used.add(chosen.name.toLowerCase())}
   }
   if(chosen&&p[distances[i]]==null&&!p.manual_overrides?.[distances[i]])update[distances[i]]=chosen.miles;
-  if(chosen&&!routeResults[i])routeResults[i]={name:chosen.name,walking_miles:chosen.miles,walking_minutes:chosen.minutes,source:'OpenStreetMap walking route'};
+  if(chosen&&!routeResults[i]?.name)routeResults[i]={name:chosen.name,walking_miles:chosen.miles,walking_minutes:chosen.minutes,source:'OpenStreetMap walking route'};
  }
  if(routeResults.length)update.station_commutes={...(p.station_commutes||{}),results:routeResults};
  if(!Object.keys(update).length)return false;
- let request=sb.from('properties').update(update).eq('id',p.id).eq('address',p.address).eq('latitude',lat).eq('longitude',lon).eq('manual_overrides',JSON.stringify(p.manual_overrides||{}));
+ let request=sb.from('properties').update(update).eq('id',p.id).eq('address',p.address).gte('latitude',lat-1e-9).lte('latitude',lat+1e-9).gte('longitude',lon-1e-9).lte('longitude',lon+1e-9).eq('manual_overrides',JSON.stringify(p.manual_overrides||{}));
  for(const key of Object.keys(update)){
   const value=p[key];request=value==null?request.is(key,null):request.eq(key,typeof value==='object'?JSON.stringify(value):value);
  }
