@@ -20,11 +20,11 @@ Deno.serve(async(req:Request)=>{
  let id="";
  try{id=(await req.json()).id}catch{return respond({error:"Invalid request"},400)}
  if(typeof id!=="string"||!/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(id))return respond({error:"Invalid house"},400);
- const result=await admin.from("properties").select("id,address,latitude,longitude,journey_estimates,import_diagnostics").eq("id",id).single();
+ const result=await admin.from("properties").select("id,url,address,latitude,longitude,journey_estimates,import_diagnostics").eq("id",id).single();
  if(result.error||!result.data)return respond({error:"House not found"},404);
  const p=result.data,address=String(p.address||"").trim();
- if(!/^\d+[a-z]?\s+/i.test(address))return respond({error:"A precise numbered address is required for journeys"},422);
  const verified=verifiedLocation(p);
+ if(!verified&&!/^\d+[a-z]?\s+/i.test(address))return respond({error:"A map point or numbered address is required for journeys"},422);
  const queryAddress=verified?verified.lat+','+verified.lon:address;
  const previous=p.journey_estimates||{},date=dateForTuesday(),out={...previous};
  const fresh=destinations.every(d=>previous[d.id]?.manual_override===true||(previous[d.id]?.origin_input===address&&Number.isFinite(Number(previous[d.id]?.minutes))&&previous[d.id]?.calculation_version==='arrival-window-v4'));
@@ -56,7 +56,7 @@ Deno.serve(async(req:Request)=>{
    const best=selectJourney(journeys,target);
    if(!best)throw Error("No route with the exact house, destination and a consistent arrival was returned");
    const legs=best.legs,first=legs[0].departurePoint,last=legs[legs.length-1].arrivalPoint;
-   return {id:d.id,minutes:Number(best.duration),arrival:best.arrivalDateTime,departure:best.startDateTime,date,origin:verified?verified.lat+','+verified.lon:first.lat+','+first.lon,origin_input:address,origin_address:first.commonName,origin_source:verified?'Nominatim confirmed address':'TfL confirmed address',destination_address:last.commonName,calculated_at:new Date().toISOString(),source:'TfL Journey Planner',calculation_version:'arrival-window-v4',desired_arrival:d.arrival,destination:d.destination};
+   return {id:d.id,minutes:Number(best.duration),arrival:best.arrivalDateTime,departure:best.startDateTime,date,origin:verified?verified.lat+','+verified.lon:first.lat+','+first.lon,origin_input:address,origin_address:first.commonName,origin_source:verified?(p.import_diagnostics?.source_location?.source==='listing-street-view'?'Listing Street View':'Nominatim confirmed address'):'TfL confirmed address',destination_address:last.commonName,calculated_at:new Date().toISOString(),source:'TfL Journey Planner',calculation_version:'arrival-window-v4',desired_arrival:d.arrival,destination:d.destination};
   }catch(e){return{id:d.id,error:String(e)}}
  }));
  for(const x of results){if(!('error' in x)&&!('manual' in x)&&!('cached' in x))out[x.id]=x}

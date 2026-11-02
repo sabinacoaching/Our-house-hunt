@@ -25,3 +25,11 @@ test('a different numbered building does not become a routing origin',async()=>{
  const x=setup({...building,address:{...building.address,house_number:'44'}});await x.enrich(x.p);
  assert.equal(x.saved(),null);assert.equal(verifiedLocation(x.p),null);
 });
+test('Street View coordinates belong to the same listing and current address',()=>{
+ const p={url:'https://www.zoopla.co.uk/for-sale/details/123',address:'88 Sussex Ave, Isleworth',latitude:51.4681168,longitude:-0.3424992};
+ p.import_diagnostics={source_location:{source:'listing-street-view',listing_url:p.url,address_input:p.address,latitude:p.latitude,longitude:p.longitude}};
+ assert.deepEqual(verifiedLocation(p),{lat:p.latitude,lon:p.longitude});
+ assert.equal(verifiedLocation({...p,address:'Another road'}),null);
+ assert.equal(verifiedLocation({...p,url:'https://www.zoopla.co.uk/for-sale/details/456'}),null);
+ assert.equal(verifiedLocation({...p,latitude:51.47}),null);
+});
