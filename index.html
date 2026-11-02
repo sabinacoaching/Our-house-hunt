@@ -513,7 +513,7 @@ async function enrichWalkingStations(p){
  }
  if(routeResults.length)update.station_commutes={...(p.station_commutes||{}),results:routeResults};
  if(!Object.keys(update).length)return false;
- let request=sb.from('properties').update(update).eq('id',p.id).eq('address',p.address).eq('latitude',lat).eq('longitude',lon).eq('manual_overrides',JSON.stringify(p.manual_overrides||{}));
+ let request=sb.from('properties').update(update).eq('id',p.id).eq('address',p.address).gte('latitude',lat-1e-9).lte('latitude',lat+1e-9).gte('longitude',lon-1e-9).lte('longitude',lon+1e-9).eq('manual_overrides',JSON.stringify(p.manual_overrides||{}));
  for(const key of Object.keys(update)){
   const value=p[key];request=value==null?request.is(key,null):request.eq(key,typeof value==='object'?JSON.stringify(value):value);
  }
