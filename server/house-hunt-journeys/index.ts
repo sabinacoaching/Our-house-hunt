@@ -64,7 +64,10 @@ Deno.serve(async(req:Request)=>{
  if(successful.length){
   let update=admin.from("properties").update({journey_estimates:out}).eq("id",id).eq("address",address).eq("journey_estimates",JSON.stringify(previous));
   // Do not save a route based on a location that was changed while TfL ran.
-  if(verified)update=update.eq("latitude",p.latitude).eq("longitude",p.longitude).eq("import_diagnostics",JSON.stringify(p.import_diagnostics));
+  // PostgREST can serialize a double with fewer digits than Postgres stores.
+  // Comparing that rounded value with exact equality rejects a valid save.
+  // A sub-millimetre tolerance retains the concurrent-location guard.
+  if(verified)update=update.gte("latitude",Number(p.latitude)-1e-9).lte("latitude",Number(p.latitude)+1e-9).gte("longitude",Number(p.longitude)-1e-9).lte("longitude",Number(p.longitude)+1e-9).eq("import_diagnostics",JSON.stringify(p.import_diagnostics));
   const r=await update.select('id');if(r.error||!r.data?.length)return respond({errors:results.filter(x=>"error" in x),saveError:r.error?.message||'Journey data changed while calculating'},409)
  }
  return respond({journeys:out,errors:results.filter(x=>"error" in x),cached:false});

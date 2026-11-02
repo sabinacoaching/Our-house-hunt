@@ -11,7 +11,7 @@ function setup({conflict=false,wrongOrigin=false,verified=false,farOrigin=false,
  if(verified)row.import_diagnostics={geocode_verified:{source:'nominatim',address_input:row.address,latitude:51.45,longitude:-.2,house_number:'37',road:'Longford Road'}};
  const urls=[];
  const admin={auth:{getUser:async()=>({data:{user:{id:'member'}}})},from(table){
-  let patch=null,locationChecked=false;return {select(){return patch?Promise.resolve(conflict||(geoConflict&&locationChecked)?{data:[],error:null}:(row={...row,...patch},{data:[{id}],error:null})):this},eq(key){if(key==='latitude')locationChecked=true;return this},update(x){patch=x;return this},single:async()=>({data:row,error:null}),maybeSingle:async()=>({data:{id:'member'},error:null})};
+  let patch=null,locationChecked=false;return {select(){return patch?Promise.resolve(conflict||(geoConflict&&locationChecked)?{data:[],error:null}:(row={...row,...patch},{data:[{id}],error:null})):this},eq(key){if(key==='latitude')throw Error('Rounded coordinates must not be compared for exact equality');return this},gte(key){if(key==='latitude')locationChecked=true;return this},lte(){return this},update(x){patch=x;return this},single:async()=>({data:row,error:null}),maybeSingle:async()=>({data:{id:'member'},error:null})};
  }};
  const fetch=async url=>{requests++;urls.push(String(url));if(failOne&&requests===1)throw Error('TfL temporarily unavailable');const u=new URL(url),d=u.searchParams.get('date'),t=u.searchParams.get('time');
   const day=`${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}T${t.slice(0,2)}:${t.slice(2)}:00Z`;
