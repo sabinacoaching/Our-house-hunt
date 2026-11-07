@@ -58,10 +58,10 @@ dialog.hh-photo-viewer[open]{display:flex;flex-direction:column}
 <section id="mainApp" hidden>
 
 <section class="panel import"><form id="importForm"><label>Add a property</label><div class="inputrow"><input id="urlInput" type="url" placeholder="Paste a Zoopla or Rightmove listing link" required><button id="importButton">Import house</button></div></form><p id="importMessage" class="hint status">Paste the listing URL. The Chrome extension reads its photographs and details.</p></section>
-<div class="filters"><label>Stage<select id="stageFilter"><option value="all">All active</option><option value="archived">Archived</option><option value="deleted">Deleted</option><option value="">—</option><option value="interested">Interested</option><option value="viewing_booked">Viewing booked</option><option value="viewed">Viewed</option><option value="shortlisted">Shortlisted</option><option value="rejected">Rejected</option><option value="under_offer_sold">Under offer / Sold</option></select></label><label>Sort<select id="sort"><option value="manual">My order (drag to rearrange)</option><option value="newest">Recently added</option><option value="price_asc">Lowest price</option><option value="price_desc">Highest price</option><option value="area_desc">Largest house</option><option value="area_asc">Smallest house</option><option value="station_asc">Closest station (walking)</option><option value="station_desc">Furthest station (walking)</option></select></label><label>Search<input id="search" placeholder="Address or area"></label><div id="count" class="count"></div><button id="archiveToggle" type="button" class="secondary">Archived (0)</button><button id="exportExcel" class="secondary" type="button">Export Excel</button><button id="exportPdf" class="secondary" type="button">Export PDF</button></div>
+<div class="filters"><label>Stage<select id="stageFilter"><option value="all">All active</option><option value="archived">Archived</option><option value="deleted">Deleted</option><option value="">—</option><option value="interested">Interested</option><option value="requested_viewing">Requested viewing</option><option value="viewing_booked">Viewing booked</option><option value="viewed">Viewed</option><option value="shortlisted">Shortlisted</option><option value="only_wo">Only w/o</option><option value="under_offer_sold">Under offer / Sold</option></select></label><label>Sort<select id="sort"><option value="manual">My order (drag to rearrange)</option><option value="newest">Recently added</option><option value="price_asc">Lowest price</option><option value="price_desc">Highest price</option><option value="area_desc">Largest house</option><option value="area_asc">Smallest house</option><option value="station_asc">Closest station (walking)</option><option value="station_desc">Furthest station (walking)</option></select></label><label>Search<input id="search" placeholder="Address or area"></label><div id="count" class="count"></div><button id="archiveToggle" type="button" class="secondary">Archived (0)</button><button id="exportExcel" class="secondary" type="button">Export Excel</button><button id="exportPdf" class="secondary" type="button">Export PDF</button></div>
 <div id="cards" class="cards"></div><div id="empty" class="empty" hidden>No houses yet. Import your first listing above.</div>
 </section></main>
-<dialog id="dialog"><div class="dialogtop"><h2 id="detailTitle"></h2><button id="close" class="secondary">✕</button></div><div id="gallery" class="gallery"></div><div class="detailbody"><div id="detailFacts" class="facts"></div><div class="detailsgrid"><label>Address<input id="editAddress"></label><label>Price (£)<input id="editPrice" type="number" min="0"></label><label>Bedrooms<input id="editBeds" type="number" min="0"></label><label>Bathrooms<input id="editBaths" type="number" min="0"></label><label>Stage<select id="editStage"><option value="">—</option><option value="interested">Interested</option><option value="viewing_booked">Viewing booked</option><option value="viewed">Viewed</option><option value="shortlisted">Shortlisted</option><option value="rejected">Rejected</option><option value="under_offer_sold">Under offer / Sold</option><option value="archived">Archive (hide)</option><option value="deleted">Delete (move to trash)</option></select></label><label>Viewing date<input id="editViewing" type="datetime-local"></label></div><div class="actions"><button id="save" type="button">Save changes</button><button id="enrich" class="secondary" type="button">Update listing data</button><button id="uploadPlan" class="secondary" type="button">Upload floor plan</button><input type="file" id="floorPlanFile" accept="image/jpeg,image/png,image/webp,image/avif" hidden><button id="remove" class="danger" type="button">Remove house</button><a id="original" target="_blank" rel="noopener noreferrer">Original listing ↗</a></div><hr><h3>Our notes</h3><div id="notes"></div><form id="noteForm"><textarea id="note" rows="3" required placeholder="Write a comment about this property"></textarea><button>Post comment</button></form></div></dialog>
+<dialog id="dialog"><div class="dialogtop"><h2 id="detailTitle"></h2><button id="close" class="secondary">✕</button></div><div id="gallery" class="gallery"></div><div class="detailbody"><div id="detailFacts" class="facts"></div><div class="detailsgrid"><label>Address<input id="editAddress"></label><label>Price (£)<input id="editPrice" type="number" min="0"></label><label>Bedrooms<input id="editBeds" type="number" min="0"></label><label>Bathrooms<input id="editBaths" type="number" min="0"></label><label>Stage<select id="editStage"><option value="">—</option><option value="interested">Interested</option><option value="requested_viewing">Requested viewing</option><option value="viewing_booked">Viewing booked</option><option value="viewed">Viewed</option><option value="shortlisted">Shortlisted</option><option value="only_wo">Only w/o</option><option value="under_offer_sold">Under offer / Sold</option><option value="archived">Archive (hide)</option><option value="deleted">Delete (move to trash)</option></select></label><label>Viewing date<input id="editViewing" type="datetime-local"></label></div><div class="actions"><button id="save" type="button">Save changes</button><button id="enrich" class="secondary" type="button">Update listing data</button><button id="uploadPlan" class="secondary" type="button">Upload floor plan</button><input type="file" id="floorPlanFile" accept="image/jpeg,image/png,image/webp,image/avif" hidden><button id="remove" class="danger" type="button">Remove house</button><a id="original" target="_blank" rel="noopener noreferrer">Original listing ↗</a></div><hr><h3>Our notes</h3><div id="notes"></div><form id="noteForm"><textarea id="note" rows="3" required placeholder="Write a comment about this property"></textarea><button>Post comment</button></form></div></dialog>
 <dialog id="photoDialog" class="hh-photo-viewer" aria-label="Large property photographs">
  <div class="hh-photo-top">
   <strong id="photoTitle"></strong>
@@ -82,7 +82,7 @@ dialog.hh-photo-viewer[open]{display:flex;flex-direction:column}
 </dialog>
 <script type="module">
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.49.8';
-import {setupComparison} from './comparison.js?v=57';
+import {setupComparison,stationOptions,stationDistance,matchesStation} from './comparison.js?v=58';
 import {setupExports} from './export-tools.js?v=2';
 import {createUniquePhotoStore,photoDigest} from './photo-dedup.js?v=4';
 import {canonicalListing,importChanges,validateGeocode} from './import-utils.js?v=2';
@@ -91,10 +91,10 @@ import {createEditHistory} from './edit-history.js?v=2';
 import {analyzeFloorplan,inspectFloorplanImage} from './floorplan-ocr.js?v=16';
 const sb=createClient('https://ficnuovumurmhzdujjvj.supabase.co','sb_publishable_yrArzwZ2GizO5ATuiAkymg_LdpVZKC9');
 const $=id=>document.getElementById(id);
-const labels={'':'No status',archived:'Archived',deleted:'Deleted',interested:'Interested',viewing_booked:'Viewing booked',viewed:'Viewed',shortlisted:'Shortlisted',rejected:'Rejected',under_offer_sold:'Under offer / Sold'};
+const labels={'':'No status',archived:'Archived',deleted:'Deleted',interested:'Interested',requested_viewing:'Requested viewing',viewing_booked:'Viewing booked',only_wo:'Only w/o',viewed:'Viewed',shortlisted:'Shortlisted',rejected:'Rejected',under_offer_sold:'Under offer / Sold'};
 let user=null,people={},homes=[],visibleHomes=[],selected=null;
-let viewingSelections=null;
-const allActiveStatuses=['','interested','viewing_booked','viewed','shortlisted','rejected','under_offer_sold'];
+let viewingSelections=null,stationSelection=null;
+const allActiveStatuses=['','interested','requested_viewing','viewing_booked','viewed','shortlisted','only_wo','under_offer_sold'];
 function selectedViewingStatuses(){
  if(viewingSelections!==null)return [...viewingSelections];
  const stage=$('stageFilter').value;
@@ -592,7 +592,7 @@ async function startAutoFill(){
 }
 let reorderBusy=false;
 async function reorderHouses(dragId,targetId,step=0,exactPosition=null){
- if($('sort').value!=='manual'||$('stageFilter').value!=='all'||viewingSelections!==null||$('search').value.trim()){report('To rearrange: select My order, All active and clear Search or Viewing status filters.',true);return}
+ if($('sort').value!=='manual'||$('stageFilter').value!=='all'||viewingSelections!==null||stationSelection!==null||$('search').value.trim()){report('To rearrange: select My order, All active and clear Search, Viewing status and Nearest station filters.',true);return}
  const active=homes.filter(p=>p.status!=='archived'&&p.status!=='deleted').sort((a,b)=>Number(a.sort_order??0)-Number(b.sort_order??0)||(new Date(b.created_at)-new Date(a.created_at)));
  const source=active.findIndex(p=>p.id===dragId),destination=active.findIndex(p=>p.id===targetId);
  if(source<0||destination<0||reorderBusy)return;
@@ -622,10 +622,11 @@ async function restoreHouse(p){
 }
 function render(){let rows=homes.filter(p=>(
  (viewingSelections!==null?viewingSelections.has(p.status||''):($('stageFilter').value==='all'?p.status!=='archived'&&p.status!=='deleted':p.status===$('stageFilter').value))
+ &&matchesStation(p,stationSelection)
  &&(!$('search').value.trim()||((p.address||'')+' '+(p.title||'')).toLowerCase().includes($('search').value.trim().toLowerCase()))
  ));if($('sort').value==='manual')rows.sort((a,b)=>Number(a.sort_order??0)-Number(b.sort_order??0)||(new Date(b.created_at)-new Date(a.created_at)));if($('sort').value==='price_asc')rows.sort((a,b)=>(a.price??Infinity)-(b.price??Infinity));if($('sort').value==='price_desc')rows.sort((a,b)=>(b.price??0)-(a.price??0));
 const numeric=(v)=>v==null||v===''?null:Number(v);
-const nearest=(p)=>{const ds=[p.station_distance_miles,p.station_2_distance_miles,p.station_3_distance_miles].map(numeric).filter(v=>Number.isFinite(v)&&v>=0);return ds.length?Math.min(...ds):null};
+const nearest=(p)=>stationDistance(p,stationSelection);
 const sortNumeric=(measure,asc)=>rows.sort((a,b)=>{const av=measure(a),bv=measure(b);if(av==null||!Number.isFinite(av))return bv==null||!Number.isFinite(bv)?0:1;if(bv==null||!Number.isFinite(bv))return -1;return asc?av-bv:bv-av});
 if($('sort').value==='area_desc')sortNumeric(p=>numeric(p.floor_area_sqm),false);
 if($('sort').value==='area_asc')sortNumeric(p=>numeric(p.floor_area_sqm),true);
@@ -779,7 +780,7 @@ $('floorPlanFile').onchange=async()=>{
  finally{button.disabled=false;button.textContent='Upload floor plan'}
 };
 const history=createEditHistory({sb,onRestored:async()=>{const wasOpen=$('dialog').open;if(wasOpen)$('dialog').close();await refresh();if(wasOpen&&selected)await openHouse(selected)}});
-const enhancements=setupComparison({sb,history,photo,displayPhoto,uniquePhotos,openHouse,openPhotoBrowser,onReorder:reorderHouses,canReorder:()=> viewingSelections===null&&$('sort').value==='manual'&&$('stageFilter').value==='all'&&!$('search').value.trim(),getStatusSelection:selectedViewingStatuses,onStatusFilterChange:applyViewingStatuses,onStatusChange:async()=>{await refresh()},shouldAutoCalculate:()=>false,onRestore:restoreHouse});
+const enhancements=setupComparison({sb,history,photo,displayPhoto,uniquePhotos,openHouse,openPhotoBrowser,onReorder:reorderHouses,canReorder:()=> viewingSelections===null&&stationSelection===null&&$('sort').value==='manual'&&$('stageFilter').value==='all'&&!$('search').value.trim(),getStatusSelection:selectedViewingStatuses,onStatusFilterChange:applyViewingStatuses,getStations:()=>stationOptions(homes),getStationSelection:()=>stationSelection,onStationFilterChange:keys=>{const options=stationOptions(homes);stationSelection=keys.length===options.length?null:new Set(keys);render()},onStatusChange:async()=>{await refresh()},shouldAutoCalculate:()=>false,onRestore:restoreHouse});
 setupExports({getVisible:()=>visibleHomes.slice(),getAll:()=>homes.slice(),photo});
 const session=await sb.auth.getSession();user=session.data.session?.user||null;if(user){await show();}else $('login').hidden=false;
 // No automatic polling: properties are read at sign-in and upon explicit Refresh or a saved edit.
