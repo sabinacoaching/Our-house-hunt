@@ -29,6 +29,9 @@ export function stationDistance(property,selection=null){
 export function matchesStation(property,selection){
  return selection===null||['station_name','station_2_name','station_3_name'].some(field=>selection.has(stationKey(property[field])));
 }
+export function nextColumnWidth(startWidth,startX,currentX){
+ return Math.round(Math.max(100,Math.min(1000,startWidth+currentX-startX)));
+}
 // Signed storage links expire. Resolve the plan on each click rather than
 // keeping the URL generated when the table was first rendered.
 export async function openFloorPlan(plan,photo,win=window){
@@ -54,6 +57,19 @@ bar.append(tableBtn,mapBtn,cardsBtn,undoBtn,notice);
 const wrap=node('section','hh-table-shell'),table=node('table','hh-table'),mapPanel=node('section'),mapMsg=node('p','hh-mapmsg','Map shows approximate positions when coordinates are available.'),mapDiv=node('div','hh-map'),missingDiv=node('div','hh-maplist');
 wrap.append(table);mapPanel.append(mapMsg,mapDiv,missingDiv);mapPanel.hidden=true;$('cards').before(bar,wrap,mapPanel);
 let rows=[],mode='table',L=null,map=null,markers=null,mapFramed=false,lastMapSig='';
+const columnWidths=new Map();
+function applyColumnWidth(index,width){
+ for(const row of table.rows){const cell=row.cells[index];if(!cell)continue;cell.style.width=width+'px';cell.style.minWidth=width+'px';cell.style.maxWidth=width+'px'}
+}
+function addColumnResize(th,index){
+ const handle=node('span','hh-column-resizer');
+ handle.title='Drag to resize column';handle.setAttribute('role','separator');handle.setAttribute('aria-orientation','vertical');
+ let startX=0,startWidth=0;
+ handle.onpointerdown=e=>{e.preventDefault();e.stopPropagation();startX=e.clientX;startWidth=th.getBoundingClientRect().width;handle.setPointerCapture(e.pointerId)};
+ handle.onpointermove=e=>{if(!handle.hasPointerCapture(e.pointerId))return;const width=nextColumnWidth(startWidth,startX,e.clientX);columnWidths.set(index,width);applyColumnWidth(index,width)};
+ handle.onpointerup=e=>{if(handle.hasPointerCapture(e.pointerId))handle.releasePointerCapture(e.pointerId)};
+ handle.onclick=e=>e.stopPropagation();th.append(handle);
+}
  history.subscribe(n=>{undoBtn.disabled=n===0;undoBtn.title=n?n+' manual changes can be undone':'No manual changes to undo'});
  undoBtn.onclick=async()=>{undoBtn.disabled=true;const r=await history.undo();if(r.error)flash(r.error.message,true);else flash('Last change undone');undoBtn.disabled=!history.canUndo()};
 function flash(msg,fail=false){notice.textContent=msg;notice.style.color=fail?'#af4b45':'#315e50';setTimeout(()=>{notice.textContent='Changes save for both of you.';notice.style.color=''},3000)}
@@ -177,7 +193,7 @@ function travelCell(p){
 function render(list){
  rows=list;
  const head=node('thead'),hr=node('tr');
- for(const title of labels){
+ for(const [columnIndex,title] of labels.entries()){
   const th=node('th','',title);
   if(title==='Nearest station'){
    th.classList.add('hh-status-filter-heading');
@@ -243,6 +259,7 @@ function render(list){
    trigger.onclick=e=>{e.stopPropagation();menu.hidden=!menu.hidden};
    th.append(trigger,menu);
   }
+  addColumnResize(th,columnIndex);
   hr.append(th);
  }
  head.append(hr);
@@ -376,6 +393,7 @@ function render(list){
    fallback.append(message);body.append(fallback);
   }
  }
+ for(const [index,width] of columnWidths)applyColumnWidth(index,width);
  $('empty').hidden=!!rows.length;
  if(mode==='map')redraw();
 }
