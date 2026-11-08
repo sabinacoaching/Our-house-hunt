@@ -21,6 +21,11 @@ test('a map pin, a different street, or manually fixed coordinates cannot replac
  assert.equal(buildLocationUpdate(p,{...hint,address:'51 Chisholm Road, Croydon'}),null);
  assert.equal(buildLocationUpdate({...p,manual_overrides:{latitude:true}},hint),null);
 });
+test('a verified walking correction keeps its station when the house point changes',()=>{
+ const u=buildLocationUpdate({...p,manual_overrides:{},station_name:'East Croydon Rail Station',station_commutes:{google_verified:{'East Croydon':{walking_minutes:12,source:'manual'}}}},hint);
+ assert.ok(!Object.hasOwn(u,'station_name'));assert.ok(!Object.hasOwn(u,'station_distance_miles'));
+ assert.equal(u.station_commutes.google_verified['East Croydon'].walking_minutes,12);
+});
 test('address editing starts the update and guards concurrent edits',()=>{
  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
  const compare=readFileSync(new URL('../comparison.js',import.meta.url),'utf8');

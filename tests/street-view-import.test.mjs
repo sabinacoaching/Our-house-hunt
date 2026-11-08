@@ -25,3 +25,6 @@ test('an approximate listing map point is not accepted as the house location',()
 test('rejects a panorama located on a different road',()=>{
  const p=run({source:'listing-street-view',latitude:51.46,longitude:-.34,address:'51 Chisholm Road, Croydon'});assert.equal(p.latitude,null);
 });
+test('a Street View point on the correct road is usable without a house number',()=>{
+ assert.equal(validStreetViewHint({source:'listing-street-view',address:'Cedar Rd, Croydon',latitude:51.377,longitude:-.086},'Cedar Road, Croydon'),true);
+});
