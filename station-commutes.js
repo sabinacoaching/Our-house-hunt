@@ -15,6 +15,20 @@ export function stationWalkingMiles(p,i){
  const google=c.google_routes?.origin===p.address&&c.google_routes?.stations?.[i]===name&&c.google_routes.results?.[i]?.walking_minutes!=null?c.google_routes.results[i]:null;
  return stationOverride(c,name).walking_miles??google?.walking_miles??t?.walking_miles??r.walking_miles??r.google_walking?.miles??p[i===0?'station_distance_miles':i===1?'station_2_distance_miles':'station_3_distance_miles'];
 }
+export function stationWalkingMapUrl(p,i){
+ const names=stationNames(p),name=names[i],c=p.station_commutes||{},final=c.tfl_final;
+ const location=p.import_diagnostics?.source_location;
+ const sourceMatches=location?.source==='listing-street-view'&&location.listing_url===p.url&&location.address_input===p.address&&Number.isFinite(Number(p.latitude))&&Number.isFinite(Number(p.longitude))&&Math.abs(Number(location.latitude)-Number(p.latitude))<1e-7&&Math.abs(Number(location.longitude)-Number(p.longitude))<1e-7;
+ const origin=sourceMatches?`${p.latitude},${p.longitude}`:(p.address?.trim()?p.address+', United Kingdom':`${p.latitude},${p.longitude}`);
+ const item=final?.origin===`${p.latitude},${p.longitude}`&&final?.results?.[i]?.name===name?final.results[i]:null;
+ const lat=Number(item?.lat),lon=Number(item?.lon);
+ const preciseStop=!!item?.station_id&&!/^HUB/i.test(item.station_id)&&item.lat!=null&&item.lon!=null&&Number.isFinite(lat)&&Number.isFinite(lon)&&lat>49&&lat<61&&lon> -9&&lon<3;
+ const destination=preciseStop?`${lat},${lon}`:/tram/i.test(name)?name.replace(/\s*(?:tram\s*)?stop$/i,'')+' Tram Stop, London, UK':/underground|tube/i.test(name)||name==='Ealing Common'?name.replace(/\s*underground$/i,'')+' Underground Station, London, UK':name.replace(/\s*(?:railway|rail|train|station)$/i,'')+' Railway Station, London, UK';
+ const args={api:'1',origin,destination,travelmode:'walking'};
+ const checked=c.google_routes;
+ if(!sourceMatches&&!preciseStop&&checked?.origin===p.address&&checked?.origin_place_id&&checked?.stations?.[i]===name&&checked?.results?.[i]?.station_place_id){args.origin_place_id=checked.origin_place_id;args.destination_place_id=checked.results[i].station_place_id}
+ return 'https://www.google.com/maps/dir/?'+new URLSearchParams(args).toString();
+}
 // Station times are calculated once by TfL and saved in the property record.
 // A single walking link opens Google Maps with the destination's station name.
 export function setupStationAccess({sb,history,shouldAutoCalculate}){
@@ -22,21 +36,6 @@ export function setupStationAccess({sb,history,shouldAutoCalculate}){
  const el=(tag,cls='',content='')=>{const e=document.createElement(tag);e.className=cls;e.textContent=content;return e};
  const names=stationNames;
  const coords=p=>p.latitude+','+p.longitude;
- function destination(name){
-  if(/tram/i.test(name))return name.replace(/\s*(?:tram\s*)?stop$/i,'')+' Tram Stop, London, UK';
-  if(/underground|tube/i.test(name)||name==='Ealing Common')return name.replace(/\s*underground$/i,'')+' Underground Station, London, UK';
-  return name.replace(/\s*(?:railway|rail|train|station)$/i,'')+' Railway Station, London, UK';
- }
- function mapUrl(p,i){
-  const origin=p.address?.trim()?p.address+', United Kingdom':coords(p);
-  const args={api:'1',origin,destination:destination(names(p)[i]),travelmode:'walking'};
-  const checked=p.station_commutes?.google_routes;
-  if(checked?.origin===p.address&&checked?.origin_place_id&&checked?.stations?.[i]===names(p)[i]&&checked?.results?.[i]?.station_place_id){
-   args.origin_place_id=checked.origin_place_id;
-   args.destination_place_id=checked.results[i].station_place_id;
-  }
-  return 'https://www.google.com/maps/dir/?'+new URLSearchParams(args).toString();
- }
  function render(p,i){
   const v=views.get(p.id+':'+i);if(!v)return;
   const c=p.station_commutes||{},r=c.results?.[i]?.name===names(p)[i]?c.results?.[i]:{},t=completed(p)&&c.tfl_final.results?.[i]?.name===names(p)[i]?c.tfl_final.results?.[i]:null,override=stationOverride(c,names(p)[i]);
@@ -46,7 +45,7 @@ export function setupStationAccess({sb,history,shouldAutoCalculate}){
   const approxMiles=google?.walking_miles==null&&override.walking_miles==null&&t?.walking_miles==null&&r.walking_miles==null&&r.google_walking?.miles==null;
   const approxMins=google?.walking_minutes==null&&override.walking_minutes==null&&t?.walking_minutes==null&&r.walking_minutes==null&&r.google_walking?.minutes==null;
   v.walk.textContent='Walking: '+(mi!=null?(approxMiles?'~':'')+Number(mi).toFixed(2)+' mi':'—')+(mins!=null?' / '+(approxMins?'~':'')+Math.round(mins)+' min':'')+(override.walking_minutes!=null?' · manual':google?.walking_minutes!=null?' · Google':'');
-  v.link.href=mapUrl(p,i);
+  v.link.href=stationWalkingMapUrl(p,i);
   const pt=override.pt_minutes??google?.pt_minutes??t?.pt_minutes??t?.avg_minutes??r.pt_minutes??r.avg_minutes;
   const exactPt=override.pt_minutes!=null||google?.pt_minutes!=null||!!t?.pt_departure||!!r.pt_departure;
   v.pt.textContent='PT: '+(pt!=null?(exactPt?'':'~')+Math.round(pt)+' min':'—');

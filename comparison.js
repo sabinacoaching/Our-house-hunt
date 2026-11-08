@@ -1,4 +1,4 @@
-import {setupStationAccess,stationWalkingMiles} from './station-commutes.js?v=20';
+import {setupStationAccess,stationWalkingMiles} from './station-commutes.js?v=21';
 export function manualJourney(previous,minutes,updatedAt){
  const old=previous||{};
  const {arrival,departure,arrival_gap_minutes,date,calculated_at,audit_version,calculation_version,...rest}=old;
