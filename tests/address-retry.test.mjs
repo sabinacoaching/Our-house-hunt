@@ -21,9 +21,14 @@ test('saving one address does not recalculate another unfinished house',async()=
  const x=setup(['one','two'].map(id=>({id,address:'88 Sussex Avenue, Isleworth',import_diagnostics:{route_pending:true}})));
  await x.resume('one');assert.deepEqual(x.calls,['one']);
 });
+test('unfinished Street View imports can be retried without a house number',async()=>{
+ const x=setup([{id:'new',address:'Cedar Road',import_diagnostics:{route_pending:true,require_street_view:true}}]);
+ assert.equal(await x.resume(),1);assert.deepEqual(x.calls,['new']);
+});
 test('refresh and save connect to pending import retry',()=>{
  assert.match(html,/\$\('refresh'\)\.onclick=[^\n]+await resumePendingRoutes\(\)/);
  assert.match(html,/\$\('save'\)\.onclick=[^\n]+if\(addressChanged\)void updateLocationForAddress\(id\)/);
  assert.match(html,/importsRequestedAgain\.delete\(id\)/);
+ assert.match(html,/updateLocationForAddress\(p.id,false\)/);
  assert.match(html,/Address or location changed during station lookup/);
 });

@@ -349,6 +349,12 @@ async function finishNewHouseImport(id){
    if(missingPlan||missingFacts){
     try{await enrichProperty(p)}catch(e){console.warn('Original listing retry',p.address,e)}
    }
+   if(p.import_diagnostics?.require_street_view&&(p.latitude==null||p.longitude==null)){
+    if(await updateLocationForAddress(p.id,false)){
+     const current=await sb.from('properties').select('*').eq('id',p.id).single();
+     if(current.data)Object.assign(p,current.data);
+    }
+   }
    if(missingGeo){
     try{await enrichWalkingStations(p)}catch(e){console.warn('Station/geocoding retry',p.address,e)}
    }
@@ -740,7 +746,7 @@ async function repairExistingMedia(){
 }
 // Address edits are tied to a fresh Street View point. Leave manual corrections untouched.
 const updatingLocations=new Set();
-async function updateLocationForAddress(id){
+async function updateLocationForAddress(id,continueImport=true){
  if(updatingLocations.has(id))return false;
  updatingLocations.add(id);
  try{
@@ -764,12 +770,12 @@ async function updateLocationForAddress(id){
   const saved=await request.select('id');
   if(saved.error||!saved.data?.length)throw saved.error||Error('House changed during route calculation; nothing was overwritten');
   pendingJourneyImportIds.add(id);
-  await refresh();await finishNewHouseImport(id);return true;
+  await refresh();if(continueImport)await finishNewHouseImport(id);return true;
  }catch(e){report('Address saved, but automatic route update could not finish: '+(e?.message||e),true);return false}
  finally{updatingLocations.delete(id)}
 }
 async function resumePendingRoutes(id=null){
- const pending=homes.filter(p=>(!id||p.id===id)&&p.status!=='deleted'&&p.import_diagnostics?.route_pending===true&&(/^\s*\d+[a-z]?\s+/i.test(p.address||'')||(['listing-street-view','listing-map'].includes(p.import_diagnostics?.source_location?.source)&&p.latitude!=null&&p.longitude!=null)));
+ const pending=homes.filter(p=>(!id||p.id===id)&&p.status!=='deleted'&&p.import_diagnostics?.route_pending===true&&(p.import_diagnostics?.require_street_view||/^\s*\d+[a-z]?\s+/i.test(p.address||'')||(['listing-street-view','listing-map'].includes(p.import_diagnostics?.source_location?.source)&&p.latitude!=null&&p.longitude!=null)));
  for(const p of pending){if(!user)break;pendingJourneyImportIds.add(p.id);await finishNewHouseImport(p.id)}
  return pending.length;
 }
