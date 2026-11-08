@@ -275,7 +275,7 @@ async function importHouse(raw){
   p.latitude=Number(hint.latitude);p.longitude=Number(hint.longitude);
   p.import_diagnostics.source_location={source:hint.source,listing_url:url,address_input:p.address,latitude:p.latitude,longitude:p.longitude,display_address:hint.address||null};
  }
- p.import_diagnostics.route_pending=true;
+ p.import_diagnostics.route_pending=true;p.import_diagnostics.require_street_view=true;
  const r=await sb.from('properties').insert(p);
  if(r.error)throw r.error;
  pendingJourneyImportIds.add(id);
@@ -296,6 +296,7 @@ async function importHouse(raw){
 async function calculateImportRoutes(p){
  if(!pendingJourneyImportIds.has(p.id))return [];
  const errors=[];
+ if(p.import_diagnostics?.require_street_view&&(p.latitude==null||p.longitude==null))return ['Street View map point'];
  for(const name of ['house-hunt-journeys','house-hunt-station-commutes']){
   if(name==='house-hunt-station-commutes'&&(p.latitude==null||p.longitude==null)){errors.push('precise address for station times');continue}
   if(name==='house-hunt-station-commutes'&&!p.station_name){errors.push('stations');continue}
@@ -420,6 +421,7 @@ async function enrichWalkingStations(p){
  // A listing's map pin may be approximate. When missing, use the street's map centre and show distances as approximate.
  let lat=Number(p.latitude),lon=Number(p.longitude);
  if(!Number.isFinite(lat)||!Number.isFinite(lon)||lat<49||lat>61||lon< -9||lon>3||p.latitude==null||p.longitude==null){
+   if(p.import_diagnostics?.require_street_view)return false;
    const query=String(p.address||'').replace(/^\s*\d+\s*bed(?:room)?s?\s+.*?\s+(?:for sale|to rent)\s*/i,'').replace(/\s*[-|]\s*(?:Zoopla|Rightmove).*$/i,'').trim();
    if(query.length<8)return false;
    // Nominatim frequently returns no result when a street name is combined with only an outcode (e.g. TW2).
