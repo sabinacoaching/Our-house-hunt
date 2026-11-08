@@ -1,11 +1,12 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {validStreetViewHint} from '../import-utils.js';
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const body=html.slice(html.indexOf(' const hint=data.location_hint;'),html.indexOf(' p.import_diagnostics.route_pending=true;'));
 function run(hint,address='Sussex Avenue, Isleworth TW7'){
  const p={address,latitude:null,longitude:null,import_diagnostics:{}},data={location_hint:hint},url='https://www.zoopla.co.uk/for-sale/details/123';
- new Function('p','data','url',body)(p,data,url);return p;
+ new Function('p','data','url','validStreetViewHint',body)(p,data,url,validStreetViewHint);return p;
 }
 test('source panorama populates a new home and retains its provenance',()=>{
  const p=run({source:'listing-street-view',latitude:51.4681168,longitude:-0.3424992,address:'88 Sussex Ave, Isleworth, England'});
@@ -16,7 +17,14 @@ test('a numbered original address is not replaced and invalid coordinates are ig
  assert.equal(run({source:'listing-street-view',latitude:0,longitude:0,address:'88 Sussex Ave'}).latitude,null);
  assert.equal(run({source:'unrelated',latitude:51.46,longitude:-0.34,address:'88 Sussex Ave'}).latitude,null);
 });
-test('a location from the listing map can route without guessing a house number',()=>{
+test('an approximate listing map point is not accepted as the house location',()=>{
  const p=run({source:'listing-map',latitude:51.48116,longitude:-0.356191});
- assert.equal(p.address,'Sussex Avenue, Isleworth TW7');assert.equal(p.import_diagnostics.source_location.source,'listing-map');
+ assert.equal(p.address,'Sussex Avenue, Isleworth TW7');assert.equal(p.latitude,null);assert.equal(p.import_diagnostics.source_location,undefined);
+});
+
+test('rejects a panorama located on a different road',()=>{
+ const p=run({source:'listing-street-view',latitude:51.46,longitude:-.34,address:'51 Chisholm Road, Croydon'});assert.equal(p.latitude,null);
+});
+test('a Street View point on the correct road is usable without a house number',()=>{
+ assert.equal(validStreetViewHint({source:'listing-street-view',address:'Cedar Rd, Croydon',latitude:51.377,longitude:-.086},'Cedar Road, Croydon'),true);
 });

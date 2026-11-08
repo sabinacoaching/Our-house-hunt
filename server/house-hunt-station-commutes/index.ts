@@ -30,8 +30,21 @@ async function findStation(name:string,origin:{lat:number,lon:number}){
   if(!/underground|tram/i.test(name)&&m.modes?.includes("tube")&&!m.modes?.includes("national-rail"))penalty+=10;
   return {...m,km,score:penalty+km*2};
  }).sort((a:any,b:any)=>a.score-b.score);
- const chosen=scored[0];
+ let chosen=scored[0];
  if(!chosen||chosen.km>8||chosen.score>35)throw Error("Station could not be matched accurately");
+ // Search often returns a transport hub whose centroid is neither its rail
+ // entrance nor its tram stop. Resolve the child matching the requested mode.
+ const wantedMode=/tram/i.test(name)?"tram":/underground|tube/i.test(name)?"tube":"national-rail";
+ if(String(chosen.id||"").startsWith("HUB")){
+  const details=await fetch("https://api.tfl.gov.uk/StopPoint/"+encodeURIComponent(chosen.id),{signal:AbortSignal.timeout(15000),headers:{"Accept":"application/json"}});
+  if(!details.ok)throw Error("TfL station details "+details.status);
+  const hub=await details.json();
+  const candidates=(hub.children||[]).filter((child:any)=>child.modes?.includes(wantedMode)&&child.lat!=null&&child.lon!=null&&Number.isFinite(Number(child.lat))&&Number.isFinite(Number(child.lon))&&normal(child.commonName)===target);
+  candidates.sort((a:any,b:any)=>distance(origin,a)-distance(origin,b));
+  const child=candidates[0];
+  if(!child)throw Error("No matching "+wantedMode+" station in transport hub");
+  chosen={...chosen,id:child.id,name:child.commonName,lat:child.lat,lon:child.lon,km:distance(origin,child)/1000};
+ }
  return {id:chosen.id,name:chosen.name,lat:chosen.lat,lon:chosen.lon,km:chosen.km};
 }
 async function sample(origin:any,station:any,date:string,time:string){
@@ -48,11 +61,12 @@ async function sample(origin:any,station:any,date:string,time:string){
    const parse=(x:any)=>{const s=String(x||"");return Date.parse(/(?:Z|[+-]\d\d:\d\d)$/.test(s)?s:s+"Z")};
    const start=parse(j.startDateTime),end=parse(j.arrivalDateTime);
    if(!Number.isFinite(start)||!Number.isFinite(end)||Math.abs((end-start)/60000-Number(j.duration))>1)return false;
-   const last=(j.legs||[]).at(-1)?.arrivalPoint;
+   const first=(j.legs||[])[0]?.departurePoint,last=(j.legs||[]).at(-1)?.arrivalPoint;
+   if(!first||first.lat==null||first.lon==null||!Number.isFinite(Number(first.lat))||!Number.isFinite(Number(first.lon))||distance(origin,first)>100)return false;
    if(!last||last.lat==null||last.lon==null||!Number.isFinite(Number(last.lat))||!Number.isFinite(Number(last.lon))||distance(station,last)>30)return false;
    return (j.legs||[]).some((l:any)=>!["walking","cycle"].includes(l.mode?.id)&&!!l.mode?.id);
   }).sort((a:any,b:any)=>Number(a.duration)-Number(b.duration));
-  const walks=(data.journeys||[]).filter((j:any)=>{const legs=j.legs||[],last=legs.at(-1)?.arrivalPoint;return legs.length>0&&legs.every((l:any)=>l.mode?.id==="walking")&&last?.lat!=null&&last?.lon!=null&&Number.isFinite(Number(last.lat))&&Number.isFinite(Number(last.lon))&&distance(station,last)<=30}).sort((a:any,b:any)=>a.duration-b.duration);
+  const walks=(data.journeys||[]).filter((j:any)=>{const legs=j.legs||[],last=legs.at(-1)?.arrivalPoint,first=legs[0]?.departurePoint;return legs.length>0&&legs.every((l:any)=>l.mode?.id==="walking")&&first?.lat!=null&&first?.lon!=null&&Number.isFinite(Number(first.lat))&&Number.isFinite(Number(first.lon))&&distance(origin,first)<=100&&last?.lat!=null&&last?.lon!=null&&Number.isFinite(Number(last.lat))&&Number.isFinite(Number(last.lon))&&distance(station,last)<=30}).sort((a:any,b:any)=>a.duration-b.duration);
   const foot=walks[0],metres=foot?(foot.legs||[]).reduce((a:number,l:any)=>a+Number(l.distance||0),0):null;
   const fastest=list[0];
   return {time,minutes:fastest?Number(fastest.duration):null,departure:fastest?.startDateTime??null,arrival:fastest?.arrivalDateTime??null,walk_minutes:foot?.duration??null,walk_meters:metres>0?metres:null};
@@ -78,7 +92,7 @@ Deno.serve(async(req:Request)=>{
   const cache=p.station_commutes||{};
   // Audited homes can have three independently routed stations; never replace them with a two-station cache.
   if(cache.station_audit&&JSON.stringify((cache.tfl_final?.names||[]).slice(0,2))===JSON.stringify(names))return reply({commutes:cache,cached:true});
-  if(cache.tfl_final?.complete&&cache.tfl_final.origin===origin.lat+","+origin.lon&&JSON.stringify(cache.tfl_final.names)===JSON.stringify(names))return reply({commutes:cache,cached:true});
+  if(cache.tfl_final?.complete&&cache.tfl_final.version==='tfl-v4'&&cache.tfl_final.origin===origin.lat+","+origin.lon&&JSON.stringify(cache.tfl_final.names)===JSON.stringify(names))return reply({commutes:cache,cached:true});
   const result=[];
   for(let i=0;i<3;i++){
    const name=names[i];
@@ -105,7 +119,7 @@ Deno.serve(async(req:Request)=>{
   }
   const availableStations=result.filter(x=>x.name);
   const completed=availableStations.length>0&&availableStations.every(x=>x.walking_miles!=null&&x.walking_minutes!=null);
-  const final={version:"tfl-v3",complete:completed,origin:origin.lat+","+origin.lon,names,date,times,results:result,calculated_at:new Date().toISOString(),source:"TfL Journey Planner"};
+  const final={version:"tfl-v4",complete:completed,origin:origin.lat+","+origin.lon,names,date,times,results:result,calculated_at:new Date().toISOString(),source:"TfL Journey Planner"};
   const oldResults=cache.results||[];
   const merged=result.map((x:any,i:number)=>({...oldResults[i],...x,walking_miles:x.walking_miles??oldResults[i]?.walking_miles??null,walking_minutes:x.walking_minutes??oldResults[i]?.walking_minutes??null}));
   const out={...cache,origin:final.origin,names,date,times,results:merged,tfl_final:final,calculated_at:final.calculated_at,source:"TfL Journey Planner"};

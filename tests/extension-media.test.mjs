@@ -5,7 +5,7 @@ import {readFileSync} from 'node:fs';
 const source=readFileSync(new URL('../extension/background.js',import.meta.url),'utf8');
 function runPage({host,path,body,script='',buttons=[],query=()=>null}){
  const h1={textContent:'2 bedroom house for sale Test Road, London',closest:()=>null};
- const document={body:{innerText:body},title:'2 bedroom house for sale Test Road, London',querySelector:s=>s==='h1'?h1:query(s),querySelectorAll:s=>s==='script'?[{textContent:script}]:s==='button'?buttons:s==='button,[role="tab"]'?buttons:s.startsWith('button,')?buttons.filter(b=>b.floor):[]};
+ const document={body:{innerText:body},title:'2 bedroom house for sale Test Road, London',querySelector:s=>s==='h1'?h1:query(s),querySelectorAll:s=>s==='script'?[{textContent:script}]:s==='button'?buttons:s==='button,[role="tab"],a'?buttons:s.startsWith('button,')?buttons.filter(b=>b.floor):[]};
  const c=vm.createContext({document,location:{hostname:host,pathname:path},URL,console,performance:{getEntriesByType:()=>[]},setTimeout:fn=>{fn();return 1},clearTimeout(){},chrome:{runtime:{onMessage:{addListener(){}}}}});
  return vm.runInContext(source+';readPropertyFromPage()',c);
 }
@@ -17,12 +17,12 @@ test('Rightmove media come from the matching listing model in source order',asyn
  const result=await runPage({host:'www.rightmove.co.uk',path:'/properties/12345',body:'£550,000\n2 bedroom house',script});
  assert.deepEqual(Array.from(result.images),[a,b]);assert.deepEqual(Array.from(result.floorplans),[plan]);
 });
-test('Rightmove uses the matched listing map point for automatic journeys',async()=>{
+test('Rightmove does not substitute the listing map point for Street View',async()=>{
  // Model shape and coordinates from a real Rightmove property page; no house is imported.
  const nodes=[{propertyData:1},{id:2,images:3,floorplans:4,location:5},'93918057',[6],[8],{latitude:10,longitude:11,pinType:12},{url:7},'https://media.rightmove.co.uk/property-photo/a.jpeg',{url:9},'https://media.rightmove.co.uk/floorplan/p.jpeg',51.479742,-0.338502,'ACCURATE_POINT'];
  const script='window.__PAGE_MODEL = '+JSON.stringify({data:JSON.stringify(nodes)})+';';
  const result=await runPage({host:'www.rightmove.co.uk',path:'/properties/93918057',body:'£550,000\n4 bedroom house',script});
- assert.equal(result.location_hint.source,'listing-map');assert.equal(result.location_hint.latitude,51.479742);assert.equal(result.location_hint.longitude,-0.338502);
+ assert.equal(result.location_hint,null);
 });
 test('Zoopla captures the gallery panel and its specifically labelled plan',async()=>{
  const a='https://lid.zoocdn.com/u/1200/900/a.jpg',b='https://lid.zoocdn.com/u/1200/900/b.jpg',plan='https://lid.zoocdn.com/u/1200/900/p.jpg';
@@ -39,13 +39,13 @@ test('Zoopla reads the original listing media model without opening a gallery',a
  const result=await runPage({host:'www.zoopla.co.uk',path:'/for-sale/details/123',body:'£500,000\n2 bedroom house',script});
  assert.deepEqual(Array.from(result.images),['https://lid.zoocdn.com/u/1200/900/first.jpg','https://lid.zoocdn.com/u/1200/900/second.jpg']);
  assert.deepEqual(Array.from(result.floorplans),['https://lid.zoocdn.com/u/1200/900/plan.jpg']);
- assert.equal(result.location_hint.source,'listing-map');assert.equal(result.location_hint.latitude,51.48116);
+ assert.equal(result.location_hint,null);
 });
 test('Zoopla location is available even when the listing provides no floor plan',async()=>{
  const listing={listingId:123,location:{coordinates:{latitude:51.48116,longitude:-0.356191}},propertyImage:[{filename:'first.jpg'}]};
  const script='self.__next_f.push('+JSON.stringify([1,'7d:'+JSON.stringify(['$', 'div',null,{children:listing}])+'\n'])+')';
  const result=await runPage({host:'www.zoopla.co.uk',path:'/for-sale/details/123',body:'£500,000\n2 bedroom house',script});
- assert.equal(result.location_hint.source,'listing-map');assert.equal(result.location_hint.latitude,51.48116);assert.deepEqual(Array.from(result.floorplans),[]);
+ assert.equal(result.location_hint,null);assert.deepEqual(Array.from(result.floorplans),[]);
 });
 test('Zoopla reads location and address from the listing Street View panel',async()=>{
  const listing={listingId:123,propertyImage:[{filename:'first.jpg'}],floorPlan:{image:[{filename:'plan.jpg'}]}};
@@ -54,4 +54,13 @@ test('Zoopla reads location and address from the listing Street View panel',asyn
  const panel={querySelector:s=>s.includes('short-address')?{textContent:'88 Sussex Ave'}:s.includes('long-address')?{textContent:'Isleworth, England'}:s.includes('address-link')?{href:'https://www.google.com/maps/@51.4681168,-0.3424992,0a,73.7y'}:null};
  const result=await runPage({host:'www.zoopla.co.uk',path:'/for-sale/details/123',body:'£500,000\n2 bedroom house',script,buttons:[street],query:s=>s.includes('-content-street_view')&&open?panel:null});
  assert.equal(result.location_hint.source,'listing-street-view');assert.equal(result.location_hint.address,'88 Sussex Ave, Isleworth, England');assert.equal(result.location_hint.latitude,51.4681168);
+});
+
+test('Rightmove reads the Google Street View panorama address and point',async()=>{
+ let open=false;const street={textContent:'Street View',innerText:'Street View',click(){open=true},getAttribute:()=>''};
+ const query=s=>!open?null:s.includes('short-address')?{textContent:'28 Algar Rd'}:s.includes('long-address')?{textContent:'Isleworth, England'}:s.includes('address-link')?{href:'https://www.google.com/maps/@51.4674242,-0.3271555,0a,73.7y'}:null;
+ const nodes=[{propertyData:1},{id:2,images:3,floorplans:4},'12345',[5],[],{url:6},'https://media.rightmove.co.uk/property-photo/a.jpeg'];
+ const script='window.__PAGE_MODEL = '+JSON.stringify({data:JSON.stringify(nodes)})+';';
+ const result=await runPage({host:'www.rightmove.co.uk',path:'/properties/12345',body:'£500,000\n2 bedroom house',script,buttons:[street],query});
+ assert.equal(result.location_hint.source,'listing-street-view');assert.equal(result.location_hint.address,'28 Algar Rd, Isleworth, England');
 });

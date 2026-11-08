@@ -40,3 +40,8 @@ test('does not ask for station journeys when no station has been found',async()=
  assert.ok((await x.calculate(x.p)).includes('stations'));
  assert.deepEqual(x.calls,['house-hunt-journeys']);assert.equal(x.pending.has(x.p.id),true);
 });
+test('new imports requiring Street View never route from an unverified address',async()=>{
+ const x=setup();x.p.import_diagnostics={require_street_view:true};
+ assert.deepEqual(await x.calculate(x.p),['Street View map point']);
+ assert.deepEqual(x.calls,[]);assert.equal(x.pending.has(x.p.id),true);
+});

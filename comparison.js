@@ -1,4 +1,4 @@
-import {setupStationAccess} from './station-commutes.js?v=19';
+import {setupStationAccess,stationWalkingMiles} from './station-commutes.js?v=20';
 export function manualJourney(previous,minutes,updatedAt){
  const old=previous||{};
  const {arrival,departure,arrival_gap_minutes,date,calculated_at,audit_version,calculation_version,...rest}=old;
@@ -18,10 +18,10 @@ export function stationOptions(properties){
  return [...names].sort((a,b)=>a[1].localeCompare(b[1],'en-GB'));
 }
 export function stationDistance(property,selection=null){
- const names=['station_name','station_2_name','station_3_name'],distances=['station_distance_miles','station_2_distance_miles','station_3_distance_miles'];
+ const names=['station_name','station_2_name','station_3_name'];
  const values=names.map((name,i)=>{
   if(selection!==null&&!selection.has(stationKey(property[name])))return null;
-  const value=property[distances[i]];
+  const value=stationWalkingMiles(property,i);
   return value==null||value===''?null:Number(value);
  }).filter(v=>v!==null&&Number.isFinite(v)&&v>=0);
  return values.length?Math.min(...values):null;
@@ -43,7 +43,7 @@ export async function openFloorPlan(plan,photo,win=window){
   if(tab)tab.location.replace(url);else win.location.assign(url);
  }catch(error){if(tab)tab.close();throw error}
 }
-export function setupComparison({sb,history,photo,displayPhoto,uniquePhotos,openHouse,openPhotoBrowser,onReorder,canReorder,onStatusChange,shouldAutoCalculate,onRestore,getStatusSelection,onStatusFilterChange,getStations,getStationSelection,onStationFilterChange}){
+export function setupComparison({sb,history,photo,displayPhoto,uniquePhotos,openHouse,openPhotoBrowser,onReorder,canReorder,onStatusChange,onAddressChange,shouldAutoCalculate,onRestore,getStatusSelection,onStatusFilterChange,getStations,getStationSelection,onStationFilterChange}){
 const stationAccess=setupStationAccess({sb,history,shouldAutoCalculate});
 const $=id=>document.getElementById(id),node=(tag,cls='',content)=>{const x=document.createElement(tag);x.className=cls;if(content!==undefined)x.textContent=content;return x};
 const statuses={'':'—',interested:'Interested',requested_viewing:'Requested viewing',viewing_booked:'Viewing booked',viewed:'Viewed',shortlisted:'Shortlisted',only_wo:'Only w/o',under_offer_sold:'Under offer / Sold',archived:'Archive (hide)',deleted:'Delete (move to trash)'};
@@ -84,7 +84,7 @@ async function save(p,key,value,input){
  const overrides={...(p.manual_overrides||{}),[key]:true};
  const r=await history.save(p,{[key]:val,manual_overrides:overrides});
  if(r.error){flash(r.error.message,true);input?.classList.add('hh-savefail');return}
- input?.classList.remove('hh-savefail');flash('Saved');if(key==='status')await onStatusChange?.(p,val);
+ input?.classList.remove('hh-savefail');flash('Saved');if(key==='status')await onStatusChange?.(p,val);if(key==='address')await onAddressChange?.(p);
 }
 function editor(p,key,type='text'){let x=node(type==='textarea'?'textarea':type==='select'?'select':'input');if(type==='select'){for(const [v,label] of Object.entries(statuses)){const opt=node('option','',label);opt.value=v;x.append(opt)}x.value=p[key]||''}else{if(type==='number'){x.type='number';x.step='any';x.min='0'}if(type==='textarea')x.rows=6;x.value=p[key]??''}x.setAttribute('aria-label',key+' '+p.address);let tid;if(type==='textarea'){const minimum=(key==='comment_sabina'||key==='comment_david')?230:86;const resize=()=>{x.style.height='auto';x.style.height=Math.max(minimum,x.scrollHeight+8)+'px'};x.style.resize='none';x.style.overflowY='hidden';resize();x.addEventListener('input',()=>{resize();clearTimeout(tid);tid=setTimeout(()=>save(p,key,x.value,x),800)});x.addEventListener('blur',()=>{clearTimeout(tid);save(p,key,x.value,x)})}else x.addEventListener('change',()=>save(p,key,x.value,x));return x}
 const cell=value=>{const t=node('td');if(value instanceof Node)t.append(value);else t.textContent=value;return t};
