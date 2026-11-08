@@ -22,7 +22,7 @@ export function stationWalkingMapUrl(p,i){
  const origin=sourceMatches?`${p.latitude},${p.longitude}`:(p.address?.trim()?p.address+', United Kingdom':`${p.latitude},${p.longitude}`);
  const item=final?.origin===`${p.latitude},${p.longitude}`&&final?.results?.[i]?.name===name?final.results[i]:null;
  const lat=Number(item?.lat),lon=Number(item?.lon);
- const preciseStop=!!item?.station_id&&!/^HUB/i.test(item.station_id)&&item.lat!=null&&item.lon!=null&&Number.isFinite(lat)&&Number.isFinite(lon)&&lat>49&&lat<61&&lon> -9&&lon<3;
+ const preciseStop=!!item?.station_id&&!!item?.entrance_id&&!/^HUB/i.test(item.station_id)&&item.lat!=null&&item.lon!=null&&Number.isFinite(lat)&&Number.isFinite(lon)&&lat>49&&lat<61&&lon> -9&&lon<3;
  const destination=preciseStop?`${lat},${lon}`:/tram/i.test(name)?name.replace(/\s*(?:tram\s*)?stop$/i,'')+' Tram Stop, London, UK':/underground|tube/i.test(name)||name==='Ealing Common'?name.replace(/\s*underground$/i,'')+' Underground Station, London, UK':name.replace(/\s*(?:railway|rail|train|station)$/i,'')+' Railway Station, London, UK';
  const args={api:'1',origin,destination,travelmode:'walking'};
  const checked=c.google_routes;

@@ -30,7 +30,7 @@ async function findStation(name:string,origin:{lat:number,lon:number}){
   if(!/underground|tram/i.test(name)&&m.modes?.includes("tube")&&!m.modes?.includes("national-rail"))penalty+=10;
   return {...m,km,score:penalty+km*2};
  }).sort((a:any,b:any)=>a.score-b.score);
- let chosen=scored[0];
+ let chosen=scored[0],stationDetails:any=null;
  if(!chosen||chosen.km>8||chosen.score>35)throw Error("Station could not be matched accurately");
  // Search often returns a transport hub whose centroid is neither its rail
  // entrance nor its tram stop. Resolve the child matching the requested mode.
@@ -43,9 +43,29 @@ async function findStation(name:string,origin:{lat:number,lon:number}){
   candidates.sort((a:any,b:any)=>distance(origin,a)-distance(origin,b));
   const child=candidates[0];
   if(!child)throw Error("No matching "+wantedMode+" station in transport hub");
+  stationDetails=child;
   chosen={...chosen,id:child.id,name:child.commonName,lat:child.lat,lon:child.lon,km:distance(origin,child)/1000};
  }
- return {id:chosen.id,name:chosen.name,lat:chosen.lat,lon:chosen.lon,km:chosen.km};
+ if(!stationDetails){
+  const details=await fetch("https://api.tfl.gov.uk/StopPoint/"+encodeURIComponent(chosen.id),{signal:AbortSignal.timeout(15000),headers:{"Accept":"application/json"}});
+  if(!details.ok)throw Error("TfL station details "+details.status);
+  const root=await details.json();stationDetails=root.id===chosen.id?root:(root.children||[]).find((x:any)=>x.id===chosen.id);
+ }
+ const entrances=(stationDetails?.children||[]).filter((x:any)=>/Entrance$/i.test(x.stopType||"")&&x.status!==false&&x.lat!=null&&x.lon!=null&&Number.isFinite(Number(x.lat))&&Number.isFinite(Number(x.lon))&&(!x.stationNaptan||x.stationNaptan===chosen.id));
+ if(!entrances.length&&wantedMode==="tram")entrances.push({id:chosen.id,lat:chosen.lat,lon:chosen.lon,stopType:"TramStop"});
+ if(!entrances.length)throw Error("No confirmed walking entrance for "+name);
+ const routed=await Promise.all(entrances.map(async(e:any)=>{
+  try{
+   const url="https://routing.openstreetmap.de/routed-foot/route/v1/driving/"+origin.lon+","+origin.lat+";"+e.lon+","+e.lat+"?overview=false";
+   const r=await fetch(url,{signal:AbortSignal.timeout(12000)});if(!r.ok)return null;
+   const data=await r.json(),route=data.routes?.[0];
+   if(data.code!=="Ok"||!Number.isFinite(Number(route?.distance))||Number(route.distance)<=0||!Number.isFinite(Number(route?.duration))||Number(route.duration)<=0||data.waypoints?.some((p:any)=>Number(p.distance)>40))return null;
+   return {id:e.id,lat:Number(e.lat),lon:Number(e.lon),meters:Number(route.distance),seconds:Number(route.duration)};
+  }catch{return null}
+ }));
+ const entrance=routed.filter(Boolean).sort((a:any,b:any)=>a.meters-b.meters)[0];
+ if(!entrance)throw Error("Walking route to a confirmed station entrance unavailable");
+ return {id:chosen.id,name:chosen.name,lat:entrance.lat,lon:entrance.lon,entrance_id:entrance.id,walking_meters:entrance.meters,walking_seconds:entrance.seconds,km:chosen.km};
 }
 async function sample(origin:any,station:any,date:string,time:string){
  // A station ID can resolve to a nearby bus stop and omit the walk to the
@@ -92,7 +112,7 @@ Deno.serve(async(req:Request)=>{
   const cache=p.station_commutes||{};
   // Audited homes can have three independently routed stations; never replace them with a two-station cache.
   if(cache.station_audit&&JSON.stringify((cache.tfl_final?.names||[]).slice(0,2))===JSON.stringify(names))return reply({commutes:cache,cached:true});
-  if(cache.tfl_final?.complete&&cache.tfl_final.version==='tfl-v4'&&cache.tfl_final.origin===origin.lat+","+origin.lon&&JSON.stringify(cache.tfl_final.names)===JSON.stringify(names))return reply({commutes:cache,cached:true});
+  if(cache.tfl_final?.complete&&cache.tfl_final.version==='tfl-v5'&&cache.tfl_final.origin===origin.lat+","+origin.lon&&JSON.stringify(cache.tfl_final.names)===JSON.stringify(names))return reply({commutes:cache,cached:true});
   const result=[];
   for(let i=0;i<3;i++){
    const name=names[i];
@@ -102,24 +122,16 @@ Deno.serve(async(req:Request)=>{
     const samples=[];
     for(const time of times){samples.push(await sample(origin,destination,date,time));await new Promise(done=>setTimeout(done,260))}
     const googleWalk=null;
-    const walkingSample=samples.find(x=>x.walk_meters!=null&&x.walk_minutes!=null);
-    let walking_miles=walkingSample?.walk_meters!=null?Math.round(walkingSample.walk_meters/1609.344*100)/100:null;
-    let walking_minutes=walkingSample?.walk_minutes??null;
-    let walking_source=walking_miles!=null?"TfL Journey Planner":null;
-    if(walking_miles==null){
-      try{
-        const u="https://routing.openstreetmap.de/routed-foot/route/v1/driving/"+origin.lon+","+origin.lat+";"+destination.lon+","+destination.lat+"?overview=false";
-        const rr=await fetch(u,{signal:AbortSignal.timeout(12000)});
-        if(rr.ok){const route=(await rr.json()).routes?.[0];if(route){walking_miles=Math.round(Number(route.distance)/1609.344*100)/100;walking_minutes=Math.round(Number(route.duration)/60);walking_source="OpenStreetMap walking route"}}
-      }catch(e){console.warn("Walking route unavailable",String(e))}
-    }
+    const walking_miles=Math.round(destination.walking_meters/1609.344*100)/100;
+    const walking_minutes=Math.max(1,Math.round(destination.walking_seconds/60));
+    const walking_source="OpenStreetMap walking route to TfL entrance";
     const actual=samples.find(s=>Number.isFinite(s.minutes)&&s.minutes!=null);
-    result.push({name,station_id:destination.id,station_name:destination.name,lat:destination.lat,lon:destination.lon,avg_minutes:null,pt_minutes:actual?.minutes??null,pt_departure:actual?.departure??null,pt_arrival:actual?.arrival??null,walking_miles,walking_minutes,walking_source,samples,google_walking:googleWalk,source:"TfL Journey Planner",note:actual?null:"No reliable public-transport route"});
+    result.push({name,station_id:destination.id,entrance_id:destination.entrance_id,station_name:destination.name,lat:destination.lat,lon:destination.lon,avg_minutes:null,pt_minutes:actual?.minutes??null,pt_departure:actual?.departure??null,pt_arrival:actual?.arrival??null,walking_miles,walking_minutes,walking_source,samples,google_walking:googleWalk,source:"TfL Journey Planner",note:actual?null:"No reliable public-transport route"});
    }catch(e){result.push({name,avg_minutes:null,samples:[],error:String(e)})}
   }
   const availableStations=result.filter(x=>x.name);
   const completed=availableStations.length>0&&availableStations.every(x=>x.walking_miles!=null&&x.walking_minutes!=null);
-  const final={version:"tfl-v4",complete:completed,origin:origin.lat+","+origin.lon,names,date,times,results:result,calculated_at:new Date().toISOString(),source:"TfL Journey Planner"};
+  const final={version:"tfl-v5",complete:completed,origin:origin.lat+","+origin.lon,names,date,times,results:result,calculated_at:new Date().toISOString(),source:"TfL Journey Planner"};
   const oldResults=cache.results||[];
   const merged=result.map((x:any,i:number)=>({...oldResults[i],...x,walking_miles:x.walking_miles??oldResults[i]?.walking_miles??null,walking_minutes:x.walking_minutes??oldResults[i]?.walking_minutes??null}));
   const out={...cache,origin:final.origin,names,date,times,results:merged,tfl_final:final,calculated_at:final.calculated_at,source:"TfL Journey Planner"};
