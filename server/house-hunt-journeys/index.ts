@@ -1,4 +1,5 @@
 import {selectJourney,matchesOrigin,matchesDestination,verifiedLocation,nearLocation} from './select.js';
+import {walkingAlternatives} from './walking-alternatives.js';
 import {createClient} from "npm:@supabase/supabase-js@2.49.8";
 const root=Deno.env.get("SUPABASE_URL")!;
 const admin=createClient(root,Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,{auth:{persistSession:false,autoRefreshToken:false}});
@@ -27,11 +28,11 @@ Deno.serve(async(req:Request)=>{
  if(!verified&&!/^\d+[a-z]?\s+/i.test(address))return respond({error:"A map point or numbered address is required for journeys"},422);
  const queryAddress=verified?verified.lat+','+verified.lon:address;
  const previous=p.journey_estimates||{},date=dateForTuesday(),out={...previous};
- const fresh=destinations.every(d=>previous[d.id]?.manual_override===true||(previous[d.id]?.origin_input===address&&Number.isFinite(Number(previous[d.id]?.minutes))&&previous[d.id]?.calculation_version==='arrival-window-v4'));
+ const fresh=destinations.every(d=>previous[d.id]?.manual_override===true||(previous[d.id]?.origin_input===address&&Number.isFinite(Number(previous[d.id]?.minutes))&&previous[d.id]?.calculation_version==='arrival-window-v5'));
  if(fresh)return respond({journeys:out,cached:true});
  const results=await Promise.all(destinations.map(async d=>{
   if(previous[d.id]?.manual_override===true)return {id:d.id,manual:true};
-  if(previous[d.id]?.origin_input===address&&previous[d.id]?.calculation_version==='arrival-window-v4'&&Number.isFinite(Number(previous[d.id]?.minutes)))return {id:d.id,cached:true};
+  if(previous[d.id]?.origin_input===address&&previous[d.id]?.calculation_version==='arrival-window-v5'&&Number.isFinite(Number(previous[d.id]?.minutes)))return {id:d.id,cached:true};
   try{
    // TfL returns a small set of journeys for each request. Ask for several
    // nearby arrival deadlines as well as route preferences; a single response
@@ -53,10 +54,13 @@ Deno.serve(async(req:Request)=>{
     return (verified?nearLocation(first,verified):matchesOrigin(address,first))&&matchesDestination(d.id,last)&&first?.lat!=null&&first?.lon!=null&&Number.isFinite(lat)&&Number.isFinite(lon)&&lat>49&&lat<61&&lon> -9&&lon<3;
    });
    const target=Date.parse(date.slice(0,4)+'-'+date.slice(4,6)+'-'+date.slice(6,8)+'T'+d.arrival.slice(0,2)+':'+d.arrival.slice(2)+':00Z');
-   const best=selectJourney(journeys,target);
+   const first=journeys[0]?.legs?.[0]?.departurePoint,last=journeys[0]?.legs?.at(-1)?.arrivalPoint;
+   const origin=verified||((first?.lat!=null&&first?.lon!=null)?{lat:Number(first.lat),lon:Number(first.lon)}:null);
+   const extra=origin&&last?.lat!=null&&last?.lon!=null?await walkingAlternatives({fetchFn:fetch,origin,destination:last,date,deadline:target,journeys}):[];
+   const best=selectJourney([...journeys,...extra],target);
    if(!best)throw Error("No route with the exact house, destination and a consistent arrival was returned");
-   const legs=best.legs,first=legs[0].departurePoint,last=legs[legs.length-1].arrivalPoint;
-   return {id:d.id,minutes:Number(best.duration),arrival:best.arrivalDateTime,departure:best.startDateTime,date,origin:verified?verified.lat+','+verified.lon:first.lat+','+first.lon,origin_input:address,origin_address:first.commonName,origin_source:verified?(p.import_diagnostics?.source_location?.source==='listing-map'?'Listing map':p.import_diagnostics?.source_location?.source==='listing-street-view'?'Listing Street View':'Nominatim confirmed address'):'TfL confirmed address',destination_address:last.commonName,calculated_at:new Date().toISOString(),source:'TfL Journey Planner',calculation_version:'arrival-window-v4',desired_arrival:d.arrival,destination:d.destination};
+   const legs=best.legs,routeFirst=legs[0].departurePoint,routeLast=legs[legs.length-1].arrivalPoint;
+   return {id:d.id,minutes:Number(best.duration),arrival:best.arrivalDateTime,departure:best.startDateTime,date,origin:verified?verified.lat+','+verified.lon:routeFirst.lat+','+routeFirst.lon,origin_input:address,origin_address:routeFirst.commonName,origin_source:verified?(p.import_diagnostics?.source_location?.source==='listing-map'?'Listing map':p.import_diagnostics?.source_location?.source==='listing-street-view'?'Listing Street View':'Nominatim confirmed address'):'TfL confirmed address',destination_address:routeLast.commonName,calculated_at:new Date().toISOString(),source:best.walking_adjusted?'TfL Journey Planner + OpenStreetMap walking':'TfL Journey Planner',calculation_version:'arrival-window-v5',desired_arrival:d.arrival,destination:d.destination};
   }catch(e){return{id:d.id,error:String(e)}}
  }));
  for(const x of results){if(!('error' in x)&&!('manual' in x)&&!('cached' in x))out[x.id]=x}

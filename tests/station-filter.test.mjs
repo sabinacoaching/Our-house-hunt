@@ -23,6 +23,12 @@ test('distance sorting uses the selected station, handles missing distances and 
  assert.equal(stationDistance(homes[2],null),.3);
  assert.equal(stationDistance(homes[1],new Set(['isleworth','syon lane'])),.7);
 });
+test('distance sorting matches the walking route shown and respects manual correction',()=>{
+ const p={address:'101 Cedar Road',latitude:51.377,longitude:-.087,station_name:'East Croydon',station_distance_miles:.23,station_commutes:{tfl_final:{complete:true,origin:'51.377,-0.087',names:['East Croydon'],results:[{name:'East Croydon',walking_miles:.4}]}}};
+ assert.equal(stationDistance(p),.4);
+ p.station_commutes.google_verified={'East Croydon':{walking_miles:.5}};
+ assert.equal(stationDistance(p),.5);
+});
 test('both status selectors and the table support the new statuses without offering rejected',()=>{
  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
  const comparison=readFileSync(new URL('../comparison.js',import.meta.url),'utf8');

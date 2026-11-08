@@ -82,10 +82,11 @@ dialog.hh-photo-viewer[open]{display:flex;flex-direction:column}
 </dialog>
 <script type="module">
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.49.8';
-import {setupComparison,stationOptions,stationDistance,matchesStation} from './comparison.js?v=59';
+import {setupComparison,stationOptions,stationDistance,matchesStation} from './comparison.js?v=61';
+import {buildLocationUpdate} from './location-update.js?v=1';
 import {setupExports} from './export-tools.js?v=2';
 import {createUniquePhotoStore,photoDigest} from './photo-dedup.js?v=4';
-import {canonicalListing,importChanges,validateGeocode} from './import-utils.js?v=2';
+import {canonicalListing,importChanges,validateGeocode,validStreetViewHint} from './import-utils.js?v=3';
 import {reconcileOne,mediaRevision} from './reconcile-media.js?v=1';
 import {createEditHistory} from './edit-history.js?v=2';
 import {analyzeFloorplan,inspectFloorplanImage} from './floorplan-ocr.js?v=16';
@@ -269,7 +270,7 @@ async function importHouse(raw){
  const floorplans=await archive(floorplanCandidates,id,'source-plan',Infinity,planChecks,Number(String(data.extension_version||'0').split('.')[1])>=9);
  const p={id,url,source:data.source,title:data.title||'',address:data.address||'',agency_name:data.agency_name||null,agency_email:data.agency_email||null,agency_website:data.agency_website||null,price:data.price??null,bedrooms:data.bedrooms??null,bathrooms:listingBathrooms(data),wc_count:data.wc_count??null,floors:listingFloors(data),floor_area_sqm:data.floor_area_sqm??null,garden_area_sqm:data.garden_area_sqm??null,garden_description:data.garden_description||'',station_name:'',station_distance_miles:null,station_2_name:'',station_2_distance_miles:null,latitude:null,longitude:null,property_type:data.property_type||null,tenure:data.tenure||null,images,floorplans,import_diagnostics:{source:'original-listing',extension_version:data.extension_version||'unknown',status:data.floorplan_status||'unknown',candidates:floorplanCandidates.length,archived:floorplans.length,checks:planChecks,attempted_at:new Date().toISOString(),media_source_revision:mediaRevision,media_source_result:'completed',source_values:{agency_name:data.agency_name||null,agency_email:data.agency_email||null,agency_website:data.agency_website||null,price:data.price??null,bedrooms:data.bedrooms??null,bathrooms:listingBathrooms(data),wc_count:data.wc_count??null,floors:listingFloors(data),floor_area_sqm:data.floor_area_sqm??null,garden_area_sqm:data.garden_area_sqm??null,garden_description:data.garden_description||'',property_type:data.property_type||null,tenure:data.tenure||null}},created_by:user.id,status:''};
  const hint=data.location_hint;
- if(['listing-street-view','listing-map'].includes(hint?.source)&&Number.isFinite(Number(hint.latitude))&&Number.isFinite(Number(hint.longitude))&&Number(hint.latitude)>49&&Number(hint.latitude)<61&&Number(hint.longitude)>-9&&Number(hint.longitude)<3){
+ if(validStreetViewHint(hint,p.address)){
   if(/^\s*\d+[a-z]?\s+/i.test(hint.address||'')&&!/^\s*\d+[a-z]?\s+/i.test(p.address))p.address=hint.address;
   p.latitude=Number(hint.latitude);p.longitude=Number(hint.longitude);
   p.import_diagnostics.source_location={source:hint.source,listing_url:url,address_input:p.address,latitude:p.latitude,longitude:p.longitude,display_address:hint.address||null};
@@ -302,7 +303,7 @@ async function calculateImportRoutes(p){
    const result=await sb.functions.invoke(name,{body:{id:p.id}});
    if(result.error||result.data?.error||result.data?.saveError)throw result.error||Error(result.data?.error||result.data?.saveError);
    if(name==='house-hunt-journeys'&&p.latitude==null&&p.longitude==null){
-    const verified=Object.values(result.data?.journeys||{}).find(x=>x?.calculation_version==='arrival-window-v4'&&x.origin_input===p.address&&typeof x.origin==='string');
+    const verified=Object.values(result.data?.journeys||{}).find(x=>['arrival-window-v4','arrival-window-v5'].includes(x?.calculation_version)&&x.origin_input===p.address&&typeof x.origin==='string');
     if(verified){
      const [lat,lon]=verified.origin.split(',').map(Number);
      if(Number.isFinite(lat)&&Number.isFinite(lon)&&lat>49&&lat<61&&lon> -9&&lon<3){
@@ -735,6 +736,36 @@ async function repairExistingMedia(){
   if(old.length){await refresh();report('Original photos updated for '+saved+' houses'+(unavailable?'; '+unavailable+' original listings were unavailable.':'.'),!!unavailable)}
  }finally{mediaRepairRunning=false}
 }
+// Address edits are tied to a fresh Street View point. Leave manual corrections untouched.
+const updatingLocations=new Set();
+async function updateLocationForAddress(id){
+ if(updatingLocations.has(id))return false;
+ updatingLocations.add(id);
+ try{
+  const first=await sb.from('properties').select('*').eq('id',id).single();
+  if(first.error||!first.data)throw first.error||Error('House not found');
+  const original=first.data;
+  report('Checking Street View and updating routes for '+original.address+'…');
+  const read=await extension('IMPORT_URL',{url:original.url},70000);
+  const update=buildLocationUpdate(original,read?.location_hint);
+  if(!update)throw Error('Street View could not confirm a point on this road');
+  let request=sb.from('properties').update(update).eq('id',id).eq('address',original.address);
+  for(const key of ['import_diagnostics','station_commutes','journey_estimates','manual_overrides']){
+   const value=original[key];request=value==null?request.is(key,null):request.eq(key,JSON.stringify(value));
+  }
+  for(const key of ['latitude','longitude']){
+   const value=original[key];request=value==null?request.is(key,null):request.gte(key,Number(value)-1e-9).lte(key,Number(value)+1e-9);
+  }
+  for(const key of ['station_name','station_2_name','station_3_name','station_distance_miles','station_2_distance_miles','station_3_distance_miles']){
+   const value=original[key];request=value==null?request.is(key,null):request.eq(key,value);
+  }
+  const saved=await request.select('id');
+  if(saved.error||!saved.data?.length)throw saved.error||Error('House changed during route calculation; nothing was overwritten');
+  pendingJourneyImportIds.add(id);
+  await refresh();await finishNewHouseImport(id);return true;
+ }catch(e){report('Address saved, but automatic route update could not finish: '+(e?.message||e),true);return false}
+ finally{updatingLocations.delete(id)}
+}
 async function resumePendingRoutes(id=null){
  const pending=homes.filter(p=>(!id||p.id===id)&&p.status!=='deleted'&&p.import_diagnostics?.route_pending===true&&(/^\s*\d+[a-z]?\s+/i.test(p.address||'')||(['listing-street-view','listing-map'].includes(p.import_diagnostics?.source_location?.source)&&p.latitude!=null&&p.longitude!=null)));
  for(const p of pending){if(!user)break;pendingJourneyImportIds.add(p.id);await finishNewHouseImport(p.id)}
@@ -743,14 +774,14 @@ async function resumePendingRoutes(id=null){
 async function show(){const r=await sb.from('members').select('id,display_name');if(r.error){txt('loginError','Unable to check membership: '+r.error.message);return}people=Object.fromEntries(r.data.map(x=>[x.id,x.display_name]));if(!people[user.id]){txt('loginError','This account is not registered as a household member');return}$('login').hidden=true;$('mainApp').hidden=false;$('logout').hidden=false;$('refresh').hidden=false;$('changePassword').hidden=false;txt('who',people[user.id]);await refresh()}
 $('loginForm').onsubmit=async e=>{e.preventDefault();txt('loginError','');const r=await sb.auth.signInWithPassword({email:$('email').value,password:$('password').value});if(r.error){txt('loginError',r.error.message);return}user=r.data.user;await show()};
 $('logout').onclick=async()=>{await sb.auth.signOut();location.reload()};
-$('refresh').onclick=async()=>{await refresh();report('Saved data refreshed. Checking unfinished imports…');try{const count=await resumePendingRoutes();if(!count)report('Saved data refreshed. No unfinished imports with an address.')}catch(e){report('Could not complete import: '+e.message,true)}};
+$('refresh').onclick=async()=>{await refresh();report('Saved data refreshed. Checking unfinished imports…');try{const stale=homes.filter(p=>p.status!=='deleted'&&p.import_diagnostics?.source_location?.address_input&&p.import_diagnostics.source_location.address_input!==p.address).map(p=>p.id);for(const id of stale)await updateLocationForAddress(id);const count=await resumePendingRoutes();if(!count&&!stale.length)report('Saved data refreshed. No unfinished imports with an address.')}catch(e){report('Could not complete import: '+e.message,true)}};
 
 $('importForm').onsubmit=async e=>{e.preventDefault();$('importButton').disabled=true;try{await importHouse($('urlInput').value.trim());$('urlInput').value=''}catch(err){report(err.message,true)}finally{$('importButton').disabled=false}};
 for(const id of ['stageFilter','sort','search'])$(id).addEventListener(id==='search'?'input':'change',id==='stageFilter'?()=>{viewingSelections=null;render()}:render);
 $('resetComparisonFilters').onclick=()=>{viewingSelections=null;stationSelection=null;$('stageFilter').value='all';render()};
 $('archiveToggle').onclick=()=>{const inArchive=$('stageFilter').value==='archived'||viewingSelections?.size===1&&viewingSelections.has('archived');viewingSelections=null;$('stageFilter').value=inArchive?'all':'archived';$('search').value='';render();};
 $('close').onclick=()=>$('dialog').close();
-$('save').onclick=async()=>{if(!selected)return;const payload={address:$('editAddress').value.trim(),price:$('editPrice').value?Number($('editPrice').value):null,bedrooms:$('editBeds').value?Number($('editBeds').value):null,bathrooms:$('editBaths').value?Number($('editBaths').value):null,status:$('editStage').value,viewing_at:$('editViewing').value?new Date($('editViewing').value).toISOString():null,...enhancements.edited()};if(payload.status==='deleted'&&!confirm('Move this house to Deleted?'))return;const id=selected.id,addressChanged=payload.address!==selected.address;const overrides={...(selected.manual_overrides||{})};for(const [k,v] of Object.entries(payload)){if(String(selected[k]??'')!==String(v??''))overrides[k]=true;}payload.manual_overrides=overrides;const r=await history.save(selected,payload);if(r.error){alert(r.error.message);return}await refresh();$('dialog').close();if(addressChanged)void resumePendingRoutes(id).catch(e=>report('Could not complete import: '+e.message,true))};
+$('save').onclick=async()=>{if(!selected)return;const payload={address:$('editAddress').value.trim(),price:$('editPrice').value?Number($('editPrice').value):null,bedrooms:$('editBeds').value?Number($('editBeds').value):null,bathrooms:$('editBaths').value?Number($('editBaths').value):null,status:$('editStage').value,viewing_at:$('editViewing').value?new Date($('editViewing').value).toISOString():null,...enhancements.edited()};if(payload.status==='deleted'&&!confirm('Move this house to Deleted?'))return;const id=selected.id,addressChanged=payload.address!==selected.address;const overrides={...(selected.manual_overrides||{})};for(const [k,v] of Object.entries(payload)){if(String(selected[k]??'')!==String(v??''))overrides[k]=true;}payload.manual_overrides=overrides;const r=await history.save(selected,payload);if(r.error){alert(r.error.message);return}await refresh();$('dialog').close();if(addressChanged)void updateLocationForAddress(id)};
 $('enrich').onclick=updateFromListing;
 $('remove').onclick=async()=>{if(!selected||!confirm('Move this house to Deleted? You can restore it later.'))return;const r=await history.save(selected,{status:'deleted'});if(r.error){alert(r.error.message);return}$('dialog').close();selected=null;await refresh()};
 $('noteForm').onsubmit=async e=>{e.preventDefault();if(!selected)return;const body=$('note').value.trim();if(!body)return;const r=await sb.from('notes').insert({property_id:selected.id,author_id:user.id,body});if(r.error){alert(r.error.message);return}$('note').value='';await loadNotes()};
@@ -781,7 +812,7 @@ $('floorPlanFile').onchange=async()=>{
  finally{button.disabled=false;button.textContent='Upload floor plan'}
 };
 const history=createEditHistory({sb,onRestored:async()=>{const wasOpen=$('dialog').open;if(wasOpen)$('dialog').close();await refresh();if(wasOpen&&selected)await openHouse(selected)}});
-const enhancements=setupComparison({sb,history,photo,displayPhoto,uniquePhotos,openHouse,openPhotoBrowser,onReorder:reorderHouses,canReorder:()=> viewingSelections===null&&stationSelection===null&&$('sort').value==='manual'&&$('stageFilter').value==='all'&&!$('search').value.trim(),getStatusSelection:selectedViewingStatuses,onStatusFilterChange:applyViewingStatuses,getStations:()=>stationOptions(homes),getStationSelection:()=>stationSelection,onStationFilterChange:keys=>{const options=stationOptions(homes);stationSelection=keys.length===options.length?null:new Set(keys);render()},onStatusChange:async()=>{await refresh()},shouldAutoCalculate:()=>false,onRestore:restoreHouse});
+const enhancements=setupComparison({sb,history,photo,displayPhoto,uniquePhotos,openHouse,openPhotoBrowser,onReorder:reorderHouses,canReorder:()=> viewingSelections===null&&stationSelection===null&&$('sort').value==='manual'&&$('stageFilter').value==='all'&&!$('search').value.trim(),getStatusSelection:selectedViewingStatuses,onStatusFilterChange:applyViewingStatuses,getStations:()=>stationOptions(homes),getStationSelection:()=>stationSelection,onStationFilterChange:keys=>{const options=stationOptions(homes);stationSelection=keys.length===options.length?null:new Set(keys);render()},onStatusChange:async()=>{await refresh()},onAddressChange:async p=>{await refresh();void updateLocationForAddress(p.id)},shouldAutoCalculate:()=>false,onRestore:restoreHouse});
 setupExports({getVisible:()=>visibleHomes.slice(),getAll:()=>homes.slice(),photo});
 const session=await sb.auth.getSession();user=session.data.session?.user||null;if(user){await show();}else $('login').hidden=false;
 // No automatic polling: properties are read at sign-in and upon explicit Refresh or a saved edit.

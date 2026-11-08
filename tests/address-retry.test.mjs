@@ -23,7 +23,7 @@ test('saving one address does not recalculate another unfinished house',async()=
 });
 test('refresh and save connect to pending import retry',()=>{
  assert.match(html,/\$\('refresh'\)\.onclick=[^\n]+await resumePendingRoutes\(\)/);
- assert.match(html,/\$\('save'\)\.onclick=[^\n]+if\(addressChanged\)void resumePendingRoutes\(id\)/);
+ assert.match(html,/\$\('save'\)\.onclick=[^\n]+if\(addressChanged\)void updateLocationForAddress\(id\)/);
  assert.match(html,/importsRequestedAgain\.delete\(id\)/);
  assert.match(html,/Address or location changed during station lookup/);
 });
