@@ -287,7 +287,6 @@ async function importHouse(raw){
  try { await analyzeFloorplan({sb,property:p,photo}); } catch(e) { failures.push('floor plan'); console.warn('Automatic floor plan reading unavailable',e); }
  const routeProblems=await calculateImportRoutes(p);
  failures.push(...routeProblems);
- try{await queueGoogleHouse(p.id)}catch(e){failures.push('Google routes');console.warn('Google routing unavailable',e)}
  await refresh();
  const missing=[p.latitude==null?'map point':null,!p.station_name?'stations':null,p.bathrooms==null?'bathrooms':null,p.floors==null?'floors':null,p.floor_area_sqm==null?'floor area':null,!p.floorplans?.length?'floor plan':null].filter(Boolean);
  if(missing.length||failures.length){
@@ -297,40 +296,11 @@ async function importHouse(raw){
 }
 async function calculateImportRoutes(p){
  if(!pendingJourneyImportIds.has(p.id))return [];
- const errors=[];
- if(p.import_diagnostics?.require_street_view&&(p.latitude==null||p.longitude==null))return ['Street View map point'];
- for(const name of ['house-hunt-journeys','house-hunt-station-commutes']){
-  if(name==='house-hunt-station-commutes'&&(p.latitude==null||p.longitude==null)){errors.push('precise address for station times');continue}
-  if(name==='house-hunt-station-commutes'&&!p.station_name){errors.push('stations');continue}
-  try{
-   const result=await sb.functions.invoke(name,{body:{id:p.id}});
-   if(result.error||result.data?.error||result.data?.saveError)throw result.error||Error(result.data?.error||result.data?.saveError);
-   if(name==='house-hunt-journeys'&&p.latitude==null&&p.longitude==null){
-    const verified=Object.values(result.data?.journeys||{}).find(x=>['arrival-window-v4','arrival-window-v5'].includes(x?.calculation_version)&&x.origin_input===p.address&&typeof x.origin==='string');
-    if(verified){
-     const [lat,lon]=verified.origin.split(',').map(Number);
-     if(Number.isFinite(lat)&&Number.isFinite(lon)&&lat>49&&lat<61&&lon> -9&&lon<3){
-      const saved=await sb.from('properties').update({latitude:lat,longitude:lon}).eq('id',p.id).eq('address',p.address).is('latitude',null).is('longitude',null).select('id').maybeSingle();
-      if(saved.error)throw saved.error;
-      if(saved.data){p.latitude=lat;p.longitude=lon;await enrichWalkingStations(p)}
-     }
-    }
-   }
-   if(result.data?.errors?.length)throw Error('Some journeys were unavailable');
-   if(name==='house-hunt-station-commutes'&&!result.data?.commutes?.tfl_final?.complete)throw Error('Station walking routes incomplete');
-  }catch(e){errors.push(name==='house-hunt-journeys'?'journey times':'station times');console.warn('Automatic journey calculation unavailable',name,e)}
- }
- if(!errors.length){
-  const current=await sb.from('properties').select('import_diagnostics').eq('id',p.id).single();
-  if(current.error||!current.data)errors.push('save completion');
-  else {
-   const before=current.data.import_diagnostics||{},updated={...before,route_pending:false};
-   const saved=await sb.from('properties').update({import_diagnostics:updated}).eq('id',p.id).eq('import_diagnostics',JSON.stringify(before)).select('id');
-   if(saved.error||!saved.data?.length)errors.push('save completion');
-   else pendingJourneyImportIds.delete(p.id);
-  }
- }
- return errors;
+ try{
+  await queueGoogleHouse(p.id);
+  pendingJourneyImportIds.delete(p.id);
+  return [];
+ }catch(e){console.warn('Google routing unavailable',e);return ['Google routes: '+String(e?.message||e)]}
 }
 // Resume only imports that did not finish; completed homes are not recalculated.
 const finishingImports=new Set(),importsRequestedAgain=new Set();
