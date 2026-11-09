@@ -496,7 +496,7 @@ async function googleRoute(input){
   const response=await chrome.scripting.executeScript({target:{tabId:tab.id},func:houseHuntReadMapsPage,args:[args]});
   const page=response?.[0]?.result;if(kind==='station_transit'&&page?.noRoute)return {unavailable:true,source:'Google Maps',origin,destination,url:page.url};if(!page?.rows?.length)throw Error('Google Maps did not return route options');
   const parsed=mode==='walking'?HouseHuntGoogleRoutes.readWalk(page.rows):HouseHuntGoogleRoutes.readTransit(page.rows,hour*60+minute,mode);
-  if(!parsed){if(kind==='station_transit'&&page.rows.some(r=>(r.modes||[]).some(m=>/^walk$/i.test(m)))&&page.rows.every(r=>(r.modes||[]).length&&(r.modes||[]).every(m=>/^walk$/i.test(m))))return {unavailable:true,source:'Google Maps',origin,destination,url:page.url};throw Error('No valid Google Maps route for the requested time')}
+  if(!parsed){if(kind==='station_transit'&&page.rows.some(r=>(r.modes||[]).some(m=>/^walk(?:ing)?$/i.test(m)))&&page.rows.every(r=>(r.modes||[]).length&&(r.modes||[]).every(m=>/^walk(?:ing)?$/i.test(m))))return {unavailable:true,source:'Google Maps',origin,destination,url:page.url};throw Error('No valid Google Maps route for the requested time')}
   if(mode==='walking')return {...parsed,source:'Google Maps',origin,destination,url:page.url};
   const stamp=n=>String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0');
   const dayBefore=new Date(date);dayBefore.setUTCDate(dayBefore.getUTCDate()-1);
