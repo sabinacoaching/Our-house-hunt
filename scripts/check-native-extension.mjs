@@ -10,5 +10,6 @@ try{
   const start=Date.now();
   const result=await worker.evaluate(async kind=>{try{return {ok:true,value:await googleRoute({kind,origin:{lat:51.4631369,lon:-.3552057},destination:{lat:51.46223,lon:-.36195}})}}catch(error){return {ok:false,error:String(error),injections:globalThis.capturedInjections.splice(0)}}},kind);
   console.log('NATIVE_RESULT '+JSON.stringify({kind,ms:Date.now()-start,...result}));
+  if(!result.ok)process.exitCode=1;
  }
 }finally{await context.close()}
