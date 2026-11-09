@@ -1,6 +1,6 @@
 import {validStreetViewHint,streetViewListingUrl} from './import-utils.js?v=4';
 import {buildGoogleRouteUpdate} from './google-route-update.js?v=2';
-import {selectGoogleStations} from './google-station-selection.js?v=1';
+import {selectGoogleStations} from './google-station-selection.js?v=2';
 
 export function needsGoogleRouteResume(p){
  if(p.status==='deleted')return false;
@@ -73,18 +73,25 @@ export async function calculateGoogleRoutes(id,{sb,extension,progress=()=>{},onP
   progress('Reading Google Maps: '+p.address+' → '+kind);
   await step(kind,async()=>{google.journeys[kind]=await route(kind)});
  }
+ async function loadStationMetadata(){
+  const found=await sb.functions.invoke('house-hunt-station-commutes',{body:{id,preview:true,discover:true,metadata_only:true,latitude,longitude}});
+  if(found.error||found.data?.error||!found.data?.metadata)throw await functionError(found,'Station discovery');
+  work.metadata=found.data.metadata;
+ }
  if(!work.metadata){
   progress('Finding station entrances: '+p.address);
-  await step('station_discovery',async()=>{
-   const found=await sb.functions.invoke('house-hunt-station-commutes',{body:{id,preview:true,discover:true,metadata_only:true,latitude,longitude}});
-   if(found.error||found.data?.error||!found.data?.metadata)throw await functionError(found,'Station discovery');
-   work.metadata=found.data.metadata;
-  },false);
+  await step('station_discovery',loadStationMetadata,false);
  }
  if(work.metadata&&!work.preview){
   await step('station_walking',async()=>{
-   const selected=await selectGoogleStations(work.metadata,{origin,walks:work.walks,route:async(destination,name)=>{progress('Reading Google Maps walking: '+p.address+' → '+name);return route('station_walk',destination)},onWalk:()=>save()});
-   work.preview=selected.preview;google.stations=selected.stations;
+   for(let attempt=0;attempt<2;attempt++)try{
+    const selected=await selectGoogleStations(work.metadata,{origin,walks:work.walks,route:async(destination,name)=>{progress('Reading Google Maps walking: '+p.address+' → '+name);return route('station_walk',destination)},onWalk:()=>save()});
+    work.preview=selected.preview;google.stations=selected.stations;break;
+   }catch(error){
+    if(error.code!=='STATION_METADATA_RETRY'||attempt!==0)throw error;
+    progress('Waiting for the station service, retaining saved Google routes: '+p.address);
+    await delay(Math.min(60000,error.retry_after_ms||1200));await loadStationMetadata();await save();
+   }
   });
  }
  if(work.preview){

@@ -29,7 +29,8 @@ export async function selectGoogleStations(metadata,{origin,walks={},route,onWal
  if(required.some((name,i)=>name&&!chosen[i]))throw Error('A manually selected station could not be routed');
  const limit=Math.max(...chosen.filter(Boolean).map(x=>x.walking.walking_miles*1609.344))+120;
  if(failures.some(x=>x.lower<=limit))throw Error('A potentially nearer station could not be checked: '+failures.filter(x=>x.lower<=limit).map(x=>x.error).join('; '));
- if((metadata.errors||[]).some(x=>x.lat!=null&&x.lon!=null&&straight(origin,x)<=limit))throw Error('Metadata for a potentially nearer station is unavailable');
+ const missing=(metadata.errors||[]).filter(x=>x.lat!=null&&x.lon!=null&&straight(origin,x)<=limit&&(x.retryable===true||/TfL (?:429|5\d\d)|timeout|timed out|fetch failed|network/i.test(x.error||'')));
+ if(missing.length){const error=Error('Station metadata temporarily unavailable: '+missing.map(x=>x.error).join('; '));error.code='STATION_METADATA_RETRY';error.retry_after_ms=Math.max(1200,...missing.map(x=>Number(x.retry_after_ms)||0));throw error}
  const names=chosen.map(x=>x?.name||'');
  return {preview:{tfl_final:{complete:true,origin:originKey,names,results:chosen.map(x=>x?{name:x.name,station_id:x.stop.station_id,entrance_id:x.entrance.entrance_id,lat:Number(x.entrance.lat),lon:Number(x.entrance.lon)}:null),source:'TfL station entrances; Google Maps walking selection'}},stations:chosen.map(x=>x?{walking:x.walking}:null)};
 }
