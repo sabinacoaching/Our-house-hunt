@@ -15,3 +15,19 @@ test('scheduled Maps timestamps use London daylight saving time',()=>{const x=se
 test('route requests from unrelated websites are ignored',()=>{const x=setup();assert.equal(x.listener()({action:'GOOGLE_ROUTE'},{url:'https://other.example/'},()=>{}),false)});
 
 test('Google walking-only station card is treated as no public transport',async()=>{const x=setup(false,true),v=await x.context.googleRoute({kind:'station_transit',origin:{lat:51.3770119,lon:-.0867585},destination:{lat:51.37487,lon:-.09289}});assert.equal(v.unavailable,true);assert.equal(v.source,'Google Maps');assert.equal(x.closed(),x.opened.length)});
+
+test('a faster earlier Google itinerary triggers a later-departure lookup and the real returned 07:38 trip wins',async()=>{
+ const opened=[],closed=[],requests=[];
+ const chrome={tabs:{create:async info=>{opened.push(info.url);return {id:opened.length}},get:async()=>({status:'complete'}),remove:async id=>closed.push(id),onUpdated:{addListener(){},removeListener(){}}},runtime:{onMessage:{addListener(){}}},scripting:{executeScript:async({args})=>{
+  const request=args[0];requests.push(request);
+  const rows=request.mode==='depart'?[{duration:'41 min',heading:'6:57 AM-7:38 AM',modes:['Train']},{duration:'44 min',heading:'7:04 AM-7:48 AM',modes:['Train']}]:[{duration:'41 min',heading:'6:42 AM-7:23 AM',modes:['Train']},{duration:'53 min',heading:'6:46 AM-7:39 AM',modes:['Train']}];
+  return [{result:{url:'https://www.google.com/maps/test',rows}}];
+ }}};
+ const context=vm.createContext({chrome,URL,URLSearchParams,Intl,Date,setTimeout,clearTimeout,console});
+ vm.runInContext(parser,context);vm.runInContext('async function houseHuntReadMapsPage(){}',context);vm.runInContext(code,context);
+ const result=await context.googleRoute({kind:'waterloo',origin:{lat:51.3694953,lon:-.0883864}});
+ assert.equal(result.minutes,41);assert.ok(result.departure.endsWith('T06:57:00'));assert.ok(result.arrival.endsWith('T07:38:00'));
+ assert.equal(result.departure_probe,'checked');assert.deepEqual(requests.map(x=>x.mode),['arrive','depart']);
+ assert.equal(requests[1].time24,'06:54');assert.equal(opened.length,2);assert.equal(closed.length,2);
+ assert.match(opened[1],/!6e0!/);
+});
