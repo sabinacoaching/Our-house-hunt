@@ -1,7 +1,11 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {setupStationAccess,stationWalkingMapUrl} from '../station-commutes.js';
+import {setupStationAccess,stationWalkingMapUrl,stationWalkingMiles} from '../station-commutes.js';
 const element=()=>({children:[],classList:{add(){}},setAttribute(){},append(...xs){this.children.push(...xs)}});
+test('a distance manually edited in the house card remains authoritative over the automatic route',()=>{
+ const p={address:'Example',station_name:'Alpha',station_distance_miles:.8,manual_overrides:{station_distance_miles:true},station_commutes:{google_routes:{origin:'Example',stations:['Alpha'],results:[{walking_minutes:10,walking_miles:.5}]}}};
+ assert.equal(stationWalkingMiles(p,0),.8);p.station_distance_miles=null;assert.equal(stationWalkingMiles(p,0),null);
+});
 test('station display uses a confirmed address route without inventing walking minutes',()=>{
  const previous=globalThis.document;globalThis.document={createElement:element};
  try{

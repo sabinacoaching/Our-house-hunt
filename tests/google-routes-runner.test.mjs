@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {calculateGoogleRoutes,needsGoogleRouteResume,functionError} from '../google-routes-runner.js';
 const id='00000000-0000-4000-8000-000000000001';
-function fixture({failKind=null,discoveryFailure=false,noPoint=false,conflict=false,onRoute=()=>{}}={}){
+function fixture({failKind=null,failOnce=false,discoveryFailure=false,noPoint=false,conflict=false,onRoute=()=>{}}={}){
  const origin='51.41,-0.31',url='https://www.zoopla.co.uk/for-sale/details/123';
  let row={id,url,address:noPoint?'Alpine Close, Park Hill CR0':'10 Example Road',latitude:noPoint?null:51.41,longitude:noPoint?null:-.31,station_name:'Alpha',station_2_name:'',station_3_name:null,comment_sabina:'keep',sort_order:2000,manual_overrides:{},journey_estimates:{dilly:{source:'manual',manual_override:true,minutes:65}},station_commutes:{},import_diagnostics:{route_pending:true}};
  if(!noPoint)row.import_diagnostics.source_location={source:'listing-street-view',listing_url:url,address_input:row.address,latitude:51.41,longitude:-.31};
@@ -19,14 +19,14 @@ function fixture({failKind=null,discoveryFailure=false,noPoint=false,conflict=fa
  const extension=async(action,args)=>{
   if(action==='IMPORT_URL')return {location_hint:{source:'listing-street-view',address:'18 Adjacent Road',latitude:51.41,longitude:-.31}};
   assert.equal(action,'GOOGLE_ROUTE');const {route}=args;calls.push(route.kind);await onRoute(route,row);
-  if(route.kind===failed){failed=null;throw Error('network failed')}
+  if(route.kind===failed){if(failOnce)failed=null;throw Error('network failed')}
   const destination=route.destination?`${route.destination.lat},${route.destination.lon}`:'confirmed destination';
   if(route.kind==='station_walk')return {source:'Google Maps',origin,destination,walking_miles:.4,walking_minutes:8};
   if(route.kind==='station_transit')return {source:'Google Maps',origin,destination,unavailable:true};
   const time={waterloo:'07:40',dilly:'18:40',dancelab:'19:50'}[route.kind],parts=time.split(':').map(Number),dep=parts[0]*60+parts[1]-40;
   return {source:'Google Maps',origin,destination,date:'2026-11-10',departure:'2026-11-10T'+String(Math.floor(dep/60)).padStart(2,'0')+':'+String(dep%60).padStart(2,'0')+':00',arrival:'2026-11-10T'+time+':00',minutes:40};
  };
- return {sb,extension,calls,writes,guards,row:()=>row,replace:p=>{row=p},options:()=>({sb,extension,delay:async()=>{}})};
+ return {sb,extension,calls,writes,guards,row:()=>row,replace:p=>{row=p},clearFailure:()=>{failed=null},options:()=>({sb,extension,routingDate:'2026-11-10',delay:async()=>{}})};
 }
 test('saves Google journeys independently, selects station walking and retains manual data',async()=>{
  const x=fixture();await calculateGoogleRoutes(id,x.options());
@@ -40,7 +40,10 @@ test('a failed route does not discard other routes; retry requests only that mis
  const x=fixture({failKind:'dilly'});await assert.rejects(()=>calculateGoogleRoutes(id,x.options()),/dilly: network failed/);
  assert.equal(x.row().journey_estimates.waterloo.minutes,40);assert.equal(x.row().journey_estimates.dancelab.minutes,40);assert.equal(x.row().import_diagnostics.route_pending,true);
  assert.equal(x.row().import_diagnostics.google_routes_version,null);const before=x.calls.length;
- await calculateGoogleRoutes(id,x.options());assert.deepEqual(x.calls.slice(before),['dilly']);assert.equal(x.row().import_diagnostics.route_pending,false);
+ x.clearFailure();await calculateGoogleRoutes(id,x.options());assert.deepEqual(x.calls.slice(before),['dilly']);assert.equal(x.row().import_diagnostics.route_pending,false);
+});
+test('a temporary Google load failure is retried automatically without recalculating other routes',async()=>{
+ const x=fixture({failKind:'dilly',failOnce:true});await calculateGoogleRoutes(id,x.options());assert.equal(x.calls.filter(x=>x==='dilly').length,2);assert.equal(x.calls.filter(x=>x==='waterloo').length,1);assert.equal(x.row().import_diagnostics.route_pending,false);
 });
 test('station failure retains all three destination routes and records the actual server error',async()=>{
  const x=fixture({discoveryFailure:true});await assert.rejects(()=>calculateGoogleRoutes(id,x.options()),/TfL station metadata timed out/);

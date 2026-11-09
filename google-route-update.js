@@ -20,8 +20,8 @@ export function buildGoogleRouteUpdate(p,location,stationPreview,google,{partial
  const deadlines={dancelab:'19:50',dilly:'18:40',waterloo:'07:40'};
  for(const id of ['dancelab','dilly','waterloo']){const v=google?.journeys?.[id];if(!v&&partial)continue;if(!v||v.source!=='Google Maps'||v.origin!==origin||!Number.isFinite(Number(v.minutes))||!v.departure||!v.arrival||!/^\d{4}-\d{2}-\d{2}$/.test(v.date||''))throw Error('Missing Google journey '+id);
   const dep=Date.parse(v.departure+'Z'),arr=Date.parse(v.arrival+'Z'),deadline=Date.parse(v.date+'T'+deadlines[id]+':00Z');
-  if(!Number.isFinite(dep)||!Number.isFinite(arr)||arr>deadline||Math.abs((arr-dep)/60000-Number(v.minutes))>1)throw Error('Invalid Google journey timing '+id);
-  const item={...v,id,minutes:Number(v.minutes),origin_input:p.address,origin_source:'Listing Street View',destination_address:v.destination,calculated_at:google.calculated_at,calculation_version:'google-visible-v1'};automatic[id]=item;if(next[id]?.manual_override!==true&&next[id]?.source!=='manual')next[id]=item;
+  if(!Number.isFinite(dep)||!Number.isFinite(arr)||arr<=dep||!(Number(v.minutes)>0)||arr>deadline||Math.abs((arr-dep)/60000-Number(v.minutes))>1)throw Error('Invalid Google journey timing '+id);
+  const item={...v,id,minutes:Number(v.minutes),origin_input:p.address,origin_source:'Listing Street View',destination_address:v.destination,calculated_at:v.calculated_at||google.calculated_at,calculation_version:'google-visible-v1'};automatic[id]=item;if(next[id]?.manual_override!==true&&next[id]?.source!=='manual')next[id]=item;
  }
  const prev=p.import_diagnostics||{},history=Array.isArray(prev.routing_history)?prev.routing_history.slice(-4):[];
  if(!google.work||prev.google_routes_work?.job_id!==google.work.job_id)history.push({address:p.address,latitude:p.latitude,longitude:p.longitude,stations:p.station_commutes,journeys:p.journey_estimates});

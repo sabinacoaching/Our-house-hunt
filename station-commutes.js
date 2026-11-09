@@ -11,6 +11,8 @@ const completed=p=>{
  return !!(q?.complete&&(q.origin===coords||(q.origin_input&&q.origin_input===p.address))&&JSON.stringify(q.names)===JSON.stringify(names.slice(0,q.names?.length||2)));
 };
 export function stationWalkingMiles(p,i){
+ const field=['station_distance_miles','station_2_distance_miles','station_3_distance_miles'][i];
+ if(p.manual_overrides?.[field])return p[field]??null;
  const c=p.station_commutes||{},name=stationNames(p)[i],r=c.results?.[i]?.name===name?c.results[i]:{},t=completed(p)&&c.tfl_final.results?.[i]?.name===name?c.tfl_final.results[i]:null;
  const google=c.google_routes?.origin===p.address&&c.google_routes?.stations?.[i]===name&&c.google_routes.results?.[i]?.walking_minutes!=null?c.google_routes.results[i]:null;
  return stationOverride(c,name).walking_miles??google?.walking_miles??t?.walking_miles??r.walking_miles??r.google_walking?.miles??p[i===0?'station_distance_miles':i===1?'station_2_distance_miles':'station_3_distance_miles'];
@@ -42,7 +44,7 @@ export function setupStationAccess({sb,history,shouldAutoCalculate}){
   const google=c.google_routes?.origin===p.address&&c.google_routes?.stations?.[i]===names(p)[i]&&c.google_routes.results?.[i]?.walking_minutes!=null?c.google_routes.results[i]:null;
   const mi=stationWalkingMiles(p,i);
   const mins=override.walking_minutes??google?.walking_minutes??t?.walking_minutes??r.walking_minutes??r.google_walking?.minutes??null;
-  const approxMiles=google?.walking_miles==null&&override.walking_miles==null&&t?.walking_miles==null&&r.walking_miles==null&&r.google_walking?.miles==null;
+  const approxMiles=!p.manual_overrides?.[['station_distance_miles','station_2_distance_miles','station_3_distance_miles'][i]]&&google?.walking_miles==null&&override.walking_miles==null&&t?.walking_miles==null&&r.walking_miles==null&&r.google_walking?.miles==null;
   const approxMins=google?.walking_minutes==null&&override.walking_minutes==null&&t?.walking_minutes==null&&r.walking_minutes==null&&r.google_walking?.minutes==null;
   v.walk.textContent='Walking: '+(mi!=null?(approxMiles?'~':'')+Number(mi).toFixed(2)+' mi':'—')+(mins!=null?' / '+(approxMins?'~':'')+Math.round(mins)+' min':'')+(override.walking_minutes!=null?' · manual':google?.walking_minutes!=null?' · Google':'');
   v.link.href=stationWalkingMapUrl(p,i);

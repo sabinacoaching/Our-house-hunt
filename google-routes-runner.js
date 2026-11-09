@@ -17,7 +17,7 @@ function nextTuesday(){const now=new Date(),parts=Object.fromEntries(new Intl.Da
 
 // Every step is validated and saved for the same original-listing point. Failed
 // steps remain pending; a retry resumes them and never discards completed routes.
-export async function calculateGoogleRoutes(id,{sb,extension,progress=()=>{},onPointSaved=async()=>{},onSaved=onPointSaved,delay=ms=>new Promise(r=>setTimeout(r,ms))}){
+export async function calculateGoogleRoutes(id,{sb,extension,progress=()=>{},onPointSaved=async()=>{},onSaved=onPointSaved,routingDate=nextTuesday(),delay=ms=>new Promise(r=>setTimeout(r,ms))}){
  async function read(){const r=await sb.from('properties').select('*').eq('id',id).single();if(r.error||!r.data)throw r.error||Error('House not found');if(r.data.status==='deleted')throw Error('House was deleted');return r.data}
  let p=await read();
  const d=p.import_diagnostics||{},completed=d.source_location;
@@ -38,7 +38,7 @@ export async function calculateGoogleRoutes(id,{sb,extension,progress=()=>{},onP
   save=oldOverrides==null?save.is('manual_overrides',null):save.eq('manual_overrides',JSON.stringify(oldOverrides));
   const saved=await save.select('*').maybeSingle();if(saved.error||!saved.data)throw saved.error||Error('House changed while its map point was being saved');p=saved.data;await onPointSaved();
  }
- const date=nextTuesday(),old=p.import_diagnostics?.google_routes_work;
+ const date=routingDate,old=p.import_diagnostics?.google_routes_work;
  const reusable=old?.version==='google-pipeline-v2'&&old.origin===originKey&&old.address===p.address&&old.listing_url===p.url;
  const work=reusable?structuredClone(old):{version:'google-pipeline-v2',job_id:crypto.randomUUID(),origin:originKey,address:p.address,listing_url:p.url,walks:{},google:{stations:[],journeys:{}}};
  if(work.date&&work.date!==date){work.google.journeys={};work.google.stations=(work.google.stations||[]).map(x=>x?{walking:x.walking}:null)}
@@ -53,15 +53,19 @@ export async function calculateGoogleRoutes(id,{sb,extension,progress=()=>{},onP
    const patch=buildGoogleRouteUpdate(fresh,{latitude,longitude,source_location:source},work.preview,{...google,work},{partial:true});
    const result=await sb.rpc('house_hunt_save_google_routes',{p_id:id,p_before:fresh,p_patch:patch});
    if(result.error)throw result.error;
-   if(result.data===true){p={...fresh,...patch};if(visible)await onSaved(p);return}
+   if(result.data===true){p={...fresh,...patch};if(visible)try{await onSaved(p)}catch(error){console.warn('Saved route display unavailable',error)}return}
   }
   throw Error('House changed during calculation; the saved user data was retained');
  }
- async function route(kind,destination){await delay(250);return extension('GOOGLE_ROUTE',{route:{kind,origin,...(destination?{destination}:{})}},130000)}
+ async function route(kind,destination){await delay(250);const value=await extension('GOOGLE_ROUTE',{route:{kind,origin,...(destination?{destination}:{})}},130000);if(kind!=='station_walk'&&!value?.unavailable&&value?.date!==date)throw Error('Google returned a different timetable date');return {...value,calculated_at:new Date().toISOString()}}
  async function step(key,fn,visible=true){
   const before=structuredClone(google),beforePreview=work.preview;
-  try{await fn();delete work.errors[key];await save(visible);return true}
-  catch(error){for(const field of Object.keys(google))delete google[field];Object.assign(google,before);work.preview=beforePreview;work.errors[key]=String(error?.message||error);await save();if(work.errors[key].includes('GOOGLE_VERIFICATION_REQUIRED'))throw error;return false}
+  for(let attempt=0;attempt<2;attempt++){
+   try{await fn();delete work.errors[key];await save(visible);return true}
+   catch(error){for(const field of Object.keys(google))delete google[field];Object.assign(google,structuredClone(before));work.preview=beforePreview;work.errors[key]=String(error?.message||error);await save();if(work.errors[key].includes('GOOGLE_VERIFICATION_REQUIRED'))throw error;
+    if(attempt===0&&/network|timeout|timed out|temporar|TfL (?:429|500|502|503|504)|route results unavailable/i.test(work.errors[key])){progress('Retrying '+key+': '+p.address);await delay(1200);continue}return false;
+   }
+  }
  }
  // These three routes do not need station discovery and must not be blocked by it.
  for(const kind of ['waterloo','dilly','dancelab']){

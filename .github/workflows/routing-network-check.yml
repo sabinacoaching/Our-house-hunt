@@ -3,6 +3,12 @@ on:
   workflow_dispatch:
   push:
     branches: [routing-architecture-20261109]
+    paths:
+      - 'google-*.js'
+      - 'extension/google-route-*.js'
+      - 'server/house-hunt-station-commutes/**'
+      - 'scripts/check-routing-live.mjs'
+      - '.github/workflows/routing-network-check.yml'
 permissions:
   contents: read
 jobs:

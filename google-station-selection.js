@@ -23,7 +23,7 @@ export async function selectGoogleStations(metadata,{origin,walks={},route,onWal
    if(!walking){walking=await route({lat:Number(e.lat),lon:Number(e.lon)},e.stop.name);walks[e.key]=walking;await onWalk()}
    if(walking.source!=='Google Maps'||walking.origin!==originKey||walking.destination!==e.lat+','+e.lon||!(Number(walking.walking_miles)>0)||!(Number(walking.walking_minutes)>0))throw Error('Invalid Google walking route to '+e.stop.name);
    const current=best.get(e.stop.station_id);if(!current||walking.walking_miles<current.walking.walking_miles)best.set(e.stop.station_id,{stop:e.stop,entrance:e,walking});
-  }catch(error){failures.push({lower:e.lower,error:String(error?.message||error)})}
+  }catch(error){if(String(error?.message||error).includes('GOOGLE_VERIFICATION_REQUIRED'))throw error;failures.push({lower:e.lower,error:String(error?.message||error)})}
  }
  const chosen=choose();if(!chosen.some(Boolean))throw Error('No Google walking routes to station entrances: '+failures.map(x=>x.error).join('; '));
  if(required.some((name,i)=>name&&!chosen[i]))throw Error('A manually selected station could not be routed');

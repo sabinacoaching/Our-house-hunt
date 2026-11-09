@@ -37,7 +37,7 @@ dialog.hh-photo-viewer[open]{display:flex;flex-direction:column}
 <link rel="stylesheet" href="./comparison.css?v=26">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css'">
 </head><body>
-<header class="top"><div class="brand">⌂ &nbsp;<span>Our House Hunt</span></div><div class="topright"><strong id="who"></strong><span id="hhVersion" title="Current House Hunt site version" style="font-size:11px;color:#72817f">v52</span><button id="refresh" class="secondary" hidden>Refresh</button><button id="changePassword" class="secondary" hidden>Change password</button><button id="logout" class="secondary" hidden>Sign out</button></div></header>
+<header class="top"><div class="brand">⌂ &nbsp;<span>Our House Hunt</span></div><div class="topright"><strong id="who"></strong><span id="hhVersion" title="Current House Hunt site version" style="font-size:11px;color:#72817f">v53</span><button id="refresh" class="secondary" hidden>Refresh</button><button id="changePassword" class="secondary" hidden>Change password</button><button id="logout" class="secondary" hidden>Sign out</button></div></header>
 <main>
 <section id="login" class="panel login" hidden>
 <h1>Welcome home</h1><p>Your shared shortlist, notes and viewings.</p>
@@ -82,7 +82,7 @@ dialog.hh-photo-viewer[open]{display:flex;flex-direction:column}
 </dialog>
 <script type="module">
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.49.8';
-import {setupComparison,stationOptions,stationDistance,matchesStation} from './comparison.js?v=64';
+import {setupComparison,stationOptions,stationDistance,matchesStation} from './comparison.js?v=65';
 import {calculateGoogleRoutes,needsGoogleRouteResume} from './google-routes-runner.js?v=5';
 import {buildLocationUpdate} from './location-update.js?v=3';
 import {setupExports} from './export-tools.js?v=2';
@@ -351,6 +351,13 @@ async function finishNewHouseImport(id){
  finishingImports.add(id);
  try{
   const importer=await extension('PING',{},3500),googleCapable=Number(String(importer?.version||'0').split('.')[1]||0)>=16;
+  if(googleCapable){
+   const query=await sb.from('properties').select('*').eq('id',id).single();if(query.error||!query.data)throw query.error||Error('House not found');
+   const p=query.data;
+   if(!p.floorplans?.length||p.floors==null||p.floor_area_sqm==null)try{await enrichProperty(p);if(p.floorplans?.length)await analyzeFloorplan({sb,property:p,photo})}catch(e){console.warn('Source detail unavailable',e)}
+   pendingJourneyImportIds.add(id);const problems=await calculateImportRoutes(p);await refresh();
+   report(problems.length?'Import saved. '+problems.join('; '):'Routes saved: '+p.address+'.',!!problems.length);return;
+  }
   for(let attempt=0;attempt<3;attempt++){
    if(attempt)await new Promise(resolve=>setTimeout(resolve,3500*(attempt+1)));
    const query=await sb.from('properties').select('*').eq('id',id).single();
