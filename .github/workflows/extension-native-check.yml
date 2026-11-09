@@ -1,6 +1,7 @@
 name: Native extension check
 on:
   workflow_dispatch:
+  workflow_call:
   push:
     branches: [extension-native-transport-20261109]
     paths:

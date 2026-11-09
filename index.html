@@ -37,7 +37,7 @@ dialog.hh-photo-viewer[open]{display:flex;flex-direction:column}
 <link rel="stylesheet" href="./comparison.css?v=26">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css'">
 </head><body>
-<header class="top"><div class="brand">⌂ &nbsp;<span>Our House Hunt</span></div><div class="topright"><strong id="who"></strong><span id="hhVersion" title="Current House Hunt site version" style="font-size:11px;color:#72817f">v53</span><button id="refresh" class="secondary" hidden>Refresh</button><button id="changePassword" class="secondary" hidden>Change password</button><button id="logout" class="secondary" hidden>Sign out</button></div></header>
+<header class="top"><div class="brand">⌂ &nbsp;<span>Our House Hunt</span></div><div class="topright"><strong id="who"></strong><span id="hhVersion" title="Current House Hunt site version" style="font-size:11px;color:#72817f">v54</span><button id="refresh" class="secondary" hidden>Refresh</button><button id="changePassword" class="secondary" hidden>Change password</button><button id="logout" class="secondary" hidden>Sign out</button></div></header>
 <main>
 <section id="login" class="panel login" hidden>
 <h1>Welcome home</h1><p>Your shared shortlist, notes and viewings.</p>
@@ -165,9 +165,9 @@ function extension(action,args,ms=60000){return new Promise((resolve,reject)=>{c
 async function probeImporter(required=false){
 try{const r=await extension('PING',{},3500);if(!r?.extension)throw Error('Unexpected extension reply');
 const version=Number(String(r.version||'0').split('.')[1]||0);
-if(version<9){const msg='Chrome importer v0.9 or later is required for importing listings.';report(msg,true);if(required)throw Error(msg);return false}
+if(version<17){const msg='Chrome importer 0.17.0 or later is required for scheduled Google Maps routes.';report(msg,true);if(required)throw Error(msg);return false}
 if(!required)report('Importer connected. Missing details will be checked automatically.');
-return true}catch(e){const msg=/v0\.9|requires|must be updated/i.test(e.message||'')?e.message:'Chrome importer is not responding. Install/update the extension, press Reload at chrome://extensions, then reload this webpage.';report(msg,true);if(required)throw Error(msg);return false}}
+return true}catch(e){const msg=/0\.17|requires|must be updated/i.test(e.message||'')?e.message:'Chrome importer is not responding. Install/update the extension, press Reload at chrome://extensions, then reload this webpage.';report(msg,true);if(required)throw Error(msg);return false}}
 function blob64(base64,mime){const binary=atob(base64),arr=new Uint8Array(binary.length);for(let i=0;i<binary.length;i++)arr[i]=binary.charCodeAt(i);return new Blob([arr],{type:mime})}
 async function archive(urls,id,prefix='photo',limit=Infinity,checks=[],sourcePlan=false){
  const saved=[],hashes=[],seenUrls=new Set();
@@ -337,7 +337,7 @@ async function calculateLegacyImportRoutes(p){
 async function calculateImportRoutes(p){
  if(!pendingJourneyImportIds.has(p.id))return [];
  let version=0;try{const response=await extension('PING',{},3500);version=Number(String(response?.version||'0').split('.')[1]||0)}catch{}
- if(version<16)return calculateLegacyImportRoutes(p);
+ if(version<17)return ['Chrome importer 0.17.0 is required to finish Google Maps routes'];
  try{
   await queueGoogleHouse(p.id);
   pendingJourneyImportIds.delete(p.id);
@@ -807,12 +807,12 @@ async function resumePendingRoutes(id=null){
  return pending.length;
 }
 const googleRouteJobs=new Map();let googleRouteTail=Promise.resolve();
-function queueGoogleHouse(id){if(googleRouteJobs.has(id))return googleRouteJobs.get(id);const job=googleRouteTail.then(()=>calculateGoogleRoutes(id,{sb,extension,progress:message=>report(message),onPointSaved:refresh,onSaved:p=>{const existing=homes.find(x=>x.id===p.id);if(existing)Object.assign(existing,p);if(selected?.id===p.id)Object.assign(selected,p);render()}}));googleRouteTail=job.catch(()=>{});googleRouteJobs.set(id,job);job.finally(()=>googleRouteJobs.delete(id)).catch(()=>{});return job}
+function queueGoogleHouse(id){if(googleRouteJobs.has(id))return googleRouteJobs.get(id);const job=googleRouteTail.then(async()=>{const ping=await extension('PING',{},3500);if(Number(String(ping?.version||'0').split('.')[1]||0)<17)throw Error('Chrome importer 0.17.0 is required to finish Google Maps routes');return calculateGoogleRoutes(id,{sb,extension,progress:message=>report(message),onPointSaved:refresh,onSaved:p=>{const existing=homes.find(x=>x.id===p.id);if(existing)Object.assign(existing,p);if(selected?.id===p.id)Object.assign(selected,p);render()}})});googleRouteTail=job.catch(()=>{});googleRouteJobs.set(id,job);job.finally(()=>googleRouteJobs.delete(id)).catch(()=>{});return job}
 let googleMigrationStarted=false;
 async function migrateGoogleRoutes(){
  if(googleMigrationStarted)return;googleMigrationStarted=true;
- try{const ping=await extension('PING',{},3500);if(Number(String(ping?.version||'0').split('.')[1]||0)<16)return;
-  const ids=homes.filter(needsGoogleRouteResume).map(p=>p.id),failed=[];
+ try{const ids=homes.filter(needsGoogleRouteResume).map(p=>p.id),failed=[];if(!ids.length)return;
+  const ping=await extension('PING',{},3500);if(Number(String(ping?.version||'0').split('.')[1]||0)<17){report('Chrome importer 0.17.0 is required to finish Google Maps routes.',true);return}
   for(const id of ids){if(!user)break;try{await queueGoogleHouse(id);await refresh()}catch(e){failed.push(String(e?.message||e));console.warn('Google route update failed',id,e);if(String(e?.message||e).includes('GOOGLE_VERIFICATION_REQUIRED'))break}}
   if(ids.length)report(failed.length?'Google route update incomplete for '+failed.length+' house(s): '+failed[0]:'Google routes saved for '+ids.length+' house(s).',!!failed.length);
  }catch(e){console.warn('Google route update unavailable',e)}
