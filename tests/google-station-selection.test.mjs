@@ -29,3 +29,12 @@ test('chooses the shortest checked entrance of one station and never duplicates 
  const x=fixture();x.metadata.candidates[0].entrances.push({entrance_id:'short-entrance',lat:51.4501,lon:-.299});const route=x.options.route;x.options.route=async(point,name)=>point.lon===-.299?{source:'Google Maps',origin:originKey,destination:point.lat+','+point.lon,walking_miles:.2,walking_minutes:4}:route(point,name);
  const r=await selectGoogleStations(x.metadata,x.options);assert.deepEqual(r.preview.tfl_final.names,['Alpha','Beta','Gamma']);assert.equal(r.preview.tfl_final.results[0].entrance_id,'short-entrance');
 });
+test('a temporarily missing nearby station asks for fresh metadata and keeps checked Google walks',async()=>{
+ const x=fixture();x.metadata.errors=[{name:'Missing',lat:51.4501,lon:-.3,error:'Error: TfL 429 at /StopPoint/missing',retry_after_ms:5000}];
+ await assert.rejects(()=>selectGoogleStations(x.metadata,x.options),error=>error.code==='STATION_METADATA_RETRY'&&error.retry_after_ms===5000);
+ assert.ok(Object.keys(x.walks).length>0);
+});
+test('an identity with no public entrance does not block routing other eligible stations',async()=>{
+ const x=fixture();x.metadata.errors=[{name:'Unavailable',lat:51.4501,lon:-.3,error:'Error: No public entrance in TfL station metadata',retryable:false}];
+ const r=await selectGoogleStations(x.metadata,x.options);assert.deepEqual(r.preview.tfl_final.names,['Beta','Gamma','Delta']);
+});

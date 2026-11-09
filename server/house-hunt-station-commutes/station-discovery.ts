@@ -1,6 +1,7 @@
 // TfL supplies station identities and public entrances only. Google Maps supplies
 // every distance and duration. Discovery must never depend on another router.
 const cache=new Map<string,{until:number,value:Promise<any>}>();
+let retryAfter=0;
 const pause=(ms:number)=>new Promise(done=>setTimeout(done,ms));
 const point=(p:any)=>p?.lat!=null&&p?.lon!=null&&Number.isFinite(Number(p.lat))&&Number.isFinite(Number(p.lon));
 const key=(s:string)=>String(s||'').toLowerCase().replace(/\b(?:railway|rail|national rail|train|station|stop)\b/g,'').replace(/[^a-z0-9]+/g,' ').trim();
@@ -9,8 +10,18 @@ function metres(a:any,b:any){const r=Math.PI/180,dlat=(Number(b.lat)-a.lat)*r,dl
 async function tfl(path:string){
  const saved=cache.get(path);if(saved&&saved.until>Date.now())return saved.value;
  const value=(async()=>{let last:any;for(let attempt=0;attempt<2;attempt++){
-  try{const response=await fetch('https://api.tfl.gov.uk'+path,{signal:AbortSignal.timeout(10000),headers:{Accept:'application/json'}});
-   if(!response.ok){if(attempt===0&&[429,500,502,503,504].includes(response.status)){await pause(800);continue}throw Error('TfL '+response.status+' at '+path.split('?')[0])}
+  try{
+   if(retryAfter>Date.now())await pause(Math.min(60000,retryAfter-Date.now()));
+   const response=await fetch('https://api.tfl.gov.uk'+path,{signal:AbortSignal.timeout(path.startsWith('/StopPoint?')?20000:10000),headers:{Accept:'application/json'}});
+   if(!response.ok){
+    if(response.status===429){
+     const header=response.headers?.get('Retry-After'),seconds=header==null?NaN:Number(header),wait=Number.isFinite(seconds)?seconds*1000:header?Date.parse(header)-Date.now():60000;
+     const ms=Math.max(1000,Math.min(60000,Number.isFinite(wait)?wait:60000));retryAfter=Math.max(retryAfter,Date.now()+ms);
+     if(attempt===0)continue;
+     const error:any=Error('TfL 429 at '+path.split('?')[0]);error.retry_after_ms=ms;throw error;
+    }
+    if(attempt===0&&[500,502,503,504].includes(response.status)){await pause(800);continue}throw Error('TfL '+response.status+' at '+path.split('?')[0]);
+   }
    return await response.json();
   }catch(error){last=error;if(attempt===0)await pause(500)}
  }throw last||Error('TfL station metadata unavailable')})();
@@ -48,7 +59,7 @@ export async function discoverStationEntrances(origin:{lat:number,lon:number},pr
    if(!entrances.length&&details.modes?.includes('tram'))entrances.push({entrance_id:details.id,lat:Number(details.lat),lon:Number(details.lon)});
    if(!entrances.length)throw Error('No public entrance in TfL station metadata');
    return {name:display(details.commonName||stop.commonName),station_id:details.id,entrances:[...new Map(entrances.map(e=>[e.entrance_id,e])).values()]};
-  }catch(error){errors.push({station_id:stop.id,name:display(stop.commonName),lat:stop.lat,lon:stop.lon,error:String(error)});return null}
+  }catch(error:any){errors.push({station_id:stop.id,name:display(stop.commonName),lat:stop.lat,lon:stop.lon,error:String(error),retryable:/TfL (?:429|5\d\d)|timeout|timed out|fetch failed|network/i.test(String(error)),retry_after_ms:error.retry_after_ms||null});return null}
  });
  const candidates=found.filter(Boolean);
  if(!candidates.length)throw Error('No station entrances found: '+errors.map(e=>e.error).join('; '));

@@ -23,7 +23,7 @@ try{
   const sb={from:()=>({select(){return this},eq(){return this},single:async()=>({data:structuredClone(row)})}),functions:{invoke:async(_name,{body})=>{const response=await handler(new Request('https://example.test',{method:'POST',headers:{authorization:'Bearer test','content-type':'application/json'},body:JSON.stringify(body)}));return response.ok?{data:await response.json()}:{error:{message:'non-2xx',context:response}}}},rpc:async(_name,args)=>{assert.deepEqual(args.p_before,row);row={...row,...structuredClone(args.p_patch)};writes++;return {data:true}}};
   const start=Date.now(),calls=[];
   try{
-   await calculateGoogleRoutes(id,{sb,extension:async(action,{route})=>{assert.equal(action,'GOOGLE_ROUTE');calls.push(route.kind);return extensionWorker.evaluate(async route=>googleRoute(route),route)},progress:message=>console.log('PROGRESS '+message),delay:async()=>{}});
+   await calculateGoogleRoutes(id,{sb,extension:async(action,{route})=>{assert.equal(action,'GOOGLE_ROUTE');calls.push(route.kind);return extensionWorker.evaluate(async route=>googleRoute(route),route)},progress:message=>console.log('PROGRESS '+message)});
    assert.equal(row.import_diagnostics.route_pending,false);assert.equal(Object.keys(row.journey_estimates).length,3);
    const before=calls.length;await calculateGoogleRoutes(id,{sb,extension:async()=>{throw Error('Completed home must not recalculate')}});assert.equal(calls.length,before);
    console.log('LIVE_RESULT '+JSON.stringify({address,complete:true,ms:Date.now()-start,requests,writes,calls,journeys:row.journey_estimates,stations:row.station_commutes.google_routes,entrances:row.station_commutes.tfl_final.results}));
