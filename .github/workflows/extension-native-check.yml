@@ -20,4 +20,12 @@ jobs:
           node-version: 22
       - run: npm install --no-save --package-lock=false playwright@1.62.1
       - run: npx playwright install --with-deps chromium
-      - run: node scripts/check-native-extension.mjs
+      - uses: actions/checkout@v4
+        with:
+          ref: 348283d4a2b546988f864f9e0653dfda1f1d068d
+          path: .native-baseline
+      - run: xvfb-run --auto-servernum node scripts/check-native-extension.mjs
+        env:
+          HH_BASELINE: '1'
+          HH_EXTENSION_PATH: ${{ github.workspace }}/.native-baseline/extension
+      - run: xvfb-run --auto-servernum node scripts/check-native-extension.mjs
