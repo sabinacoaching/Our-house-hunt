@@ -27,10 +27,11 @@
   return (window.length?window.sort((a,b)=>a.minutes-b.minutes||b.arrival-a.arrival):earlier.sort((a,b)=>b.arrival-a.arrival||a.minutes-b.minutes))[0]||null;
  }
  function readWalk(rows){
+  const options=[];
   for(const r of rows||[]){const minutes=duration(r.duration),m=String(r.distance||'').replace(/\u00a0|\u202f/g,' ').match(/([\d,.]+)\s*(mi(?:le)?s?|km|kilomet(?:er|re)s?|m(?:et(?:er|re)s?)?|ft|feet)\b/i);if(!minutes||!m)continue;
    const n=Number(m[1].replace(',','.')),unit=m[2].toLowerCase();if(!Number.isFinite(n)||n<=0)continue;const miles=/^k/.test(unit)?n/1.609344:/^f/.test(unit)?n/5280:/^m(?:et|$)/.test(unit)?n/1609.344:n;
-   return {walking_minutes:minutes,walking_miles:Math.round(miles*1000)/1000,display_distance:r.distance};
-  }return null;
+   options.push({walking_minutes:minutes,walking_miles:Math.round(miles*1000)/1000,display_distance:r.distance});
+  }return options.sort((a,b)=>a.walking_minutes-b.walking_minutes||a.walking_miles-b.walking_miles)[0]||null;
  }
  root.HouseHuntGoogleRoutes={duration,times,readTransit,readWalk};
 })(globalThis);

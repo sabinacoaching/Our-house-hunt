@@ -52,11 +52,11 @@ function harness({missingAddress=false}={}){
   rows.set(p.id,{...p,...clone(args.p_patch)});return {data:true};
  }};
  const extension=async(action,args={})=>{
-  if(action==='PING')return {version:'0.17.0'};
+  if(action==='PING')return {version:'0.18.0'};
   if(action==='IMPORT_URL'){
    const item=examples.find(x=>new URL(x.url).pathname===new URL(args.url).pathname);assert.ok(item,'requested listing must come from the imported URL');
    return {source:item.url.includes('zoopla')?'Zoopla':'Rightmove',title:item.address,address:missingAddress?'':item.address,
-    extension_version:'0.17.0',bedrooms:3,bathrooms:1,floors:2,floor_area_sqm:100,
+    extension_version:'0.18.0',bedrooms:3,bathrooms:1,floors:2,floor_area_sqm:100,
     images:[item.url+'/photo'],floorplans:[item.url+'/plan'],
     location_hint:{source:'listing-street-view',address:'Adjacent Street, London',latitude:item.lat,longitude:item.lon}};
   }
