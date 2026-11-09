@@ -1,6 +1,7 @@
 // Runs only inside the Google Maps tab opened for one property route.
 // Return the visible route cards, never internal Google network responses.
 async function houseHuntReadMapsPage(request){
+ try{
  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
  const blocked=()=>/unusual traffic|verify you are human|not a robot|automated queries|captcha/i.test(document.body?.innerText||'')||!!document.querySelector('#captcha-form');
  async function waitFor(fn,label,ms=25000){const until=Date.now()+ms;while(Date.now()<until){if(blocked())throw Error('GOOGLE_VERIFICATION_REQUIRED');const v=fn();if(v)return v;await sleep(350)}throw Error(label+' unavailable')}
@@ -29,4 +30,5 @@ async function houseHuntReadMapsPage(request){
   if(later){const before=sign();later.click();try{all=all.concat(await stableCards(before))}catch(e){if(String(e).includes('GOOGLE_VERIFICATION_REQUIRED'))throw e}}
  }
  return {rows:all,url:initialUrl,date:request.date,time:request.time24};
+ }catch(error){return {error:String(error?.message||error),diagnostic:{url:location.href,time:document.querySelector('input[name="transit-time"]')?.value||null,dates:[...document.querySelectorAll('button')].map(x=>(x.innerText||'').trim()).filter(x=>/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)/i.test(x)).slice(0,5)}}}
 }
