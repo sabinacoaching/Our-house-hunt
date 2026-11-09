@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Our House Hunt Importer 0.16.0",
-  "version": "0.16.0",
-  "description": "Reliable Zoopla floorplan capture using DOM and newly loaded image resources; original listing only.",
+  "name": "Our House Hunt Importer 0.17.0",
+  "version": "0.17.0",
+  "description": "Imports original listings, floor plans and scheduled Google Maps journeys.",
   "permissions": [
     "tabs",
     "scripting"

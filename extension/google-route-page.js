@@ -20,6 +20,10 @@ async function houseHuntReadMapsPage(request){
   if(request.destinationKind==='point'&&!current.includes(request.destination))throw Error('Google destination did not match requested station entrance');
   if(request.destinationKind==='fixed')await waitFor(()=>{const d=document.querySelector('input[aria-label^="Destination"],input[aria-label^="Choose destination"]'),s=String(d?.value||'').toLowerCase().replace(/[^a-z0-9]/g,'');return (request.destinationCheck||[]).every(part=>s.includes(part))},'Google destination',15000);
   if(request.mode==='walking')return {rows:await stableCards(),url:location.href};
+  if(request.mode==='depart'&&!document.querySelector('input[name="transit-time"]')){
+   const visible=await stableCards();
+   if(visible.noRoute||Array.isArray(visible)&&visible.length&&visible.every(r=>r.modes.some(m=>/^walk(?:ing)?$/i.test(m))&&!r.modes.some(m=>/^(train|bus|tram|subway|rail|underground|ferry|light rail)$/i.test(m))))return {noRoute:true,url:location.href};
+  }
   function clockMatches(value){const m=String(value||'').replace(/\u00a0|\u202f/g,' ').trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);if(!m)return false;const h=m[3]?Number(m[1])%12+(/PM/i.test(m[3])?12:0):Number(m[1]);return h<24&&Number(m[2])<60&&String(h).padStart(2,'0')+':'+m[2]===request.time24}
   function correctSchedule(){
    // The URL carries the full date, time and arrive/depart flag. Verify that
@@ -30,12 +34,15 @@ async function houseHuntReadMapsPage(request){
    return p.year+'-'+p.month+'-'+p.day===request.date&&p.hour+':'+p.minute===request.time24;
   }
   await waitFor(correctSchedule,'Requested Google timetable',20000);
-  const first=await stableCards(),url=location.href;if(first.noRoute)return {noRoute:true,url};let all=[...first];
-  if(request.mode==='arrive'){
-   const later=[...document.querySelectorAll('button')].find(x=>/later trips/i.test(x.getAttribute('aria-label')||''));
-   if(later){const before=JSON.stringify(cards());later.click();try{const next=await stableCards(before);if(Array.isArray(next))all=all.concat(next)}catch(error){if(String(error).includes('GOOGLE_VERIFICATION_REQUIRED'))throw error}}
+  const first=await stableCards(),url=location.href;if(first.noRoute)return {noRoute:true,url};
+  const later=request.mode==='arrive'?[...document.querySelectorAll('button')].find(x=>/later trips/i.test(x.getAttribute('aria-label')||'')):null;
+  if(request.phase==='later'){
+   if(!later)return {rows:[],url};
+   const before=JSON.stringify(cards());later.click();const next=await stableCards(before);
+   return {rows:Array.isArray(next)?next:[],url,date:request.date,time:request.time24};
   }
-  return {rows:all,url,date:request.date,time:request.time24};
+  // Return the initial results before clicking anything that could navigate.
+  return {rows:first,hasLater:!!later,url,date:request.date,time:request.time24};
  }catch(error){
   // Chrome can otherwise return an undefined InjectionResult for a rejected
   // async function, hiding the real error behind "no route options".

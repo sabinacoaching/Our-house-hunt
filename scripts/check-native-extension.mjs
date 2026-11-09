@@ -1,6 +1,10 @@
 import {chromium} from 'playwright';
 import {fileURLToPath} from 'node:url';
+import {readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 const path=process.env.HH_EXTENSION_PATH||fileURLToPath(new URL('../extension',import.meta.url));
+const fingerprint=createHash('sha256');for(const name of ['manifest.json','background.js','bridge.js','google-route-page.js','google-route-parser.js'])fingerprint.update(name+'\n').update(readFileSync(path+'/'+name));
+console.log('EXTENSION_FINGERPRINT '+JSON.stringify({version:JSON.parse(readFileSync(path+'/manifest.json','utf8')).version,sha256:fingerprint.digest('hex')}));
 const context=await chromium.launchPersistentContext('',{channel:'chromium',headless:false,locale:process.env.HH_LOCALE||'en-GB',timezoneId:'Europe/London',args:['--disable-extensions-except='+path,'--load-extension='+path]});
 context.on('page',page=>{page.on('pageerror',e=>console.log('PAGE_ERROR '+e.message))});
 try{

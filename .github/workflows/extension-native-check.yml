@@ -6,6 +6,7 @@ on:
     paths:
       - 'extension/**'
       - 'scripts/check-native-extension.mjs'
+      - 'scripts/check-routing-live.mjs'
       - '.github/workflows/extension-native-check.yml'
 permissions:
   contents: read
@@ -20,12 +21,5 @@ jobs:
           node-version: 22
       - run: npm install --no-save --package-lock=false playwright@1.62.1
       - run: npx playwright install --with-deps chromium
-      - uses: actions/checkout@v4
-        with:
-          ref: 348283d4a2b546988f864f9e0653dfda1f1d068d
-          path: .native-baseline
       - run: xvfb-run --auto-servernum node scripts/check-native-extension.mjs
-        env:
-          HH_BASELINE: '1'
-          HH_EXTENSION_PATH: ${{ github.workspace }}/.native-baseline/extension
-      - run: xvfb-run --auto-servernum node scripts/check-native-extension.mjs
+      - run: xvfb-run --auto-servernum node scripts/check-routing-live.mjs
