@@ -14,7 +14,7 @@ for(const [address,latitude,longitude] of points){
  let handler;
  const id='00000000-0000-4000-8000-000000000001';
  const p={id,latitude,longitude,station_name:'',station_2_name:'',station_3_name:null,station_commutes:{},manual_overrides:{}};
- const admin={auth:{getUser:async()=>({data:{user:{id:'test'}}})},from:()=>({select(){return this},eq(){return this},single:async()=>({data:p}),maybeSingle:async()=>({data:{id:'test'}}),update(){throw Error('Network check must not write')}};
+ const admin={auth:{getUser:async()=>({data:{user:{id:'test'}}})},from:()=>({select(){return this},eq(){return this},single:async()=>({data:p}),maybeSingle:async()=>({data:{id:'test'}}),update(){throw Error('Network check must not write')}})};
  const requests=[];
  const realFetch=async(url,options)=>{
   const start=Date.now();
