@@ -15,4 +15,4 @@ jobs:
         with:
           node-version: 22
       - run: npm install --no-save --package-lock=false playwright-core@1.62.1
-      - run: node scripts/check-google-maps.mjs
+      - run: node scripts/check-routing-live.mjs

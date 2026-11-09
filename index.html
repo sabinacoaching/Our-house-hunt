@@ -83,7 +83,7 @@ dialog.hh-photo-viewer[open]{display:flex;flex-direction:column}
 <script type="module">
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.49.8';
 import {setupComparison,stationOptions,stationDistance,matchesStation} from './comparison.js?v=64';
-import {calculateGoogleRoutes,needsGoogleRouteResume} from './google-routes-runner.js?v=4';
+import {calculateGoogleRoutes,needsGoogleRouteResume} from './google-routes-runner.js?v=5';
 import {buildLocationUpdate} from './location-update.js?v=3';
 import {setupExports} from './export-tools.js?v=2';
 import {createUniquePhotoStore,photoDigest} from './photo-dedup.js?v=4';
@@ -283,10 +283,12 @@ async function importHouse(raw){
  report('House saved with '+images.length+' photographs. Completing location, stations and floor plan…');
  await refresh();
  const failures=[];
- try { await enrichWalkingStations(p); } catch(e) { failures.push('location/stations'); console.warn('Walking stations not available',e); }
+ const importer=await extension('PING',{},3500);
+ if(Number(String(importer?.version||'0').split('.')[1]||0)<16)try { await enrichWalkingStations(p); } catch(e) { failures.push('location/stations'); console.warn('Walking stations not available',e); }
  try { await analyzeFloorplan({sb,property:p,photo}); } catch(e) { failures.push('floor plan'); console.warn('Automatic floor plan reading unavailable',e); }
  const routeProblems=await calculateImportRoutes(p);
  failures.push(...routeProblems);
+ const savedHouse=await sb.from('properties').select('*').eq('id',p.id).single();if(savedHouse.data)Object.assign(p,savedHouse.data);
  await refresh();
  const missing=[p.latitude==null?'map point':null,!p.station_name?'stations':null,p.bathrooms==null?'bathrooms':null,p.floors==null?'floors':null,p.floor_area_sqm==null?'floor area':null,!p.floorplans?.length?'floor plan':null].filter(Boolean);
  if(missing.length||failures.length){
@@ -348,6 +350,7 @@ async function finishNewHouseImport(id){
  if(finishingImports.has(id)){importsRequestedAgain.add(id);return}
  finishingImports.add(id);
  try{
+  const importer=await extension('PING',{},3500),googleCapable=Number(String(importer?.version||'0').split('.')[1]||0)>=16;
   for(let attempt=0;attempt<3;attempt++){
    if(attempt)await new Promise(resolve=>setTimeout(resolve,3500*(attempt+1)));
    const query=await sb.from('properties').select('*').eq('id',id).single();
@@ -361,20 +364,21 @@ async function finishNewHouseImport(id){
    if(missingPlan||missingFacts){
     try{await enrichProperty(p)}catch(e){console.warn('Original listing retry',p.address,e)}
    }
-   if(p.import_diagnostics?.require_street_view&&(p.latitude==null||p.longitude==null)){
+   if(!googleCapable&&p.import_diagnostics?.require_street_view&&(p.latitude==null||p.longitude==null)){
     if(await updateLocationForAddress(p.id,false)){
      const current=await sb.from('properties').select('*').eq('id',p.id).single();
      if(current.data)Object.assign(p,current.data);
     }
    }
-   if(missingGeo){
+   if(missingGeo&&!googleCapable){
     try{await enrichWalkingStations(p)}catch(e){console.warn('Station/geocoding retry',p.address,e)}
    }
    if((p.floorplans||[]).length&&(p.floor_area_sqm==null||p.floors==null||p.garden_area_sqm==null)){
     try{await analyzeFloorplan({sb,property:p,photo})}catch(e){console.warn('Plan recognition retry',p.address,e)}
    }
-   await calculateImportRoutes(p);
+   const routeProblems=await calculateImportRoutes(p);
    await refresh();
+   if(googleCapable&&routeProblems.length){report('Import saved. '+routeProblems.join('; '),true);return}
   }
   const q=await sb.from('properties').select('address,latitude,longitude,floorplans,floors,floor_area_sqm,station_name,station_2_name,journey_estimates').eq('id',id).single();
   if(!q.error&&q.data){
@@ -796,7 +800,7 @@ async function resumePendingRoutes(id=null){
  return pending.length;
 }
 const googleRouteJobs=new Map();let googleRouteTail=Promise.resolve();
-function queueGoogleHouse(id){if(googleRouteJobs.has(id))return googleRouteJobs.get(id);const job=googleRouteTail.then(()=>calculateGoogleRoutes(id,{sb,extension,progress:message=>report(message),onPointSaved:refresh}));googleRouteTail=job.catch(()=>{});googleRouteJobs.set(id,job);job.finally(()=>googleRouteJobs.delete(id)).catch(()=>{});return job}
+function queueGoogleHouse(id){if(googleRouteJobs.has(id))return googleRouteJobs.get(id);const job=googleRouteTail.then(()=>calculateGoogleRoutes(id,{sb,extension,progress:message=>report(message),onPointSaved:refresh,onSaved:p=>{const existing=homes.find(x=>x.id===p.id);if(existing)Object.assign(existing,p);if(selected?.id===p.id)Object.assign(selected,p);render()}}));googleRouteTail=job.catch(()=>{});googleRouteJobs.set(id,job);job.finally(()=>googleRouteJobs.delete(id)).catch(()=>{});return job}
 let googleMigrationStarted=false;
 async function migrateGoogleRoutes(){
  if(googleMigrationStarted)return;googleMigrationStarted=true;

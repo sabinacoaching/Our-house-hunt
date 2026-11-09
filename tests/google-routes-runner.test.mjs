@@ -1,41 +1,76 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {calculateGoogleRoutes,needsGoogleRouteResume} from '../google-routes-runner.js';
+import {calculateGoogleRoutes,needsGoogleRouteResume,functionError} from '../google-routes-runner.js';
 const id='00000000-0000-4000-8000-000000000001';
-function fixture(failKind){
+function fixture({failKind=null,discoveryFailure=false,noPoint=false,conflict=false,onRoute=()=>{}}={}){
  const origin='51.41,-0.31',url='https://www.zoopla.co.uk/for-sale/details/123';
- const house={id,url,address:'10 Example Road',latitude:51.41,longitude:-.31,station_name:'Alpha',station_2_name:'',station_3_name:'',manual_overrides:{},journey_estimates:{dilly:{source:'manual',manual_override:true,minutes:65}},station_commutes:{},import_diagnostics:{source_location:{source:'listing-street-view',listing_url:url,address_input:'10 Example Road',latitude:51.41,longitude:-.31}}};
- const preview={tfl_final:{complete:true,origin,names:['Alpha','',''],results:[{name:'Alpha',entrance_id:'A',lat:51.42,lon:-.32}]}};let saved=null,calls=[];
- const sb={from:()=>({select(){return this},eq(){return this},single:async()=>({data:house})}),functions:{invoke:async(name,{body})=>{assert.equal(body.preview,true);assert.equal(body.discover,true);return {data:{preview:true,commutes:preview}}}},rpc:async(name,args)=>{saved=args;return {data:true}}};
- const extension=async(action,{route})=>{assert.equal(action,'GOOGLE_ROUTE');calls.push(route.kind);if(route.kind===failKind)throw Error('network failed');const destination=route.destination?`${route.destination.lat},${route.destination.lon}`:'address';
+ let row={id,url,address:noPoint?'Alpine Close, Park Hill CR0':'10 Example Road',latitude:noPoint?null:51.41,longitude:noPoint?null:-.31,station_name:'Alpha',station_2_name:'',station_3_name:null,comment_sabina:'keep',sort_order:2000,manual_overrides:{},journey_estimates:{dilly:{source:'manual',manual_override:true,minutes:65}},station_commutes:{},import_diagnostics:{route_pending:true}};
+ if(!noPoint)row.import_diagnostics.source_location={source:'listing-street-view',listing_url:url,address_input:row.address,latitude:51.41,longitude:-.31};
+ const calls=[],writes=[],guards=[];let failed=failKind,conflicts=conflict?1:0;
+ const sb={from:()=>{let patch;return {select(){return this},eq(k,v){guards.push([k,v]);return this},is(){return this},update(p){patch=p;return this},single:async()=>({data:structuredClone(row)}),maybeSingle:async()=>{row={...row,...structuredClone(patch)};return {data:structuredClone(row)}}}},functions:{invoke:async(name,{body})=>{
+  assert.equal(body.metadata_only,true);assert.equal(body.preview,true);assert.equal(body.discover,true);
+  if(discoveryFailure)return {error:{message:'Edge Function returned a non-2xx status code',context:new Response(JSON.stringify({error:'TfL station metadata timed out'}),{status:500})}};
+  return {data:{preview:true,metadata:{origin,candidates:[{name:'Alpha',station_id:'A',entrances:[{entrance_id:'entrance-a',lat:51.411,lon:-.311}]}],protected_names:[null,null,null],errors:[]}}};
+ }},rpc:async(name,args)=>{
+  assert.equal(name,'house_hunt_save_google_routes');assert.deepEqual(args.p_before,row);
+  if(conflicts-- >0){row.comment_david='edited during routing';return {data:false}}
+  row={...row,...structuredClone(args.p_patch)};writes.push(structuredClone(row));return {data:true};
+ }};
+ const extension=async(action,args)=>{
+  if(action==='IMPORT_URL')return {location_hint:{source:'listing-street-view',address:'18 Adjacent Road',latitude:51.41,longitude:-.31}};
+  assert.equal(action,'GOOGLE_ROUTE');const {route}=args;calls.push(route.kind);await onRoute(route,row);
+  if(route.kind===failed){failed=null;throw Error('network failed')}
+  const destination=route.destination?`${route.destination.lat},${route.destination.lon}`:'confirmed destination';
   if(route.kind==='station_walk')return {source:'Google Maps',origin,destination,walking_miles:.4,walking_minutes:8};
   if(route.kind==='station_transit')return {source:'Google Maps',origin,destination,unavailable:true};
-  return {source:'Google Maps',origin,destination,date:'2026-11-10',departure:'2026-11-10T07:00:00',arrival:'2026-11-10T07:40:00',minutes:40};};
- return {sb,extension,house,calls,saved:()=>saved};
+  const time={waterloo:'07:40',dilly:'18:40',dancelab:'19:50'}[route.kind],parts=time.split(':').map(Number),dep=parts[0]*60+parts[1]-40;
+  return {source:'Google Maps',origin,destination,date:'2026-11-10',departure:'2026-11-10T'+String(Math.floor(dep/60)).padStart(2,'0')+':'+String(dep%60).padStart(2,'0')+':00',arrival:'2026-11-10T'+time+':00',minutes:40};
+ };
+ return {sb,extension,calls,writes,guards,row:()=>row,replace:p=>{row=p},options:()=>({sb,extension,delay:async()=>{}})};
 }
-test('calculates the complete house using the same origin, then saves once with manual journeys protected',async()=>{const x=fixture();await calculateGoogleRoutes(id,{...x,delay:async()=>{}});assert.deepEqual(x.calls,['station_walk','station_transit','waterloo','dilly','dancelab']);assert.equal(x.saved().p_before,x.house);assert.deepEqual(x.saved().p_patch.journey_estimates.dilly,x.house.journey_estimates.dilly);assert.equal(x.saved().p_patch.import_diagnostics.google_routes_version,'google-maps-ui-v1')});
-test('does not write partial results if one Google route fails',async()=>{const x=fixture('dilly');await assert.rejects(()=>calculateGoogleRoutes(id,{...x,delay:async()=>{}}),/network failed/);assert.equal(x.saved(),null)});
-test('completed homes do not request routes on another page load',async()=>{const x=fixture();x.house.import_diagnostics.google_routes_version='google-maps-ui-v1';assert.deepEqual(await calculateGoogleRoutes(id,{...x,delay:async()=>{}}),{alreadyDone:true});assert.equal(x.calls.length,0)});
-
-test('an original Street View point on the adjacent road is saved without erasing other data if station lookup fails',async()=>{
- const url='https://www.zoopla.co.uk/for-sale/details/74553564',house={id,url,address:'Alpine Close, Park Hill CR0',latitude:null,longitude:null,manual_overrides:{},station_name:'Existing station',journey_estimates:{dilly:{minutes:72,source:'manual',manual_override:true}},station_commutes:{google_verified:{'Existing station':{walking_minutes:7}}},import_diagnostics:{route_pending:true}};
- let row=structuredClone(house),guards=[],requested,pointShown=false;
- const sb={from:()=>{let patch;return {update(x){patch=x;return this},select(){return this},eq(k,v){guards.push(['eq',k,v]);return this},is(k,v){guards.push(['is',k,v]);return this},single:async()=>({data:structuredClone(row)}),maybeSingle:async()=>{row={...row,...patch};return {data:structuredClone(row)}}}},functions:{invoke:async()=>({error:Error('station lookup failed')})},rpc:async()=>{throw Error('route write must not run')}};
- const extension=async(action,args)=>{requested=args.url;return {location_hint:{source:'listing-street-view',address:'18 Chichester Rd, Croydon, England',latitude:51.3694953,longitude:-.0883864}}};
- await assert.rejects(()=>calculateGoogleRoutes(id,{sb,extension,delay:async()=>{},onPointSaved:async()=>{pointShown=true}}),/station lookup failed/);
- assert.equal(pointShown,true);assert.equal(new URL(requested).searchParams.get('tab'),'street_view');assert.equal(row.latitude,51.3694953);assert.equal(row.longitude,-.0883864);assert.equal(row.address,house.address);assert.deepEqual(row.journey_estimates,house.journey_estimates);assert.deepEqual(row.station_commutes,house.station_commutes);assert.ok(guards.some(([op,key])=>op==='eq'&&key==='manual_overrides'));
+test('saves Google journeys independently, selects station walking and retains manual data',async()=>{
+ const x=fixture();await calculateGoogleRoutes(id,x.options());
+ assert.deepEqual(x.calls,['waterloo','dilly','dancelab','station_walk','station_transit']);
+ assert.equal(x.row().journey_estimates.dilly.minutes,65);assert.equal(x.row().import_diagnostics.google_automatic_journeys.dilly.minutes,40);
+ assert.equal(x.row().station_commutes.google_routes.results[0].walking_minutes,8);assert.equal(x.row().station_commutes.google_routes.results[0].pt_minutes,null);
+ assert.equal(x.row().comment_sabina,'keep');assert.equal(x.row().sort_order,2000);assert.equal(x.row().import_diagnostics.route_pending,false);
+ assert.ok(x.writes.some(p=>p.journey_estimates.waterloo&&p.station_commutes.google_routes==null));
 });
-test('a concurrent change prevents staging a point and does not calculate routes',async()=>{
- const url='https://www.zoopla.co.uk/for-sale/details/123',house={id,url,address:'Example Road',latitude:null,longitude:null,manual_overrides:{},import_diagnostics:{}};let previewed=false;
- const sb={from:()=>({update(){return this},select(){return this},eq(){return this},is(){return this},single:async()=>({data:structuredClone(house)}),maybeSingle:async()=>({data:null})}),functions:{invoke:async()=>{previewed=true}}};
- const extension=async()=>({location_hint:{source:'listing-street-view',address:'2 Nearby Rd',latitude:51.41,longitude:-.31}});
- await assert.rejects(()=>calculateGoogleRoutes(id,{sb,extension,delay:async()=>{}}),/House changed while/);assert.equal(previewed,false);
+test('a failed route does not discard other routes; retry requests only that missing route',async()=>{
+ const x=fixture({failKind:'dilly'});await assert.rejects(()=>calculateGoogleRoutes(id,x.options()),/dilly: network failed/);
+ assert.equal(x.row().journey_estimates.waterloo.minutes,40);assert.equal(x.row().journey_estimates.dancelab.minutes,40);assert.equal(x.row().import_diagnostics.route_pending,true);
+ assert.equal(x.row().import_diagnostics.google_routes_version,null);const before=x.calls.length;
+ await calculateGoogleRoutes(id,x.options());assert.deepEqual(x.calls.slice(before),['dilly']);assert.equal(x.row().import_diagnostics.route_pending,false);
 });
-
-test('opening the site resumes unfinished imports without recalculating older complete homes',()=>{
- const old={id:'old',address:'Old Road',import_diagnostics:{route_pending:false}},pending={id:'new',address:'Alpine Close',import_diagnostics:{route_pending:true}},deleted={...pending,status:'deleted'};
- assert.equal(needsGoogleRouteResume(old),false);assert.equal(needsGoogleRouteResume(pending),true);assert.equal(needsGoogleRouteResume(deleted),false);
+test('station failure retains all three destination routes and records the actual server error',async()=>{
+ const x=fixture({discoveryFailure:true});await assert.rejects(()=>calculateGoogleRoutes(id,x.options()),/TfL station metadata timed out/);
+ assert.ok(x.row().journey_estimates.waterloo);assert.ok(x.row().journey_estimates.dancelab);assert.equal(x.row().journey_estimates.dilly.minutes,65);
+ assert.equal(x.row().import_diagnostics.route_pending,true);assert.match(x.row().import_diagnostics.google_routes_work.errors.station_discovery,/TfL station metadata timed out/);
 });
-test('a previously completed Google route is retried after its source address changes',()=>{
- const p={address:'New Road',url:'https://example.test/listing',latitude:51.4,longitude:-.3,import_diagnostics:{route_pending:false,google_routes_version:'google-maps-ui-v1',source_location:{address_input:'Old Road',listing_url:'https://example.test/listing',latitude:51.4,longitude:-.3}}};assert.equal(needsGoogleRouteResume(p),true);p.address='Old Road';assert.equal(needsGoogleRouteResume(p),false);
+test('a panorama on the adjacent street supplies the point without changing the listing address',async()=>{
+ const x=fixture({noPoint:true,discoveryFailure:true});let shown=0;
+ await assert.rejects(()=>calculateGoogleRoutes(id,{...x.options(),onPointSaved:async()=>shown++}),/station metadata timed out/);
+ assert.equal(x.row().latitude,51.41);assert.equal(x.row().address,'Alpine Close, Park Hill CR0');assert.ok(shown>0);assert.ok(x.guards.some(([key])=>key==='manual_overrides'));
+});
+test('a concurrent unrelated edit is merged and the compare-and-save conflict is retried',async()=>{
+ const x=fixture({conflict:true});await calculateGoogleRoutes(id,x.options());assert.equal(x.row().comment_david,'edited during routing');
+});
+test('a manual journey edit made while Google loads takes priority',async()=>{
+ const x=fixture({onRoute:(route,row)=>{if(route.kind==='waterloo')row.journey_estimates.waterloo={minutes:77,source:'manual',manual_override:true}}});
+ await calculateGoogleRoutes(id,x.options());assert.equal(x.row().journey_estimates.waterloo.minutes,77);assert.equal(x.row().import_diagnostics.google_automatic_journeys.waterloo.minutes,40);
+});
+test('an address changed during a request prevents stale data from being saved',async()=>{
+ const x=fixture({onRoute:(_route,row)=>{row.address='changed'}});await assert.rejects(()=>calculateGoogleRoutes(id,x.options()),/address changed/);assert.equal(x.writes.length,0);
+});
+test('completed houses issue no network or Google requests after reopening',async()=>{
+ const x=fixture();await calculateGoogleRoutes(id,x.options());const before=x.calls.length;assert.deepEqual(await calculateGoogleRoutes(id,x.options()),{alreadyDone:true});assert.equal(x.calls.length,before);
+});
+test('function errors reveal the response error instead of hiding it behind HTTP status',async()=>{
+ const error=await functionError({error:{message:'non-2xx',context:new Response('{"error":"TfL 429"}',{status:500})}},'Station discovery');assert.match(error.message,/TfL 429/);
+});
+test('only pending imports and changed Google origins are automatically resumed',()=>{
+ assert.equal(needsGoogleRouteResume({import_diagnostics:{route_pending:false}}),false);
+ assert.equal(needsGoogleRouteResume({import_diagnostics:{route_pending:true}}),true);
+ assert.equal(needsGoogleRouteResume({status:'deleted',import_diagnostics:{route_pending:true}}),false);
+ const p={address:'New Road',url:'source',latitude:51.4,longitude:-.3,import_diagnostics:{google_routes_version:'google-maps-ui-v1',source_location:{address_input:'Old Road',listing_url:'source',latitude:51.4,longitude:-.3}}};assert.equal(needsGoogleRouteResume(p),true);p.address='Old Road';assert.equal(needsGoogleRouteResume(p),false);
 });
