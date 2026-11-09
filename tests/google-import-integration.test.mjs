@@ -17,7 +17,7 @@ const examples=[
  {url:'https://www.rightmove.co.uk/properties/100004',address:'Future Gardens, London',lat:51.50,lon:-.30}
 ];
 
-function harness(){
+function harness({missingAddress=false}={}){
  const rows=new Map(),files=new Map(),pending=new Set(),calls=[],reports=[],retries=[];
  let failingAddress=null;
  const clone=value=>structuredClone(value);
@@ -55,7 +55,7 @@ function harness(){
   if(action==='PING')return {version:'0.17.0'};
   if(action==='IMPORT_URL'){
    const item=examples.find(x=>new URL(x.url).pathname===new URL(args.url).pathname);assert.ok(item,'requested listing must come from the imported URL');
-   return {source:item.url.includes('zoopla')?'Zoopla':'Rightmove',title:item.address,address:item.address,
+   return {source:item.url.includes('zoopla')?'Zoopla':'Rightmove',title:item.address,address:missingAddress?'':item.address,
     extension_version:'0.17.0',bedrooms:3,bathrooms:1,floors:2,floor_area_sqm:100,
     images:[item.url+'/photo'],floorplans:[item.url+'/plan'],
     location_hint:{source:'listing-street-view',address:'Adjacent Street, London',latitude:item.lat,longitude:item.lon}};
@@ -66,9 +66,9 @@ function harness(){
   const p=[...rows.values()].find(x=>x.latitude===route.origin.lat&&x.longitude===route.origin.lon);assert.ok(p,'every route uses its own imported point');
   calls.push({id:p.id,kind:route.kind,origin});
   if(p.address===failingAddress&&route.kind==='dilly')throw Error('network failed');
-  const destination=route.destination?route.destination.lat+','+route.destination.lon:'Fixture destination '+route.kind;
-  if(route.kind==='station_walk')return {source:'Google Maps',origin,destination,walking_miles:.2,walking_minutes:5};
-  if(route.kind==='station_transit')return {source:'Google Maps',origin,destination,unavailable:true};
+  const destination=route.destination?.query||(route.destination?route.destination.lat+','+route.destination.lon:'Fixture destination '+route.kind);
+  if(route.kind==='station_walk')return {source:'Google Maps',origin,destination,station_id:route.destination?.station_id,walking_miles:.2,walking_minutes:5};
+  if(route.kind==='station_transit')return {source:'Google Maps',origin,destination,station_id:route.destination?.station_id,unavailable:true};
   const arrival=date+'T'+deadlines[route.kind]+':00',departure=new Date(Date.parse(arrival+'Z')-30*60000).toISOString().slice(0,19);
   return {source:'Google Maps',origin,destination,date,departure,arrival,minutes:30};
  };
@@ -88,7 +88,7 @@ test('every new Zoopla and Rightmove import runs the production Google controlle
   assert.equal(p.address,item.address,'a neighbouring panorama must not replace the address');
   assert.equal(p.latitude,item.lat);assert.equal(p.longitude,item.lon);
   assert.equal(p.import_diagnostics.route_pending,false);
-  assert.equal(p.import_diagnostics.google_routes_version,'google-maps-ui-v1');
+  assert.equal(p.import_diagnostics.google_routes_version,'google-maps-ui-v2');
   assert.deepEqual(Object.keys(p.journey_estimates).sort(),['dancelab','dilly','waterloo']);
   assert.deepEqual(h.calls.filter(x=>x.id===p.id).map(x=>x.kind),['waterloo','dilly','dancelab','station_walk','station_transit']);
   assert.ok(p.station_name);assert.equal(p.station_commutes.google_routes.results[0].walking_minutes,5);
@@ -109,4 +109,10 @@ test('an interrupted new import retains its other results and resumes only the m
  assert.deepEqual(h.calls.slice(count).map(x=>x.kind),['dilly']);
  assert.equal(h.rows.get(p.id).import_diagnostics.route_pending,false);
  assert.equal(h.rows.get(p.id).comment_sabina,'Preserve user comment');
+});
+
+test('a partial listing with no address is rejected before creating a catalogue row or uploading media',async()=>{
+ const h=harness({missingAddress:true});
+ await assert.rejects(()=>h.importHouse(examples[0].url),/original listing address could not be read/i);
+ assert.equal(h.rows.size,0);assert.equal(h.files.size,0);assert.equal(h.calls.length,0);
 });

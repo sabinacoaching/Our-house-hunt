@@ -23,9 +23,9 @@ function fixture({failKind=null,failOnce=false,discoveryFailure=false,transientM
   if(action==='IMPORT_URL')return {location_hint:{source:'listing-street-view',address:'18 Adjacent Road',latitude:51.41,longitude:-.31}};
   assert.equal(action,'GOOGLE_ROUTE');const {route}=args;calls.push(route.kind);await onRoute(route,row);
   if(route.kind===failed){if(failOnce)failed=null;throw Error('network failed')}
-  const destination=route.destination?`${route.destination.lat},${route.destination.lon}`:'confirmed destination';
-  if(route.kind==='station_walk')return {source:'Google Maps',origin,destination,walking_miles:.4,walking_minutes:8};
-  if(route.kind==='station_transit')return {source:'Google Maps',origin,destination,unavailable:true};
+  const destination=route.destination?.query||(route.destination?`${route.destination.lat},${route.destination.lon}`:'confirmed destination');
+  if(route.kind==='station_walk')return {source:'Google Maps',origin,destination,station_id:route.destination?.station_id,walking_miles:.4,walking_minutes:8};
+  if(route.kind==='station_transit')return {source:'Google Maps',origin,destination,station_id:route.destination?.station_id,unavailable:true};
   const time={waterloo:'07:40',dilly:'18:40',dancelab:'19:50'}[route.kind],parts=time.split(':').map(Number),dep=parts[0]*60+parts[1]-40;
   return {source:'Google Maps',origin,destination,date:'2026-11-10',departure:'2026-11-10T'+String(Math.floor(dep/60)).padStart(2,'0')+':'+String(dep%60).padStart(2,'0')+':00',arrival:'2026-11-10T'+time+':00',minutes:40};
  };
@@ -87,5 +87,19 @@ test('only pending imports and changed Google origins are automatically resumed'
  assert.equal(needsGoogleRouteResume({import_diagnostics:{route_pending:false}}),false);
  assert.equal(needsGoogleRouteResume({import_diagnostics:{route_pending:true}}),true);
  assert.equal(needsGoogleRouteResume({status:'deleted',import_diagnostics:{route_pending:true}}),false);
- const p={address:'New Road',url:'source',latitude:51.4,longitude:-.3,import_diagnostics:{google_routes_version:'google-maps-ui-v1',source_location:{address_input:'Old Road',listing_url:'source',latitude:51.4,longitude:-.3}}};assert.equal(needsGoogleRouteResume(p),true);p.address='Old Road';assert.equal(needsGoogleRouteResume(p),false);
+ const p={address:'New Road',url:'source',latitude:51.4,longitude:-.3,import_diagnostics:{google_routes_version:'google-maps-ui-v2',source_location:{address_input:'Old Road',listing_url:'source',latitude:51.4,longitude:-.3}}};assert.equal(needsGoogleRouteResume(p),true);p.address='Old Road';assert.equal(needsGoogleRouteResume(p),false);
+});
+
+test('an older incomplete import recovers its empty address from the same listing before validating Street View',async()=>{
+ const x=fixture(),p=x.row();p.address='';delete p.import_diagnostics.source_location;x.replace(p);
+ const original=x.extension;
+ const extension=async(action,args)=>action==='IMPORT_URL'?{...(await original(action,args)),address:'23 Recovered Road, London',nearby_stations:[]}:original(action,args);
+ await calculateGoogleRoutes(id,{...x.options(),extension});
+ assert.equal(x.row().address,'23 Recovered Road, London');assert.equal(x.row().import_diagnostics.route_pending,false);
+ assert.equal(x.row().comment_sabina,'keep');
+});
+test('the previous automatic route generation is resumed once, while completed current-generation homes stay cached',()=>{
+ const p={address:'Test',url:'source',latitude:51.4,longitude:-.3,import_diagnostics:{google_routes_version:'google-maps-ui-v1',source_location:{address_input:'Test',listing_url:'source',latitude:51.4,longitude:-.3}}};
+ assert.equal(needsGoogleRouteResume(p),true);
+ p.import_diagnostics.google_routes_version='google-maps-ui-v2';assert.equal(needsGoogleRouteResume(p),false);
 });

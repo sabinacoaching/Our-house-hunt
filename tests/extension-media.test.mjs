@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 const source=readFileSync(new URL('../extension/background.js',import.meta.url),'utf8');
-function runPage({host,path,body,script='',buttons=[],query=()=>null}){
+function runPage({host,path,body,script='',buttons=[],query=()=>null,headings=null}){
  const h1={textContent:'2 bedroom house for sale Test Road, London',closest:()=>null};
- const document={body:{innerText:body},title:'2 bedroom house for sale Test Road, London',querySelector:s=>s==='h1'?h1:query(s),querySelectorAll:s=>s==='script'?[{textContent:script}]:s==='button'?buttons:s==='button,[role="tab"],a'?buttons:s.startsWith('button,')?buttons.filter(b=>b.floor):[]};
+ const document={body:{innerText:body},title:'2 bedroom house for sale Test Road, London',querySelector:s=>s==='h1'?(headings?.[0]||h1):query(s),querySelectorAll:s=>s==='h1'?(headings||[h1]):s==='script'?[{textContent:script}]:s==='button'?buttons:s==='button,[role="tab"],a'?buttons:s.startsWith('button,')?buttons.filter(b=>b.floor):[]};
  const c=vm.createContext({document,location:{hostname:host,pathname:path},URL,console,performance:{getEntriesByType:()=>[]},setTimeout:fn=>{fn();return 1},clearTimeout(){},chrome:{runtime:{onMessage:{addListener(){}}}}});
  return vm.runInContext(source+';readPropertyFromPage()',c);
 }
@@ -63,4 +63,13 @@ test('Rightmove reads the Google Street View panorama address and point',async()
  const script='window.__PAGE_MODEL = '+JSON.stringify({data:JSON.stringify(nodes)})+';';
  const result=await runPage({host:'www.rightmove.co.uk',path:'/properties/12345',body:'£500,000\n2 bedroom house',script,buttons:[street],query});
  assert.equal(result.location_hint.source,'listing-street-view');assert.equal(result.location_hint.address,'28 Algar Rd, Isleworth, England');
+});
+
+test('an open Zoopla gallery cannot replace the complete address with the property-type heading',async()=>{
+ const listing={listingId:123,propertyImage:[{filename:'first.jpg'}],floorPlan:{image:[]}};
+ const script='self.__next_f.push('+JSON.stringify([1,'7d:'+JSON.stringify(['$', 'div',null,{children:listing}])+'\n'])+')';
+ const headings=[{textContent:'2 bed terraced house for sale',closest:()=>null},{textContent:'2 bed terraced house for saleAlpine Close, Park Hill CR0',closest:()=>null}];
+ const result=await runPage({host:'www.zoopla.co.uk',path:'/for-sale/details/123',body:'£439,999\n2 bedroom house',script,headings});
+ assert.equal(result.address,'Alpine Close, Park Hill CR0');
+ assert.equal(result.extension_version,'0.18.0');
 });

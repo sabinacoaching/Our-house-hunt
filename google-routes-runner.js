@@ -1,12 +1,13 @@
 import {validStreetViewHint,streetViewListingUrl} from './import-utils.js?v=4';
-import {buildGoogleRouteUpdate} from './google-route-update.js?v=2';
-import {selectGoogleStations} from './google-station-selection.js?v=2';
+import {buildGoogleRouteUpdate} from './google-route-update.js?v=3';
+import {selectGoogleStations,stationTransportType} from './google-station-selection.js?v=3';
 
 export function needsGoogleRouteResume(p){
  if(p.status==='deleted')return false;
  const d=p.import_diagnostics||{},s=d.source_location;
  if(d.route_pending===true)return true;
- return d.google_routes_version==='google-maps-ui-v1'&&(!s||s.address_input!==p.address||s.listing_url!==p.url||Number(s.latitude)!==Number(p.latitude)||Number(s.longitude)!==Number(p.longitude));
+ if(d.google_routes_version==='google-maps-ui-v1')return true;
+ return d.google_routes_version==='google-maps-ui-v2'&&(!s||s.address_input!==p.address||s.listing_url!==p.url||Number(s.latitude)!==Number(p.latitude)||Number(s.longitude)!==Number(p.longitude));
 }
 export async function functionError(result,label){
  let message=result.data?.error;
@@ -20,12 +21,35 @@ function nextTuesday(){const now=new Date(),parts=Object.fromEntries(new Intl.Da
 export async function calculateGoogleRoutes(id,{sb,extension,progress=()=>{},onPointSaved=async()=>{},onSaved=onPointSaved,routingDate=nextTuesday(),delay=ms=>new Promise(r=>setTimeout(r,ms))}){
  async function read(){const r=await sb.from('properties').select('*').eq('id',id).single();if(r.error||!r.data)throw r.error||Error('House not found');if(r.data.status==='deleted')throw Error('House was deleted');return r.data}
  let p=await read();
- const d=p.import_diagnostics||{},completed=d.source_location;
- if(d.route_pending!==true&&d.google_routes_version==='google-maps-ui-v1'&&completed?.listing_url===p.url&&completed.address_input===p.address&&Number(completed.latitude)===Number(p.latitude)&&Number(completed.longitude)===Number(p.longitude))return {alreadyDone:true};
+ const saved=p.import_diagnostics||{},savedSource=saved.source_location;
+ if(saved.route_pending!==true&&saved.google_routes_version==='google-maps-ui-v2'&&savedSource?.listing_url===p.url&&savedSource.address_input===p.address&&Number(savedSource.latitude)===Number(p.latitude)&&Number(savedSource.longitude)===Number(p.longitude))return {alreadyDone:true};
+ let listing=null,listingWarning=null;
+ let d=p.import_diagnostics||{};
+ const hasSource=()=>d.source_location?.source==='listing-street-view'&&d.source_location.listing_url===p.url&&d.source_location.address_input===p.address&&Number(d.source_location.latitude)===Number(p.latitude)&&Number(d.source_location.longitude)===Number(p.longitude);
+ const needsPoint=!hasSource(),needsAddress=!String(p.address||'').trim();
+ if(needsPoint||needsAddress||!Object.hasOwn(d,'nearby_stations')){
+  try{listing=await extension('IMPORT_URL',{url:streetViewListingUrl(p.url)},70000)}
+  catch(error){if(needsPoint||needsAddress)throw error;listingWarning=String(error?.message||error)}
+ }
+ if(needsAddress){
+  const address=String(listing?.address||'').trim();
+  if(!address)throw Error('Original listing address is missing; the Street View point has not been rejected');
+  if(p.manual_overrides?.address)throw Error('A manually edited address cannot be replaced');
+  const diagnostics={...d,nearby_stations:listing?.nearby_stations||[],source_values:{...(d.source_values||{}),address}};
+  let save=sb.from('properties').update({address,import_diagnostics:diagnostics}).eq('id',p.id).eq('url',p.url);
+  save=p.address==null?save.is('address',null):save.eq('address',p.address);
+  save=p.import_diagnostics==null?save.is('import_diagnostics',null):save.eq('import_diagnostics',JSON.stringify(p.import_diagnostics));
+  save=p.manual_overrides==null?save.is('manual_overrides',null):save.eq('manual_overrides',JSON.stringify(p.manual_overrides));
+  const result=await save.select('*').maybeSingle();if(result.error||!result.data)throw result.error||Error('House changed while recovering its listing address');
+  p=result.data;d=p.import_diagnostics;await onPointSaved();
+ }
+ const completed=d.source_location;
+ if(d.route_pending!==true&&d.google_routes_version==='google-maps-ui-v2'&&completed?.listing_url===p.url&&completed.address_input===p.address&&Number(completed.latitude)===Number(p.latitude)&&Number(completed.longitude)===Number(p.longitude))return {alreadyDone:true};
  let source=d.source_location;
  if(!(source?.source==='listing-street-view'&&source.listing_url===p.url&&source.address_input===p.address&&Number(source.latitude)===Number(p.latitude)&&Number(source.longitude)===Number(p.longitude))){
   progress('Reading the original listing map: '+p.address);
-  const listing=await extension('IMPORT_URL',{url:streetViewListingUrl(p.url)},70000),hint=listing?.location_hint;
+  if(!listing)listing=await extension('IMPORT_URL',{url:streetViewListingUrl(p.url)},70000);
+  const hint=listing?.location_hint;
   if(!validStreetViewHint(hint,p.address))throw Error('Original listing did not provide a Street View point');
   source={source:'listing-street-view',listing_url:p.url,address_input:p.address,latitude:Number(hint.latitude),longitude:Number(hint.longitude),display_address:hint.address||null};
  }
@@ -39,10 +63,12 @@ export async function calculateGoogleRoutes(id,{sb,extension,progress=()=>{},onP
   const saved=await save.select('*').maybeSingle();if(saved.error||!saved.data)throw saved.error||Error('House changed while its map point was being saved');p=saved.data;await onPointSaved();
  }
  const date=routingDate,old=p.import_diagnostics?.google_routes_work;
- const reusable=old?.version==='google-pipeline-v2'&&old.origin===originKey&&old.address===p.address&&old.listing_url===p.url;
- const work=reusable?structuredClone(old):{version:'google-pipeline-v2',job_id:crypto.randomUUID(),origin:originKey,address:p.address,listing_url:p.url,walks:{},google:{stations:[],journeys:{}}};
+ const reusable=old?.version==='google-pipeline-v3'&&old.origin===originKey&&old.address===p.address&&old.listing_url===p.url;
+ const work=reusable?structuredClone(old):{version:'google-pipeline-v3',job_id:crypto.randomUUID(),origin:originKey,address:p.address,listing_url:p.url,walks:{},google:{stations:[],journeys:{}}};
  if(work.date&&work.date!==date){work.google.journeys={};work.google.stations=(work.google.stations||[]).map(x=>x?{walking:x.walking}:null)}
  work.date=date;work.errors={};
+ work.listing_stations=listing?.nearby_stations||d.nearby_stations||work.listing_stations||[];
+ if(listingWarning)work.listing_station_source_warning=listingWarning;
  const google=work.google;
  async function save(visible=false){
   google.calculated_at=new Date().toISOString();
@@ -76,7 +102,13 @@ export async function calculateGoogleRoutes(id,{sb,extension,progress=()=>{},onP
  async function loadStationMetadata(){
   const found=await sb.functions.invoke('house-hunt-station-commutes',{body:{id,preview:true,discover:true,metadata_only:true,latitude,longitude}});
   if(found.error||found.data?.error||!found.data?.metadata)throw await functionError(found,'Station discovery');
-  work.metadata=found.data.metadata;
+  work.metadata={...found.data.metadata,candidates:found.data.metadata.candidates.map(s=>({...s,named_query:true,transport_type:stationTransportType(s)}))};
+  const normal=s=>String(s||'').toLowerCase().replace(/\([^)]*\)/g,'').replace(/\b(?:railway|rail|train|station|stop|underground|tube)\b/g,'').replace(/[^a-z0-9]/g,'');
+  const listed=work.listing_stations||[];
+  const matching=work.metadata.candidates.filter(s=>listed.some(x=>normal(x.name)===normal(s.name)));
+  if(matching.filter(s=>stationTransportType(s)!=='tram').length>=3)work.metadata.candidates=matching;
+  work.metadata.listing_stations=listed;
+  work.metadata.candidate_source=matching.length?'Original listing stations matched to TfL identities':'TfL station identities; original listing station list unavailable';
  }
  if(!work.metadata){
   progress('Finding station entrances: '+p.address);
@@ -98,7 +130,7 @@ export async function calculateGoogleRoutes(id,{sb,extension,progress=()=>{},onP
   for(let i=0;i<3;i++){
    const stop=work.preview.tfl_final.results[i];if(!stop||google.stations[i]?.transit)continue;
    progress('Reading Google Maps transport: '+p.address+' → '+stop.name);
-   await step('station_transit_'+i,async()=>{google.stations[i].transit=await route('station_transit',{lat:Number(stop.lat),lon:Number(stop.lon)})});
+   await step('station_transit_'+i,async()=>{google.stations[i].transit=await route('station_transit',{lat:Number(stop.lat),lon:Number(stop.lon),...(stop.destination_mode==='named-station'?{query:stop.destination,name:stop.name,station_id:stop.station_id,transport_type:stop.transport_type}:{})})});
   }
  }
  await save(true);
