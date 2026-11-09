@@ -1,6 +1,19 @@
 # Our House Hunt: Recovery and Safe-Change Procedure
 
-## Exact project (do not search for a separate `our-house-hunt` repository)
+## Current project and routing architecture (2026-11-09)
+
+- Repository: **`sabinacoaching/Our-house-hunt`**, branch `main`, project files at its root. Published application: **`https://sabinacoaching.github.io/Our-house-hunt/`**. Do not operate on the other repository or website. References below to the old shared repository describe historical checkpoints only.
+- Frontend v53 works with the already installed Importer **0.16.0**. This release does not require replacing the extension. GitHub checkpoint: `backup-before-routing-rework-20261109` at `300129a71f24ebfe32ea3219230ab5791976b90f`.
+- The source point comes from the original listing's Street View panorama. A panorama on an adjacent road is permitted by the owner. Keep the advertised/user-edited address unchanged and record the panorama coordinates and original listing URL separately.
+- One controller, `google-routes-runner.js`, owns new-import routes and pending-import retries. The modern importer bypasses the older `enrichWalkingStations`/TfL/OSM routing chain. Rendering a table, card or map never starts route calculations.
+- The extension reads the visible **Google Maps** UI in background tabs, with English labels. All walking distances, walking minutes and public-transport minutes come from that UI. `house-hunt-station-commutes` with `metadata_only:true` supplies **TfL station IDs and public entrance coordinates only**. Its modern path performs no OSM walking calculation and no TfL journey calculation, uses station IDs directly instead of searching again by name, caches metadata and retries transient failures.
+- Waterloo 07:40, The Dilly 18:40 and Dance Lab 19:50 use the next typical Tuesday in Europe/London. Selection: shortest complete itinerary arriving during the five minutes up to the deadline; otherwise the closest earlier arrival. Late or internally inconsistent journeys are rejected.
+- `google-station-selection.js` compares actual Google walking routes. Great-circle distance is used only as a lower bound to skip stations that cannot be nearer, with allowance for Google's displayed distance rounding. It is never saved as walking distance or time. Multiple entrances of a station do not become duplicate stations.
+- Every validated route is saved independently through the existing `house_hunt_save_google_routes` RPC. A failed station lookup cannot discard the three destination journeys; a failed destination cannot discard walking/station results. `import_diagnostics.google_routes_work` records the exact source, routing date, completed components and errors. Retries reuse the checked components for the same origin/date; an initial load retries only pending imports, not older completed homes.
+- Manual edits win. Each save rereads the record and uses the existing atomic comparison/RLS RPC; a concurrent comment/status edit is retained. Manual journey minutes, station names, distances and `google_verified` entries are protected. No migration or permission change is required for v53.
+- Regression tests: `npm test`. Read-only live integration: `.github/workflows/routing-network-check.yml` / `scripts/check-routing-live.mjs`. It runs the production controller, production station metadata logic and the extension's exact Google reader in real Chrome, with all database writes confined to in-memory test records. Production RPC permissions/concurrency/manual-value guards are tested separately in a rolled-back transaction.
+
+## Historical shared-project location
 
 - GitHub: `sabinacoaching/sabinacoaching.github.io`, branch `main`.
 - Application: **only** folder `our-house-hunt/` within that repository. The rest of the repository hosts another site and MUST NOT be reset, reverted, overwritten, or redeployed wholesale.

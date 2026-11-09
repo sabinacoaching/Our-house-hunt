@@ -1,0 +1,24 @@
+name: Routing network check
+on:
+  workflow_dispatch:
+  push:
+    branches: [routing-architecture-20261109]
+    paths:
+      - 'google-*.js'
+      - 'extension/google-route-*.js'
+      - 'server/house-hunt-station-commutes/**'
+      - 'scripts/check-routing-live.mjs'
+      - '.github/workflows/routing-network-check.yml'
+permissions:
+  contents: read
+jobs:
+  station-discovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-save --package-lock=false playwright-core@1.62.1
+      - run: node scripts/check-routing-live.mjs

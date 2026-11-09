@@ -1,4 +1,5 @@
 import {createClient} from "npm:@supabase/supabase-js@2.49.8";
+import {discoverStationEntrances} from './station-discovery.ts';
 const root=Deno.env.get("SUPABASE_URL")!;
 const admin=createClient(root,Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,{auth:{persistSession:false,autoRefreshToken:false}});
 const reply=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{"Content-Type":"application/json","Cache-Control":"no-store","Access-Control-Allow-Origin":"https://sabinacoaching.github.io","Access-Control-Allow-Headers":"authorization,apikey,content-type,x-client-info","Access-Control-Allow-Methods":"POST,OPTIONS"}});
@@ -102,12 +103,17 @@ Deno.serve(async(req:Request)=>{
   if(who.error||!who.data.user)return reply({error:"Invalid session"},401);
   const member=await admin.from("members").select("id").eq("id",who.data.user.id).maybeSingle();
   if(member.error||!member.data)return reply({error:"Not a member"},403);
-  const {id,preview,latitude,longitude,discover}=await req.json();
+  const {id,preview,latitude,longitude,discover,metadata_only}=await req.json();
   if(typeof id!=="string"||!/^[a-f0-9-]{36}$/i.test(id))return reply({error:"Invalid property id"},400);
   const data=await admin.from("properties").select("id,latitude,longitude,station_name,station_distance_miles,station_2_name,station_2_distance_miles,station_3_name,station_3_distance_miles,station_commutes,manual_overrides").eq("id",id).single();
   if(data.error||!data.data)return reply({error:"House not found"},404);
   const p=data.data,lat=preview===true?latitude:p.latitude,lon=preview===true?longitude:p.longitude,origin={lat:Number(lat),lon:Number(lon)};
   if(lat==null||lon==null||!Number.isFinite(origin.lat)||!Number.isFinite(origin.lon)||origin.lat<49||origin.lat>61||origin.lon< -9||origin.lon>3)return reply({error:"No reliable geolocation"},422);
+  if(preview===true&&discover===true&&metadata_only===true){
+   const metadata=await discoverStationEntrances(origin,p);
+   console.info(JSON.stringify({stage:'station-entrances',property_id:id,candidates:metadata.candidates.length,errors:metadata.errors}));
+   return reply({metadata,preview:true});
+  }
   const date=tuesday();let names=[p.station_name,p.station_2_name,p.station_3_name].map((x:any)=>String(x||"").trim());
   let discovered:any[]=null;
   if(preview===true&&discover===true){
@@ -170,5 +176,5 @@ Deno.serve(async(req:Request)=>{
   const update=await request.select("id");
   if(update.error||!update.data?.length)return reply({error:"Station data changed during calculation",details:update.error?.message},409);
   return reply({commutes:out,cached:false});
- }catch(e){return reply({error:String(e)},500)}
+ }catch(e){console.error(JSON.stringify({stage:'station-commutes',error:String(e)}));return reply({error:String(e)},500)}
 });
