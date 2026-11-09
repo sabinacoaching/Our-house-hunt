@@ -12,21 +12,21 @@ export function buildGoogleRouteUpdate(p,location,stationPreview,google,{partial
  for(let i=0;i<names.length;i++)if(names[i]&&(!stops[i]?.entrance_id||stops[i].name!==names[i]))throw Error('Station entrance mismatch');
  const stationResults=names.map((name,i)=>{if(!name)return null;const w=google?.stations?.[i]?.walking,pt=google?.stations?.[i]?.transit;
   if(!w&&partial)return null;
-  if(!w||w.source!=='Google Maps'||w.origin!==origin||w.destination!==stops[i].lat+','+stops[i].lon||w.walking_miles==null||w.walking_minutes==null||!(Number(w.walking_miles)>0)||!(Number(w.walking_minutes)>0))throw Error('Missing Google walking route');
+  if(!w||w.source!=='Google Maps'||w.origin!==origin||w.destination!==(stops[i].destination||stops[i].lat+','+stops[i].lon)||stops[i].destination_mode==='named-station'&&w.station_id!==stops[i].station_id||w.walking_miles==null||w.walking_minutes==null||!(Number(w.walking_miles)>0)||!(Number(w.walking_minutes)>0))throw Error('Missing Google walking route');
   if((!pt&&!partial)||pt&&(pt.source!=='Google Maps'||pt.origin!==origin||pt.destination!==w.destination||(!pt.unavailable&&(pt.minutes==null||!(Number(pt.minutes)>0)))))throw Error('Missing Google station transport result');
-  return {name,walking_miles:Number(w.walking_miles),walking_minutes:Number(w.walking_minutes),pt_minutes:!pt||pt.unavailable?null:Number(pt.minutes),walking_url:w.url,pt_url:pt?.url||null,destination:w.destination};
+  return {name,station_id:stops[i].station_id,destination_mode:stops[i].destination_mode||'point',walking_miles:Number(w.walking_miles),walking_minutes:Number(w.walking_minutes),pt_minutes:!pt||pt.unavailable?null:Number(pt.minutes),walking_url:w.url,pt_url:pt?.url||null,destination:w.destination};
  });
  const next={...(p.journey_estimates||{})},automatic={};
  const deadlines={dancelab:'19:50',dilly:'18:40',waterloo:'07:40'};
  for(const id of ['dancelab','dilly','waterloo']){const v=google?.journeys?.[id];if(!v&&partial)continue;if(!v||v.source!=='Google Maps'||v.origin!==origin||!Number.isFinite(Number(v.minutes))||!v.departure||!v.arrival||!/^\d{4}-\d{2}-\d{2}$/.test(v.date||''))throw Error('Missing Google journey '+id);
   const dep=Date.parse(v.departure+'Z'),arr=Date.parse(v.arrival+'Z'),deadline=Date.parse(v.date+'T'+deadlines[id]+':00Z');
   if(!Number.isFinite(dep)||!Number.isFinite(arr)||arr<=dep||!(Number(v.minutes)>0)||arr>deadline||Math.abs((arr-dep)/60000-Number(v.minutes))>1)throw Error('Invalid Google journey timing '+id);
-  const item={...v,id,minutes:Number(v.minutes),origin_input:p.address,origin_source:'Listing Street View',destination_address:v.destination,calculated_at:v.calculated_at||google.calculated_at,calculation_version:'google-visible-v1'};automatic[id]=item;if(next[id]?.manual_override!==true&&next[id]?.source!=='manual')next[id]=item;
+  const item={...v,id,minutes:Number(v.minutes),origin_input:p.address,origin_source:'Listing Street View',destination_address:v.destination,calculated_at:v.calculated_at||google.calculated_at,calculation_version:'google-visible-v2'};automatic[id]=item;if(next[id]?.manual_override!==true&&next[id]?.source!=='manual')next[id]=item;
  }
  const prev=p.import_diagnostics||{},history=Array.isArray(prev.routing_history)?prev.routing_history.slice(-4):[];
  if(!google.work||prev.google_routes_work?.job_id!==google.work.job_id)history.push({address:p.address,latitude:p.latitude,longitude:p.longitude,stations:p.station_commutes,journeys:p.journey_estimates});
  const complete=!!preview&&names.every((name,i)=>!name||stationResults[i]&&google.stations?.[i]?.transit)&&Object.keys(automatic).length===3&&!Object.keys(google.work?.errors||{}).length;
- const diag={...prev,source_location:source,route_pending:!complete,google_routes_version:complete?'google-maps-ui-v1':null,google_routes_completed_at:complete?google.calculated_at:prev.google_routes_completed_at||null,google_automatic_journeys:{...(prev.google_automatic_journeys||{}),...automatic},routing_history:history,...(google.work?{google_routes_work:google.work}:{})};
+ const diag={...prev,source_location:source,route_pending:!complete,google_routes_version:complete?'google-maps-ui-v2':null,google_routes_completed_at:complete?google.calculated_at:prev.google_routes_completed_at||null,google_automatic_journeys:{...(prev.google_automatic_journeys||{}),...automatic},routing_history:history,...(google.work?{google_routes_work:google.work}:{})};
  const commutes={...(p.station_commutes||{}),google_verified:p.station_commutes?.google_verified||{}};
  if(preview){
   // Discovery carries identities and entrances, never an estimated travel time.

@@ -44,8 +44,28 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/deploy-pages@v4
         id: deployment
         with:
           artifact_name: ${{ needs.build.outputs.artifact_name }}
 
+      - name: Verify the published routing code and importer download
+        run: |
+          python - <<'PY'
+          import hashlib,pathlib,time,urllib.request,re
+          paths=['index.html','google-routes-runner.js','google-route-update.js','google-station-selection.js','station-commutes.js','comparison.js','downloads/our-house-hunt-importer-v0.18.0.zip']
+          for path in paths:
+            expected=pathlib.Path(path).read_bytes()
+            url='https://sabinacoaching.github.io/Our-house-hunt/'+path+'?release-check='+str(time.time_ns())
+            for attempt in range(4):
+              try:
+                with urllib.request.urlopen(url,timeout=20) as response: actual=response.read()
+                if hashlib.sha256(actual).digest()!=hashlib.sha256(expected).digest():raise RuntimeError('Published file differs: '+path)
+                break
+              except Exception:
+                if attempt==3:raise
+                time.sleep(2)
+            if path=='index.html':assert b'>v55</span>' in actual
+            print('PUBLISHED_FILE_PASS',path,hashlib.sha256(actual).hexdigest())
+          PY

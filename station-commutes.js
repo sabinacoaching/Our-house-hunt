@@ -18,18 +18,13 @@ export function stationWalkingMiles(p,i){
  return stationOverride(c,name).walking_miles??google?.walking_miles??t?.walking_miles??r.walking_miles??r.google_walking?.miles??p[i===0?'station_distance_miles':i===1?'station_2_distance_miles':'station_3_distance_miles'];
 }
 export function stationWalkingMapUrl(p,i){
- const names=stationNames(p),name=names[i],c=p.station_commutes||{},final=c.tfl_final;
- const location=p.import_diagnostics?.source_location;
- const sourceMatches=location?.source==='listing-street-view'&&location.listing_url===p.url&&location.address_input===p.address&&Number.isFinite(Number(p.latitude))&&Number.isFinite(Number(p.longitude))&&Math.abs(Number(location.latitude)-Number(p.latitude))<1e-7&&Math.abs(Number(location.longitude)-Number(p.longitude))<1e-7;
- const origin=sourceMatches?`${p.latitude},${p.longitude}`:(p.address?.trim()?p.address+', United Kingdom':`${p.latitude},${p.longitude}`);
- const item=final?.origin===`${p.latitude},${p.longitude}`&&final?.results?.[i]?.name===name?final.results[i]:null;
- const lat=Number(item?.lat),lon=Number(item?.lon);
- const preciseStop=!!item?.station_id&&!!item?.entrance_id&&!/^HUB/i.test(item.station_id)&&item.lat!=null&&item.lon!=null&&Number.isFinite(lat)&&Number.isFinite(lon)&&lat>49&&lat<61&&lon> -9&&lon<3;
- const destination=preciseStop?`${lat},${lon}`:/tram/i.test(name)?name.replace(/\s*(?:tram\s*)?stop$/i,'')+' Tram Stop, London, UK':/underground|tube/i.test(name)||name==='Ealing Common'?name.replace(/\s*underground$/i,'')+' Underground Station, London, UK':name.replace(/\s*(?:railway|rail|train|station)$/i,'')+' Railway Station, London, UK';
- const args={api:'1',origin,destination,travelmode:'walking'};
+ const name=stationNames(p)[i],c=p.station_commutes||{},location=p.import_diagnostics?.source_location;
+ const sourceMatches=location?.source==='listing-street-view'&&location.listing_url===p.url&&location.address_input===p.address&&p.latitude!=null&&p.longitude!=null&&Number(location.latitude)===Number(p.latitude)&&Number(location.longitude)===Number(p.longitude);
  const checked=c.google_routes;
- if(!sourceMatches&&!preciseStop&&checked?.origin===p.address&&checked?.origin_place_id&&checked?.stations?.[i]===name&&checked?.results?.[i]?.station_place_id){args.origin_place_id=checked.origin_place_id;args.destination_place_id=checked.results[i].station_place_id}
- return 'https://www.google.com/maps/dir/?'+new URLSearchParams(args).toString();
+ if(sourceMatches&&checked?.origin===p.address&&checked?.stations?.[i]===name&&checked.results?.[i]?.destination_mode==='named-station'&&checked.results[i].walking_url)return checked.results[i].walking_url;
+ const origin=sourceMatches?p.latitude+','+p.longitude:p.address+', United Kingdom';
+ const destination=/tram/i.test(name)?name.replace(/\s*(?:tram\s*)?stop$/i,'')+' Tram Stop, United Kingdom':/underground|tube/i.test(name)||name==='Ealing Common'?name.replace(/\s*underground$/i,'')+' Underground Station, United Kingdom':name.replace(/\s*(?:railway|rail|train|station)$/i,'')+' Railway Station, United Kingdom';
+ return 'https://www.google.com/maps/dir/?'+new URLSearchParams({api:'1',origin,destination,travelmode:'walking',hl:'en'});
 }
 // Station times are calculated once by TfL and saved in the property record.
 // A single walking link opens Google Maps with the destination's station name.

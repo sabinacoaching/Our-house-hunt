@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Our House Hunt Importer 0.17.0",
-  "version": "0.17.0",
+  "name": "Our House Hunt Importer 0.18.0",
+  "version": "0.18.0",
   "description": "Imports original listings, floor plans and scheduled Google Maps journeys.",
   "permissions": [
     "tabs",

@@ -20,6 +20,17 @@ async function readPropertyFromPage(){
  const meta=k=>document.querySelector('meta[property="'+k+'"]')?.content||document.querySelector('meta[name="'+k+'"]')?.content||'';
  const title=(meta('og:title')||document.title||document.querySelector('h1')?.textContent||'').trim();
  const description=meta('og:description')||meta('description')||'';
+ // An open gallery inserts a first h1 containing only the property type.
+ // Capture the complete original-listing address before interacting with media.
+ const cleanListingAddress=value=>String(value||'').replace(/\s+/g,' ').trim()
+  .replace(/,\s*\d+\s*bed(?:room)?s?\s+.*$/i,'')
+  .replace(/^\s*\d+\s*bed(?:room)?s?\s+.*?\s+(?:for sale|to rent)\s*/i,'')
+  .replace(/^\s*property\s+for\s+sale\s*/i,'')
+  .replace(/\s*[-|]\s*(?:Zoopla|Rightmove).*$/i,'').trim();
+ const headingTexts=[...document.querySelectorAll('h1')].map(x=>x.textContent||'');
+ const originalAddress=[...headingTexts.filter(x=>/for sale|to rent/i.test(x)),document.querySelector('h1')?.textContent,title]
+  .map(cleanListingAddress).find(x=>x.length>=4&&!/^(?:\d+\s*bed|photos?|floor plans?|street view)$/i.test(x))||'';
+
  const scripts=[...document.querySelectorAll('script')].map(x=>x.textContent||'');
  const photos=[],plans=[],photoSet=new Set(),planSet=new Set();
  // Prefer the listing's own ordered media structures. Zoopla's preview carousel
@@ -331,17 +342,37 @@ async function readPropertyFromPage(){
    }
  }
  // If the listing has no explicit levels, let the actual floor-plan reader decide.
- const zone=mainText.match(/(?:nearest\s+(?:train\s+|railway\s+)?stations?|nearby\s+stations?|train\s+stations?|transport\s+links)\s*\n?([\s\S]{0,1200})/i)?.[1]||'';
- const stations=[];
- for(const sm of zone.matchAll(/(?:^|\n)\s*([A-Z][A-Za-z'& -]{2,55})(?:\s+|\s*\(|\s*[-–]\s*)(?:approx\.?\s*)?(\d+(?:\.\d+)?)\s*(?:mi|miles?)\b/gi)){
-    const name=sm[1].trim();
-    if(/^(?:nearby|nearest|station|distance|transport|walking|train|railway|underground|property)/i.test(name))continue;
-    if(!stations.some(s=>s.name.toLowerCase()===name.toLowerCase()))stations.push({name});
-    if(stations.length>=2)break;
+ // Read station candidates and their advertised distances from the listing when
+ // that section is available. Advertised miles are never saved as Google walks.
+ const nearby_stations=[];
+ const addNearby=(name,miles,type)=>{
+  name=String(name||'').replace(/\s+/g,' ').trim();
+  if(!name||/^(?:nearby|nearest|distance|transport|walking|property|school)/i.test(name)||!Number.isFinite(Number(miles)))return;
+  if(!nearby_stations.some(x=>x.name.toLowerCase()===name.toLowerCase()))nearby_stations.push({name,listed_distance_miles:Number(miles),transport_type:type,source:source+' listing'});
+ };
+ const localHeading=document.getElementById?.('local-area');
+ const localRegion=localHeading?.closest?.('section')||document.querySelector('section[aria-labelledby="local-area"]');
+ const stationRegion=document.querySelector('[data-testid="transport-list"],[data-testid="nearby-stations"]');
+ if(stationRegion||localRegion){
+  const region=stationRegion||localRegion;
+  const items=[...(region.querySelectorAll?.('li,[data-testid*="station"],[data-testid*="transport"]')||[])];
+  for(const item of items){
+   const text=String(item.innerText||item.textContent||'');
+   const distance=text.match(/(\d+(?:\.\d+)?)\s*(?:mi|miles?)\b/i);
+   if(!distance)continue;
+   const labels=[...(item.querySelectorAll?.('img,svg,title,[aria-label]')||[])].map(x=>[x.getAttribute?.('alt'),x.getAttribute?.('aria-label'),x.textContent].filter(Boolean).join(' ')).join(' ');
+   const kind=/tram/i.test(labels)?'tram':/underground|tube|subway|metro/i.test(labels)?'tube':/rail|train|overground|elizabeth/i.test(labels)?'rail':null;
+   if(!kind)continue;
+   const name=text.slice(0,distance.index).replace(/\b(?:train station|railway station|underground station|tram stop)\b/gi,'').trim();
+   addNearby(name,distance[1],kind);
+  }
  }
- const stationName=stations[0]?.name||'',station2Name=stations[1]?.name||'';
- // Listing-provided distances are usually straight-line distances and are NOT labelled as walking distances.
- // Do not copy those values into walking-distance fields.
+ const zone=mainText.match(/(?:nearest\s+(?:train\s+|railway\s+)?stations?|nearby\s+stations?|train\s+stations?)\s*\n?([\s\S]{0,1600})/i)?.[1]||'';
+ for(const sm of zone.matchAll(/(?:^|\n)\s*([A-Z][A-Za-z'&() .-]{2,70})\s+(\d+(?:\.\d+)?)\s*(?:mi|miles?)\b/gi)){
+  addNearby(sm[1],sm[2],/tram/i.test(sm[1])?'tram':/underground|tube|metro/i.test(sm[1])?'tube':'rail');
+ }
+ nearby_stations.sort((a,b)=>a.listed_distance_miles-b.listed_distance_miles);
+ const stationName=nearby_stations[0]?.name||'',station2Name=nearby_stations[1]?.name||'';
  const stationMiles=null,station2Miles=null;
  // Use the listing's actual Street View, whose visible address and map link
  // refer to the panorama itself. Never combine unrelated coordinates from scripts.
@@ -353,7 +384,8 @@ async function readPropertyFromPage(){
   const essential=consent?.querySelector('#deny,[data-testid="uc-deny-all-button"]')||document.querySelector('#onetrust-reject-all-handler');
   if(essential)essential.click();
   const controls=()=>[...document.querySelectorAll('button,[role="tab"],a')];
-  const street=controls().find(el=>/^street\s*view$/i.test((el.innerText||el.textContent||'').trim()));
+  const streetControls=controls().filter(el=>/^street\s*view$/i.test((el.innerText||el.textContent||'').trim()));
+  const street=streetControls.find(el=>el.getAttribute?.('role')==='tab')||streetControls[0];
   if(street){
    street.click();
    for(let attempt=0;attempt<40;attempt++){
@@ -375,9 +407,8 @@ async function readPropertyFromPage(){
  if(latHit&&lngHit){const la=Number(latHit[1]),lo=Number(lngHit[1]);if(la>49&&la<61&&lo>-9&&lo<3){latitude=la;longitude=lo}}
  const propertyType=mainText.match(/PROPERTY TYPE\s*\n+\s*([^\n]+)/i)?.[1]||'';
  const tenure=mainText.match(/TENURE\s*\n+\s*([^\n]+)/i)?.[1]||'';
- let address=(document.querySelector('h1')?.textContent||title).trim();
- address=address.replace(/^\s*\d+\s*bed(?:room)?s?\s+.*?\s+(?:for sale|to rent)\s*/i,'').replace(/^\s*property\s+for\s+sale\s*/i,'').replace(/\s*[-|]\s*(?:Zoopla|Rightmove).*$/i,'').trim();
- if(address.length>160)address=title.slice(0,160);
+ let address=originalAddress;
+ if(!address)throw Error('Original listing address could not be read; no house was imported');
  if(!gallery.length)throw new Error('Listing loaded but house photographs were not found');
  // Identify only the agent named by this listing; the portals often provide an
  // enquiry form without disclosing the agent's actual email address.
@@ -405,7 +436,7 @@ async function readPropertyFromPage(){
   if(postcode)agency_address=segment.slice(('About '+agency_name).length,postcode.index+postcode[0].length).trim().replace(/\s+/g,' ');
  }
  const agency_website=null;
- return {listing_id:location.pathname.match(/\/(?:details|properties)\/(\d+)/)?.[1]||null,source,title,address,agency_name,agency_email,agency_website,agency_address,agency_profile_url,price,bedrooms,bathrooms,wc_count:wcs,floors,floor_area_sqm:area,garden_area_sqm:gardenArea,garden_description:gardenDescription,station_name:stationName,station_distance_miles:stationMiles,station_2_name:station2Name,station_2_distance_miles:station2Miles,latitude,longitude,location_hint,property_type:propertyType,tenure,images:gallery,floorplans:plans,floorplan_status:plans.length?'found-in-original-listing':clickedPlanTab?'tab-opened-but-image-not-found':floorTab?'floorplan-tab-click-failed':'floorplan-tab-not-found',floorplan_diagnostic:{tabFound:!!floorTab,tabClicked:clickedPlanTab,candidateCount:plans.length,error:planTabError},extension_version:'0.16.0'};
+ return {listing_id:location.pathname.match(/\/(?:details|properties)\/(\d+)/)?.[1]||null,source,title,address,agency_name,agency_email,agency_website,agency_address,agency_profile_url,price,bedrooms,bathrooms,wc_count:wcs,floors,floor_area_sqm:area,garden_area_sqm:gardenArea,garden_description:gardenDescription,nearby_stations,station_name:stationName,station_distance_miles:stationMiles,station_2_name:station2Name,station_2_distance_miles:station2Miles,latitude,longitude,location_hint,property_type:propertyType,tenure,images:gallery,floorplans:plans,floorplan_status:plans.length?'found-in-original-listing':clickedPlanTab?'tab-opened-but-image-not-found':floorTab?'floorplan-tab-click-failed':'floorplan-tab-not-found',floorplan_diagnostic:{tabFound:!!floorTab,tabClicked:clickedPlanTab,candidateCount:plans.length,error:planTabError},extension_version:'0.18.0'};
 }
 async function readAgencyProfile(expectedName){
  const normalize=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
@@ -491,10 +522,13 @@ function googlePoint(point){
 async function googleRoute(input){
  const origin=googlePoint(input?.origin),kind=String(input?.kind||''),target=googleTargets[kind];
  if(!target&&!['station_walk','station_transit'].includes(kind))throw Error('Unsupported Google route');
- const destination=target?target.address:googlePoint(input.destination),mode=target?'arrive':kind==='station_walk'?'walking':'depart',time24=target?.time||'07:30';
+ const station=input.destination,stationNamed=!target&&!!station?.query&&!!station?.station_id;
+ const destination=target?target.address:stationNamed?String(station.query):googlePoint(station),mode=target?'arrive':kind==='station_walk'?'walking':'depart',time24=target?.time||'07:30';
+ const stationCheck=stationNamed?String(station.name).replace(/\b(?:railway|rail|train|station|stop|underground|tube)\b/gi,'').replace(/\([^)]*\)/g,'').toLowerCase().split(/\s+/).map(x=>x.replace(/[^a-z0-9]/g,'')).filter(Boolean):[];
+
  const [hour,minute]=time24.split(':').map(Number);
  const date=londonNextTuesday(),dateISO=date.toISOString().slice(0,10);
- const args={origin,destination,destinationKind:target?'fixed':'point',destinationCheck:target?.check||[],mode,time24,date:dateISO};
+ const args={origin,destination,stationType:stationNamed?station.transport_type:null,destinationKind:target||stationNamed?'fixed':'point',destinationCheck:target?.check||stationCheck,mode,time24,date:dateISO};
  // Open the same scheduled directions URL that Maps produces itself. Avoid
  // typing dates/times through locale-dependent controls in an injected script.
  const url=mode==='walking'?'https://www.google.com/maps/dir/?'+new URLSearchParams({api:'1',origin,destination,travelmode:'walking',hl:'en'}):'https://www.google.com/maps/dir/'+encodeURIComponent(origin)+'/'+encodeURIComponent(destination)+'/data=!4m6!4m5!2m3!6e'+(mode==='arrive'?'1':'0')+'!7e2!8j'+googleLondonTimestamp(dateISO,time24)+'!3e3?hl=en';
@@ -502,24 +536,42 @@ async function googleRoute(input){
  try{
   tab=await chrome.tabs.create({url,active:false});await waitForLoad(tab.id,30000);
   const response=await chrome.scripting.executeScript({target:{tabId:tab.id},func:houseHuntReadMapsPage,args:[args]});
-  const page=response?.[0]?.result;if(page?.error)throw Error(page.error+(page.diagnostic?' ['+JSON.stringify(page.diagnostic)+']':''));if(kind==='station_transit'&&page?.noRoute)return {unavailable:true,source:'Google Maps',origin,destination,url:page.url};if(!page?.rows?.length)throw Error('Google Maps script returned no result after a page navigation');
+  const page=response?.[0]?.result;if(page?.error)throw Error(page.error+(page.diagnostic?' ['+JSON.stringify(page.diagnostic)+']':''));if(kind==='station_transit'&&page?.noRoute)return {unavailable:true,source:'Google Maps',origin,destination,station_id:stationNamed?station.station_id:null,destination_name:stationNamed?station.name:null,url:page.url};if(!page?.rows?.length)throw Error('Google Maps script returned no result after a page navigation');
   if(mode==='arrive'&&page.hasLater)try{
    const later=await chrome.scripting.executeScript({target:{tabId:tab.id},func:houseHuntReadMapsPage,args:[{...args,phase:'later'}]}),extra=later?.[0]?.result;
    if(extra?.error?.includes('GOOGLE_VERIFICATION_REQUIRED'))throw Error(extra.error);
    if(extra?.rows?.length)page.rows=page.rows.concat(extra.rows);
   }catch(error){if(String(error?.message||error).includes('GOOGLE_VERIFICATION_REQUIRED'))throw error}
+  let probeStatus='not-needed';
+  if(mode==='arrive'){
+   const deadline=hour*60+minute,current=HouseHuntGoogleRoutes.readTransit(page.rows,deadline);
+   const valid=page.rows.map(row=>HouseHuntGoogleRoutes.readTransit([row],deadline)).filter(Boolean);
+   const fastest=valid.length?Math.min(...valid.map(x=>x.minutes)):null;
+   if(current&&fastest<current.minutes){
+    const departMinutes=Math.max(0,deadline-fastest-5),probeTime=String(Math.floor(departMinutes/60)).padStart(2,'0')+':'+String(departMinutes%60).padStart(2,'0');
+    const probeUrl='https://www.google.com/maps/dir/'+encodeURIComponent(origin)+'/'+encodeURIComponent(destination)+'/data=!4m6!4m5!2m3!6e0!7e2!8j'+googleLondonTimestamp(dateISO,probeTime)+'!3e3?hl=en';
+    let probeTab;
+    try{
+     probeTab=await chrome.tabs.create({url:probeUrl,active:false});await waitForLoad(probeTab.id,30000);
+     const extra=await chrome.scripting.executeScript({target:{tabId:probeTab.id},func:houseHuntReadMapsPage,args:[{...args,mode:'depart',time24:probeTime}]});
+     const value=extra?.[0]?.result;if(value?.error)throw Error(value.error);
+     if(!value||!value.noRoute&&!value.rows?.length)throw Error('Google later-departure route results unavailable');
+     if(value.rows?.length)page.rows=page.rows.concat(value.rows);probeStatus='checked';
+    }finally{if(probeTab?.id)await chrome.tabs.remove(probeTab.id).catch(()=>{})}
+   }
+  }
   const parsed=mode==='walking'?HouseHuntGoogleRoutes.readWalk(page.rows):HouseHuntGoogleRoutes.readTransit(page.rows,hour*60+minute,mode);
-  if(!parsed){if(kind==='station_transit'&&page.rows.some(r=>(r.modes||[]).some(m=>/^walk(?:ing)?$/i.test(m)))&&page.rows.every(r=>(r.modes||[]).length&&(r.modes||[]).every(m=>/^walk(?:ing)?$/i.test(m))))return {unavailable:true,source:'Google Maps',origin,destination,url:page.url};throw Error('No valid Google Maps route for the requested time')}
-  if(mode==='walking')return {...parsed,source:'Google Maps',origin,destination,url:page.url};
+  if(!parsed){if(kind==='station_transit'&&page.rows.some(r=>(r.modes||[]).some(m=>/^walk(?:ing)?$/i.test(m)))&&page.rows.every(r=>(r.modes||[]).length&&(r.modes||[]).every(m=>/^walk(?:ing)?$/i.test(m))))return {unavailable:true,source:'Google Maps',origin,destination,station_id:stationNamed?station.station_id:null,destination_name:stationNamed?station.name:null,url:page.url};throw Error('No valid Google Maps route for the requested time')}
+  if(mode==='walking')return {...parsed,source:'Google Maps',origin,destination,station_id:stationNamed?station.station_id:null,destination_name:stationNamed?station.name:null,url:page.url};
   const stamp=n=>String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0');
   const dayBefore=new Date(date);dayBefore.setUTCDate(dayBefore.getUTCDate()-1);
   const depDate=parsed.departure>parsed.arrival?dayBefore.toISOString().slice(0,10):dateISO;
-  return {minutes:parsed.minutes,departure:depDate+'T'+stamp(parsed.departure)+':00',arrival:dateISO+'T'+stamp(parsed.arrival)+':00',date:dateISO,desired_arrival:target?.time||null,source:'Google Maps',origin,destination,url:page.url};
+  return {station_id:stationNamed?station.station_id:null,destination_name:stationNamed?station.name:null,selection_version:'pareto-arrival-v2',departure_probe:probeStatus,alternatives:page.rows,minutes:parsed.minutes,departure:depDate+'T'+stamp(parsed.departure)+':00',arrival:dateISO+'T'+stamp(parsed.arrival)+':00',date:dateISO,desired_arrival:target?.time||null,source:'Google Maps',origin,destination,url:page.url};
  }finally{if(tab?.id)await chrome.tabs.remove(tab.id).catch(()=>{})}
 }
 chrome.runtime.onMessage.addListener((req,sender,sendResponse)=>{
  if(!/^https:\/\/sabinacoaching\.github\.io\/(?:our-house-hunt|Our-house-hunt)\//.test(sender.url||''))return false;
- if(req.action==='PING'){sendResponse({ok:true,data:{extension:'Our House Hunt',version:'0.17.0'}});return false;}
+ if(req.action==='PING'){sendResponse({ok:true,data:{extension:'Our House Hunt',version:'0.18.0'}});return false;}
  if(!['IMPORT_URL','FETCH_IMAGE','GOOGLE_ROUTE'].includes(req.action))return false;
  (async()=>{try{const data=req.action==='IMPORT_URL'?await extract(req.url):req.action==='GOOGLE_ROUTE'?await googleRoute(req.route):await fetchImage(req.url);sendResponse({ok:true,data})}catch(e){sendResponse({ok:false,error:e.message})}})();
  return true;

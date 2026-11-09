@@ -18,7 +18,7 @@ async function houseHuntReadMapsPage(request){
   await waitFor(()=>document.querySelector('input[aria-label^="Starting point"],input[aria-label^="Choose starting point"]'),'Google directions');
   const current=decodeURIComponent(location.href);if(!current.includes(request.origin))throw Error('Google origin did not match requested point');
   if(request.destinationKind==='point'&&!current.includes(request.destination))throw Error('Google destination did not match requested station entrance');
-  if(request.destinationKind==='fixed')await waitFor(()=>{const d=document.querySelector('input[aria-label^="Destination"],input[aria-label^="Choose destination"]'),s=String(d?.value||'').toLowerCase().replace(/[^a-z0-9]/g,'');return (request.destinationCheck||[]).every(part=>s.includes(part))},'Google destination',15000);
+  if(request.destinationKind==='fixed')await waitFor(()=>{const d=document.querySelector('input[aria-label^="Destination"],input[aria-label^="Choose destination"]'),s=String(d?.value||'').toLowerCase().replace(/[^a-z0-9]/g,'');return (request.destinationCheck||[]).every(part=>s.includes(part))&&!(request.stationType==='rail'&&/tramstop/.test(s))},'Google destination',15000);
   if(request.mode==='walking')return {rows:await stableCards(),url:location.href};
   if(request.mode==='depart'&&!document.querySelector('input[name="transit-time"]')){
    const visible=await stableCards();
