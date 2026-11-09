@@ -11,13 +11,14 @@ function setup({conflict=false,stationCount=3,farEndpoint=false,hub=false,farOri
  const urls=[];
  const entrance=(id,lon)=>({id:id+'-entrance',stationNaptan:id,stopType:'NaptanRailEntrance',lat:51.45,lon});
  const fetch=async url=>{const u=String(url);urls.push(u);
+  if(u.includes('/StopPoint?'))return {ok:true,json:async()=>({stopPoints:[{commonName:'Beta Rail Station',lat:51.451,lon:-.21,modes:['national-rail']},{commonName:'Delta Rail Station',lat:51.452,lon:-.22,modes:['national-rail']}]})};
   if(u.includes('routing.openstreetmap.de'))return {ok:true,json:async()=>({code:'Ok',routes:[{distance:u.includes(';-0.23,')?900:500,duration:u.includes(';-0.23,')?700:420}],waypoints:[{distance:1},{distance:1}]})};
   if(u.includes('/StopPoint/HUBECY'))return {ok:true,json:async()=>({children:[{id:'910GECROYDN',commonName:'East Croydon Rail Station',modes:['national-rail'],lat:51.45,lon:-.215,children:noEntrances?[]:[...(multipleEntrances?[{...entrance('910GECROYDN',-.23),id:'long-entrance'}]:[]),entrance('910GECROYDN',-.21)]},{id:'940GZZCRECR',commonName:'East Croydon Tram Stop',modes:['tram'],lat:51.45,lon:-.22,children:[entrance('940GZZCRECR',-.22)]}]})};
   if(u.includes('/StopPoint/Search/')){const name=decodeURIComponent(u.split('/StopPoint/Search/')[1].split('?')[0]);return {ok:true,json:async()=>({matches:[hub&&name==='East Croydon'?{name:'East Croydon',id:'HUBECY',lat:51.45,lon:-.215,modes:['national-rail','tram']}:{name:name+' Rail Station',id:name,lat:51.45,lon:-.21,modes:['national-rail']}]})}};
   if(u.includes('/StopPoint/')){const id=decodeURIComponent(u.split('/StopPoint/')[1].split('?')[0]);return {ok:true,json:async()=>({id,children:[entrance(id,-.21)]})}};
   return {ok:true,json:async()=>({journeys:[{duration:7,legs:[{distance:500,mode:{id:'walking'},departurePoint:{lat:farOrigin?51.46:51.45,lon:-.2},arrivalPoint:{lat:51.45,lon:u.includes('/to/51.45,-0.22?')?-.22:-.21}}]},{duration:10,startDateTime:'2026-11-03T07:30:00',arrivalDateTime:'2026-11-03T07:40:00',legs:[{mode:{id:'bus'},departurePoint:{lat:51.45,lon:-.2},arrivalPoint:{lat:farEndpoint?51.451:51.45,lon:-.21}}]}]})}};
  new Function('Deno','createClient','fetch','Response','URLSearchParams','AbortSignal','setTimeout',code)({env:{get:()=>''},serve:f=>handler=f},()=>admin,fetch,Response,URLSearchParams,AbortSignal,fn=>{fn();return 1});
- return {run:()=>handler(new Request('https://example.com',{method:'POST',headers:{authorization:'Bearer test','content-type':'application/json'},body:JSON.stringify({id})})),row:()=>row,urls,guards};
+ return {run:(input={})=>handler(new Request('https://example.com',{method:'POST',headers:{authorization:'Bearer test','content-type':'application/json'},body:JSON.stringify({id,...input})})),row:()=>row,urls,guards};
 }
 test('station endpoint saves three routes and preserves manually entered data',async()=>{
  const x=setup(),r=await x.run();assert.equal(r.status,200);const saved=x.row().station_commutes;
@@ -61,8 +62,17 @@ test('does not invent walking distance when no railway entrance is confirmed',as
  const x=setup({hub:true,noEntrances:true}),r=await x.run();assert.equal(r.status,200);
  assert.equal(x.row().station_commutes.tfl_final.complete,false);assert.match(x.row().station_commutes.results[0].error,/No confirmed walking entrance/);
 });
+test('preview computes entrances for the supplied point without changing the saved record',async()=>{
+ const x=setup(),before=structuredClone(x.row()),r=await x.run({preview:true,latitude:51.45,longitude:-.2}),data=await r.json();
+ assert.equal(data.preview,true);assert.equal(data.commutes.tfl_final.complete,true);assert.deepEqual(x.row(),before);
+});
 test('rejects a distant TfL walking origin but retains a separately checked pedestrian route',async()=>{
  const x=setup({farOrigin:true}),r=await x.run();assert.equal(r.status,200);
  assert.equal(x.row().station_commutes.tfl_final.complete,true);
  assert.equal(x.row().station_commutes.results[0].walking_source,'OpenStreetMap walking route to TfL entrance');
+});
+
+test('station discovery keeps manually checked station names and does not write during preview',async()=>{
+ const x=setup(),before=structuredClone(x.row());const response=await x.run({preview:true,discover:true,latitude:51.45,longitude:-.2});const body=await response.json();
+ assert.equal(response.status,200);assert.deepEqual(body.commutes.tfl_final.names,['Alpha','Beta','Gamma']);assert.deepEqual(x.row(),before);
 });

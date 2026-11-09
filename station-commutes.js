@@ -46,10 +46,10 @@ export function setupStationAccess({sb,history,shouldAutoCalculate}){
   const approxMins=google?.walking_minutes==null&&override.walking_minutes==null&&t?.walking_minutes==null&&r.walking_minutes==null&&r.google_walking?.minutes==null;
   v.walk.textContent='Walking: '+(mi!=null?(approxMiles?'~':'')+Number(mi).toFixed(2)+' mi':'—')+(mins!=null?' / '+(approxMins?'~':'')+Math.round(mins)+' min':'')+(override.walking_minutes!=null?' · manual':google?.walking_minutes!=null?' · Google':'');
   v.link.href=stationWalkingMapUrl(p,i);
-  const pt=override.pt_minutes??google?.pt_minutes??t?.pt_minutes??t?.avg_minutes??r.pt_minutes??r.avg_minutes;
+  const pt=override.pt_minutes??(google?google.pt_minutes:(t?.pt_minutes??t?.avg_minutes??r.pt_minutes??r.avg_minutes));
   const exactPt=override.pt_minutes!=null||google?.pt_minutes!=null||!!t?.pt_departure||!!r.pt_departure;
   v.pt.textContent='PT: '+(pt!=null?(exactPt?'':'~')+Math.round(pt)+' min':'—');
-  v.pt.title=override.pt_minutes!=null?(override.source==='manual'?'Manually entered time':'User-verified time'):google?.pt_minutes!=null?'Google Routes API':t?.pt_departure?'TfL departure '+t.pt_departure:t?'TfL five Tuesday departures':r.avg_minutes!=null?'Previous TfL saved time':'No timetable route';
+  v.pt.title=override.pt_minutes!=null?(override.source==='manual'?'Manually entered time':'User-verified time'):google?.pt_minutes!=null?'Google Maps':t?.pt_departure?'TfL departure '+t.pt_departure:t?'TfL five Tuesday departures':r.avg_minutes!=null?'Previous TfL saved time':'No timetable route';
  }
  async function drain(){
   if(working)return;working=true;

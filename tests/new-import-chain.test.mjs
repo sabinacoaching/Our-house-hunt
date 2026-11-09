@@ -37,8 +37,8 @@ test('a new import carries the source point through photos, plan, stations and s
   {commonName:'Beta Rail Station',lat:51.471,lon:-.342,modes:['national-rail']},
   {commonName:'Gamma Rail Station',lat:51.472,lon:-.343,modes:['national-rail']}]})}:{ok:true,json:async()=>({routes:[{distance:1200,duration:900}]})};
  const digest=async blob=>createHash('sha256').update(Buffer.from(await blob.arrayBuffer())).digest('hex');
- const run=new Function('sb','pendingJourneyImportIds','extension','probeImporter','listing','user','crypto','photoDigest','report','mediaRevision','refresh','analyzeFloorplan','photo','finishNewHouseImport','fetch','validateGeocode','routeDelay','haversine','inspectFloorplanImage','validStreetViewHint',code+';return importHouse');
- const importHouse=run(sb,pending,extension,async()=>true,x=>x,{id:'member'},webcrypto,digest,s=>reports.push(s),'v1',async()=>{},async()=>{},async()=>'',async()=>{throw Error('unexpected retry')},fetch,()=>false,async()=>{},()=>500,async()=>({accepted:true}),validStreetViewHint);
+ const run=new Function('sb','pendingJourneyImportIds','extension','probeImporter','listing','user','crypto','photoDigest','report','mediaRevision','refresh','analyzeFloorplan','photo','finishNewHouseImport','fetch','validateGeocode','routeDelay','haversine','inspectFloorplanImage','validStreetViewHint','queueGoogleHouse',code+';return importHouse');
+ const importHouse=run(sb,pending,extension,async()=>true,x=>x,{id:'member'},webcrypto,digest,s=>reports.push(s),'v1',async()=>{},async()=>{},async()=>'',async()=>{throw Error('unexpected retry')},fetch,()=>false,async()=>{},()=>500,async()=>({accepted:true}),validStreetViewHint,async()=>{});
  await importHouse(listing);
  assert.equal(db.size,1);const p=[...db.values()][0];
  assert.equal(p.latitude,source.location_hint.latitude);assert.equal(p.longitude,source.location_hint.longitude);
