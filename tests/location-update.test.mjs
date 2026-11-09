@@ -10,21 +10,21 @@ const p={id:'house',url:'https://www.zoopla.co.uk/for-sale/details/73761901',add
 test('a corrected address changes the location and preserves manual routes and station edits',()=>{
  const u=buildLocationUpdate(p,hint);
  assert.equal(u.latitude,hint.latitude);assert.equal(u.import_diagnostics.route_pending,true);
- assert.deepEqual(u.journey_estimates,{dancelab:{minutes:42,manual_override:true}});
- assert.deepEqual(u.station_commutes.google_verified,p.station_commutes.google_verified);
- assert.equal(u.station_name,'');assert.equal(u.station_distance_miles,null);
+ assert.ok(!Object.hasOwn(u,'journey_estimates'));
+ assert.ok(!Object.hasOwn(u,'station_commutes'));
+ assert.ok(!Object.hasOwn(u,'station_name'));assert.ok(!Object.hasOwn(u,'station_distance_miles'));
  assert.ok(!Object.hasOwn(u,'station_2_name'));assert.ok(!Object.hasOwn(u,'station_2_distance_miles'));
  assert.deepEqual(u.import_diagnostics.routing_history[0].journeys,p.journey_estimates);
 });
-test('a map pin, a different street, or manually fixed coordinates cannot replace the origin',()=>{
+test('a map pin or manually fixed coordinates cannot replace the origin',()=>{
  assert.equal(buildLocationUpdate(p,{...hint,source:'listing-map'}),null);
- assert.equal(buildLocationUpdate(p,{...hint,address:'51 Chisholm Road, Croydon'}),null);
+ assert.equal(buildLocationUpdate(p,{...hint,address:'51 Chisholm Road, Croydon'}).latitude,hint.latitude);
  assert.equal(buildLocationUpdate({...p,manual_overrides:{latitude:true}},hint),null);
 });
 test('a verified walking correction keeps its station when the house point changes',()=>{
  const u=buildLocationUpdate({...p,manual_overrides:{},station_name:'East Croydon Rail Station',station_commutes:{google_verified:{'East Croydon':{walking_minutes:12,source:'manual'}}}},hint);
  assert.ok(!Object.hasOwn(u,'station_name'));assert.ok(!Object.hasOwn(u,'station_distance_miles'));
- assert.equal(u.station_commutes.google_verified['East Croydon'].walking_minutes,12);
+ assert.ok(!Object.hasOwn(u,'station_commutes'));
 });
 test('address editing starts the update and guards concurrent edits',()=>{
  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');

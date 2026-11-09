@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash,webcrypto} from 'node:crypto';
-import {validStreetViewHint} from '../import-utils.js';
+import {validStreetViewHint,sameStreet,streetViewListingUrl} from '../import-utils.js';
 
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const code=html.slice(html.indexOf('function blob64('),html.indexOf('// Resume only imports'))+'\n'+
@@ -37,8 +37,8 @@ test('a new import carries the source point through photos, plan, stations and s
   {commonName:'Beta Rail Station',lat:51.471,lon:-.342,modes:['national-rail']},
   {commonName:'Gamma Rail Station',lat:51.472,lon:-.343,modes:['national-rail']}]})}:{ok:true,json:async()=>({routes:[{distance:1200,duration:900}]})};
  const digest=async blob=>createHash('sha256').update(Buffer.from(await blob.arrayBuffer())).digest('hex');
- const run=new Function('sb','pendingJourneyImportIds','extension','probeImporter','listing','user','crypto','photoDigest','report','mediaRevision','refresh','analyzeFloorplan','photo','finishNewHouseImport','fetch','validateGeocode','routeDelay','haversine','inspectFloorplanImage','validStreetViewHint','queueGoogleHouse',code+';return importHouse');
- const importHouse=run(sb,pending,extension,async()=>true,x=>x,{id:'member'},webcrypto,digest,s=>reports.push(s),'v1',async()=>{},async()=>{},async()=>'',async()=>{throw Error('unexpected retry')},fetch,()=>false,async()=>{},()=>500,async()=>({accepted:true}),validStreetViewHint,async id=>{const p=db.get(id);p.journey_estimates=Object.fromEntries(['waterloo','dilly','dancelab'].map(k=>[k,{minutes:50}]));p.import_diagnostics.route_pending=false});
+ const run=new Function('sb','pendingJourneyImportIds','extension','probeImporter','listing','user','crypto','photoDigest','report','mediaRevision','refresh','analyzeFloorplan','photo','finishNewHouseImport','fetch','validateGeocode','routeDelay','haversine','inspectFloorplanImage','validStreetViewHint','sameStreet','streetViewListingUrl','queueGoogleHouse',code+';return importHouse');
+ const importHouse=run(sb,pending,extension,async()=>true,x=>x,{id:'member'},webcrypto,digest,s=>reports.push(s),'v1',async()=>{},async()=>{},async()=>'',async()=>{throw Error('unexpected retry')},fetch,()=>false,async()=>{},()=>500,async()=>({accepted:true}),validStreetViewHint,sameStreet,streetViewListingUrl,async id=>{const p=db.get(id);p.journey_estimates=Object.fromEntries(['waterloo','dilly','dancelab'].map(k=>[k,{minutes:50}]));p.import_diagnostics.route_pending=false});
  await importHouse(listing);
  assert.equal(db.size,1);const p=[...db.values()][0];
  assert.equal(p.latitude,source.location_hint.latitude);assert.equal(p.longitude,source.location_hint.longitude);
