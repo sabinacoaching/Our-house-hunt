@@ -1,6 +1,15 @@
 import {validStreetViewHint,streetViewListingUrl} from './import-utils.js?v=4';
 import {buildGoogleRouteUpdate} from './google-route-update.js?v=1';
 
+// Resume unfinished imports. Older, complete homes are not recalculated merely
+// because the site is opened; they can be handled separately later.
+export function needsGoogleRouteResume(p){
+ if(p.status==='deleted')return false;
+ const d=p.import_diagnostics||{},s=d.source_location;
+ if(d.route_pending===true)return true;
+ return d.google_routes_version==='google-maps-ui-v1'&&(!s||s.address_input!==p.address||s.listing_url!==p.url||Number(s.latitude)!==Number(p.latitude)||Number(s.longitude)!==Number(p.longitude));
+}
+
 // A house is written only when every route belongs to the same source point.
 export async function calculateGoogleRoutes(id,{sb,extension,progress=()=>{},onPointSaved=async()=>{},delay=ms=>new Promise(r=>setTimeout(r,ms))}){
  const result=await sb.from('properties').select('*').eq('id',id).single();
