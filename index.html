@@ -83,7 +83,7 @@ dialog.hh-photo-viewer[open]{display:flex;flex-direction:column}
 <script type="module">
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.49.8';
 import {setupComparison,stationOptions,stationDistance,matchesStation} from './comparison.js?v=64';
-import {calculateGoogleRoutes} from './google-routes-runner.js?v=3';
+import {calculateGoogleRoutes,needsGoogleRouteResume} from './google-routes-runner.js?v=4';
 import {buildLocationUpdate} from './location-update.js?v=3';
 import {setupExports} from './export-tools.js?v=2';
 import {createUniquePhotoStore,photoDigest} from './photo-dedup.js?v=4';
@@ -801,7 +801,7 @@ let googleMigrationStarted=false;
 async function migrateGoogleRoutes(){
  if(googleMigrationStarted)return;googleMigrationStarted=true;
  try{const ping=await extension('PING',{},3500);if(Number(String(ping?.version||'0').split('.')[1]||0)<16)return;
-  const ids=homes.filter(p=>p.status!=='deleted'&&(p.import_diagnostics?.google_routes_version!=='google-maps-ui-v1'||p.import_diagnostics?.source_location?.address_input!==p.address||p.import_diagnostics?.source_location?.listing_url!==p.url||Number(p.import_diagnostics?.source_location?.latitude)!==Number(p.latitude)||Number(p.import_diagnostics?.source_location?.longitude)!==Number(p.longitude))).map(p=>p.id),failed=[];
+  const ids=homes.filter(needsGoogleRouteResume).map(p=>p.id),failed=[];
   for(const id of ids){if(!user)break;try{await queueGoogleHouse(id);await refresh()}catch(e){failed.push(String(e?.message||e));console.warn('Google route update failed',id,e);if(String(e?.message||e).includes('GOOGLE_VERIFICATION_REQUIRED'))break}}
   if(ids.length)report(failed.length?'Google route update incomplete for '+failed.length+' house(s): '+failed[0]:'Google routes saved for '+ids.length+' house(s).',!!failed.length);
  }catch(e){console.warn('Google route update unavailable',e)}

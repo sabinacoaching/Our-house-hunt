@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {calculateGoogleRoutes} from '../google-routes-runner.js';
+import {calculateGoogleRoutes,needsGoogleRouteResume} from '../google-routes-runner.js';
 const id='00000000-0000-4000-8000-000000000001';
 function fixture(failKind){
  const origin='51.41,-0.31',url='https://www.zoopla.co.uk/for-sale/details/123';
@@ -30,4 +30,12 @@ test('a concurrent change prevents staging a point and does not calculate routes
  const sb={from:()=>({update(){return this},select(){return this},eq(){return this},is(){return this},single:async()=>({data:structuredClone(house)}),maybeSingle:async()=>({data:null})}),functions:{invoke:async()=>{previewed=true}}};
  const extension=async()=>({location_hint:{source:'listing-street-view',address:'2 Nearby Rd',latitude:51.41,longitude:-.31}});
  await assert.rejects(()=>calculateGoogleRoutes(id,{sb,extension,delay:async()=>{}}),/House changed while/);assert.equal(previewed,false);
+});
+
+test('opening the site resumes unfinished imports without recalculating older complete homes',()=>{
+ const old={id:'old',address:'Old Road',import_diagnostics:{route_pending:false}},pending={id:'new',address:'Alpine Close',import_diagnostics:{route_pending:true}},deleted={...pending,status:'deleted'};
+ assert.equal(needsGoogleRouteResume(old),false);assert.equal(needsGoogleRouteResume(pending),true);assert.equal(needsGoogleRouteResume(deleted),false);
+});
+test('a previously completed Google route is retried after its source address changes',()=>{
+ const p={address:'New Road',url:'https://example.test/listing',latitude:51.4,longitude:-.3,import_diagnostics:{route_pending:false,google_routes_version:'google-maps-ui-v1',source_location:{address_input:'Old Road',listing_url:'https://example.test/listing',latitude:51.4,longitude:-.3}}};assert.equal(needsGoogleRouteResume(p),true);p.address='Old Road';assert.equal(needsGoogleRouteResume(p),false);
 });
