@@ -33,9 +33,12 @@ jobs:
         with:
           name: ${{ steps.artifact_name.outputs.name }}
           path: ./
+  native-extension:
+    needs: test
+    uses: ./.github/workflows/extension-native-check.yml
   deploy:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    needs: build
+    needs: [build, native-extension]
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -45,3 +48,4 @@ jobs:
         id: deployment
         with:
           artifact_name: ${{ needs.build.outputs.artifact_name }}
+

@@ -476,6 +476,12 @@ function londonNextTuesday(){
  base.setUTCDate(base.getUTCDate()+days);return base;
 }
 const googleTargets={dancelab:{address:'63 Upper Richmond Road, London SW15 2RD',check:['63upperrichmond','sw152rd'],time:'19:50'},dilly:{address:'21 Piccadilly, London W1J 0BH',check:['21piccadilly','w1j0bh'],time:'18:40'},waterloo:{address:'Waterloo Station, London SE1 8SW',check:['waterloo'],time:'07:40'}};
+function googleLondonTimestamp(date,time){
+ const [year,month,day]=date.split('-').map(Number),[hour,minute]=time.split(':').map(Number),wall=Date.UTC(year,month-1,day,hour,minute);
+ const p=Object.fromEntries(new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/London',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(wall)).map(x=>[x.type,x.value]));
+ const offset=Date.UTC(+p.year,+p.month-1,+p.day,+p.hour,+p.minute)-wall;
+ return Math.floor((wall-offset)/1000);
+}
 function googlePoint(point){
  if(!point||point.lat==null||point.lon==null)throw Error('A confirmed map point is required');
  const lat=Number(point.lat),lon=Number(point.lon);
@@ -486,15 +492,22 @@ async function googleRoute(input){
  const origin=googlePoint(input?.origin),kind=String(input?.kind||''),target=googleTargets[kind];
  if(!target&&!['station_walk','station_transit'].includes(kind))throw Error('Unsupported Google route');
  const destination=target?target.address:googlePoint(input.destination),mode=target?'arrive':kind==='station_walk'?'walking':'depart',time24=target?.time||'07:30';
- const [hour,minute]=time24.split(':').map(Number),timeLabel=(hour%12||12)+':'+String(minute).padStart(2,'0')+' '+(hour>=12?'PM':'AM');
- const date=londonNextTuesday(),dateISO=date.toISOString().slice(0,10),dayLabel=new Intl.DateTimeFormat('en-US',{weekday:'short',month:'short',day:'numeric',timeZone:'UTC'}).format(date),calendarLabel=new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short',timeZone:'UTC'}).format(date);
- const args={origin,destination,destinationKind:target?'fixed':'point',destinationCheck:target?.check||[],mode,time24,timeLabel,date:dateISO,dayLabel,calendarLabel};
- const url='https://www.google.com/maps/dir/?'+new URLSearchParams({api:'1',origin,destination,travelmode:mode==='walking'?'walking':'transit',hl:'en'}).toString();
+ const [hour,minute]=time24.split(':').map(Number);
+ const date=londonNextTuesday(),dateISO=date.toISOString().slice(0,10);
+ const args={origin,destination,destinationKind:target?'fixed':'point',destinationCheck:target?.check||[],mode,time24,date:dateISO};
+ // Open the same scheduled directions URL that Maps produces itself. Avoid
+ // typing dates/times through locale-dependent controls in an injected script.
+ const url=mode==='walking'?'https://www.google.com/maps/dir/?'+new URLSearchParams({api:'1',origin,destination,travelmode:'walking',hl:'en'}):'https://www.google.com/maps/dir/'+encodeURIComponent(origin)+'/'+encodeURIComponent(destination)+'/data=!4m6!4m5!2m3!6e'+(mode==='arrive'?'1':'0')+'!7e2!8j'+googleLondonTimestamp(dateISO,time24)+'!3e3?hl=en';
  let tab;
  try{
   tab=await chrome.tabs.create({url,active:false});await waitForLoad(tab.id,30000);
   const response=await chrome.scripting.executeScript({target:{tabId:tab.id},func:houseHuntReadMapsPage,args:[args]});
-  const page=response?.[0]?.result;if(kind==='station_transit'&&page?.noRoute)return {unavailable:true,source:'Google Maps',origin,destination,url:page.url};if(!page?.rows?.length)throw Error('Google Maps did not return route options');
+  const page=response?.[0]?.result;if(page?.error)throw Error(page.error+(page.diagnostic?' ['+JSON.stringify(page.diagnostic)+']':''));if(kind==='station_transit'&&page?.noRoute)return {unavailable:true,source:'Google Maps',origin,destination,url:page.url};if(!page?.rows?.length)throw Error('Google Maps script returned no result after a page navigation');
+  if(mode==='arrive'&&page.hasLater)try{
+   const later=await chrome.scripting.executeScript({target:{tabId:tab.id},func:houseHuntReadMapsPage,args:[{...args,phase:'later'}]}),extra=later?.[0]?.result;
+   if(extra?.error?.includes('GOOGLE_VERIFICATION_REQUIRED'))throw Error(extra.error);
+   if(extra?.rows?.length)page.rows=page.rows.concat(extra.rows);
+  }catch(error){if(String(error?.message||error).includes('GOOGLE_VERIFICATION_REQUIRED'))throw error}
   const parsed=mode==='walking'?HouseHuntGoogleRoutes.readWalk(page.rows):HouseHuntGoogleRoutes.readTransit(page.rows,hour*60+minute,mode);
   if(!parsed){if(kind==='station_transit'&&page.rows.some(r=>(r.modes||[]).some(m=>/^walk(?:ing)?$/i.test(m)))&&page.rows.every(r=>(r.modes||[]).length&&(r.modes||[]).every(m=>/^walk(?:ing)?$/i.test(m))))return {unavailable:true,source:'Google Maps',origin,destination,url:page.url};throw Error('No valid Google Maps route for the requested time')}
   if(mode==='walking')return {...parsed,source:'Google Maps',origin,destination,url:page.url};
@@ -506,7 +519,7 @@ async function googleRoute(input){
 }
 chrome.runtime.onMessage.addListener((req,sender,sendResponse)=>{
  if(!/^https:\/\/sabinacoaching\.github\.io\/(?:our-house-hunt|Our-house-hunt)\//.test(sender.url||''))return false;
- if(req.action==='PING'){sendResponse({ok:true,data:{extension:'Our House Hunt',version:'0.16.0'}});return false;}
+ if(req.action==='PING'){sendResponse({ok:true,data:{extension:'Our House Hunt',version:'0.17.0'}});return false;}
  if(!['IMPORT_URL','FETCH_IMAGE','GOOGLE_ROUTE'].includes(req.action))return false;
  (async()=>{try{const data=req.action==='IMPORT_URL'?await extract(req.url):req.action==='GOOGLE_ROUTE'?await googleRoute(req.route):await fetchImage(req.url);sendResponse({ok:true,data})}catch(e){sendResponse({ok:false,error:e.message})}})();
  return true;

@@ -1,0 +1,26 @@
+name: Native extension check
+on:
+  workflow_dispatch:
+  workflow_call:
+  push:
+    branches: [extension-native-transport-20261109]
+    paths:
+      - 'extension/**'
+      - 'scripts/check-native-extension.mjs'
+      - 'scripts/check-routing-live.mjs'
+      - '.github/workflows/extension-native-check.yml'
+permissions:
+  contents: read
+jobs:
+  native-extension:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-save --package-lock=false playwright@1.62.1
+      - run: npx playwright install --with-deps chromium
+      - run: xvfb-run --auto-servernum node scripts/check-native-extension.mjs
+      - run: xvfb-run --auto-servernum node scripts/check-routing-live.mjs
