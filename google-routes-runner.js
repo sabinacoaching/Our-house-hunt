@@ -2,7 +2,7 @@ import {validStreetViewHint,streetViewListingUrl} from './import-utils.js?v=4';
 import {buildGoogleRouteUpdate} from './google-route-update.js?v=1';
 
 // A house is written only when every route belongs to the same source point.
-export async function calculateGoogleRoutes(id,{sb,extension,progress=()=>{},delay=ms=>new Promise(r=>setTimeout(r,ms))}){
+export async function calculateGoogleRoutes(id,{sb,extension,progress=()=>{},onPointSaved=async()=>{},delay=ms=>new Promise(r=>setTimeout(r,ms))}){
  const result=await sb.from('properties').select('*').eq('id',id).single();
  if(result.error||!result.data)throw result.error||Error('House not found');
  const p=result.data;if(p.status==='deleted')throw Error('House was deleted');
@@ -29,6 +29,7 @@ export async function calculateGoogleRoutes(id,{sb,extension,progress=()=>{},del
   const saved=await save.select('*').maybeSingle();
   if(saved.error||!saved.data)throw saved.error||Error('House changed while its map point was being saved');
   Object.assign(p,saved.data);
+  await onPointSaved();
  }
  progress('Finding nearby station entrances: '+p.address);
  const found=await sb.functions.invoke('house-hunt-station-commutes',{body:{id,preview:true,discover:true,latitude,longitude}});
