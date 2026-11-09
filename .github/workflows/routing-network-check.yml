@@ -14,4 +14,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: node scripts/check-station-discovery.mjs
+      - run: node scripts/check-station-catalogue.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: station-catalogue
+          path: station-catalogue-raw.json
