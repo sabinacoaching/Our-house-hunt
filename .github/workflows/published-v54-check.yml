@@ -1,0 +1,33 @@
+name: Verify published v54
+on:
+  push:
+    branches: [verify/published-v54-20261109]
+permissions:
+  contents: read
+jobs:
+  published-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check live Pages version and routing modules
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {readFileSync} from 'node:fs';
+          import {createHash} from 'node:crypto';
+          const origin='https://sabinacoaching.github.io/Our-house-hunt/';
+          const hash=value=>createHash('sha256').update(value).digest('hex');
+          for(const path of ['index.html','google-routes-runner.js','google-route-update.js','google-station-selection.js','import-utils.js']){
+            const url=new URL(path,origin);url.searchParams.set('verify',process.env.GITHUB_SHA+'-'+Date.now());
+            const response=await fetch(url,{cache:'no-store',signal:AbortSignal.timeout(20000)});
+            assert.equal(response.status,200,path+' must be publicly served');
+            const body=await response.text(),expected=readFileSync(path,'utf8');
+            assert.equal(hash(body),hash(expected),path+' must match the tested source');
+            if(path==='index.html')assert.match(body,/id="hhVersion"[^>]*>v54</);
+            console.log('PUBLISHED_SOURCE_PASS '+JSON.stringify({path,sha256:hash(body),version:path==='index.html'?'v54':undefined}));
+          }
+          NODE
