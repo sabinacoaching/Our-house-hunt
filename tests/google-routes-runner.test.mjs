@@ -16,3 +16,18 @@ function fixture(failKind){
 test('calculates the complete house using the same origin, then saves once with manual journeys protected',async()=>{const x=fixture();await calculateGoogleRoutes(id,{...x,delay:async()=>{}});assert.deepEqual(x.calls,['station_walk','station_transit','waterloo','dilly','dancelab']);assert.equal(x.saved().p_before,x.house);assert.deepEqual(x.saved().p_patch.journey_estimates.dilly,x.house.journey_estimates.dilly);assert.equal(x.saved().p_patch.import_diagnostics.google_routes_version,'google-maps-ui-v1')});
 test('does not write partial results if one Google route fails',async()=>{const x=fixture('dilly');await assert.rejects(()=>calculateGoogleRoutes(id,{...x,delay:async()=>{}}),/network failed/);assert.equal(x.saved(),null)});
 test('completed homes do not request routes on another page load',async()=>{const x=fixture();x.house.import_diagnostics.google_routes_version='google-maps-ui-v1';assert.deepEqual(await calculateGoogleRoutes(id,{...x,delay:async()=>{}}),{alreadyDone:true});assert.equal(x.calls.length,0)});
+
+test('an original Street View point on the adjacent road is saved without erasing other data if station lookup fails',async()=>{
+ const url='https://www.zoopla.co.uk/for-sale/details/74553564',house={id,url,address:'Alpine Close, Park Hill CR0',latitude:null,longitude:null,manual_overrides:{},station_name:'Existing station',journey_estimates:{dilly:{minutes:72,source:'manual',manual_override:true}},station_commutes:{google_verified:{'Existing station':{walking_minutes:7}}},import_diagnostics:{route_pending:true}};
+ let row=structuredClone(house),guards=[],requested;
+ const sb={from:()=>{let patch;return {update(x){patch=x;return this},select(){return this},eq(k,v){guards.push(['eq',k,v]);return this},is(k,v){guards.push(['is',k,v]);return this},single:async()=>({data:structuredClone(row)}),maybeSingle:async()=>{row={...row,...patch};return {data:structuredClone(row)}}}},functions:{invoke:async()=>({error:Error('station lookup failed')})},rpc:async()=>{throw Error('route write must not run')}};
+ const extension=async(action,args)=>{requested=args.url;return {location_hint:{source:'listing-street-view',address:'18 Chichester Rd, Croydon, England',latitude:51.3694953,longitude:-.0883864}}};
+ await assert.rejects(()=>calculateGoogleRoutes(id,{sb,extension,delay:async()=>{}}),/station lookup failed/);
+ assert.equal(new URL(requested).searchParams.get('tab'),'street_view');assert.equal(row.latitude,51.3694953);assert.equal(row.longitude,-.0883864);assert.equal(row.address,house.address);assert.deepEqual(row.journey_estimates,house.journey_estimates);assert.deepEqual(row.station_commutes,house.station_commutes);assert.ok(guards.some(([op,key])=>op==='eq'&&key==='manual_overrides'));
+});
+test('a concurrent change prevents staging a point and does not calculate routes',async()=>{
+ const url='https://www.zoopla.co.uk/for-sale/details/123',house={id,url,address:'Example Road',latitude:null,longitude:null,manual_overrides:{},import_diagnostics:{}};let previewed=false;
+ const sb={from:()=>({update(){return this},select(){return this},eq(){return this},is(){return this},single:async()=>({data:structuredClone(house)}),maybeSingle:async()=>({data:null})}),functions:{invoke:async()=>{previewed=true}}};
+ const extension=async()=>({location_hint:{source:'listing-street-view',address:'2 Nearby Rd',latitude:51.41,longitude:-.31}});
+ await assert.rejects(()=>calculateGoogleRoutes(id,{sb,extension,delay:async()=>{}}),/House changed while/);assert.equal(previewed,false);
+});

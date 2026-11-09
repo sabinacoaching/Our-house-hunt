@@ -83,11 +83,11 @@ dialog.hh-photo-viewer[open]{display:flex;flex-direction:column}
 <script type="module">
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.49.8';
 import {setupComparison,stationOptions,stationDistance,matchesStation} from './comparison.js?v=64';
-import {calculateGoogleRoutes} from './google-routes-runner.js?v=1';
-import {buildLocationUpdate} from './location-update.js?v=2';
+import {calculateGoogleRoutes} from './google-routes-runner.js?v=2';
+import {buildLocationUpdate} from './location-update.js?v=3';
 import {setupExports} from './export-tools.js?v=2';
 import {createUniquePhotoStore,photoDigest} from './photo-dedup.js?v=4';
-import {canonicalListing,importChanges,validateGeocode,validStreetViewHint} from './import-utils.js?v=3';
+import {canonicalListing,importChanges,validateGeocode,validStreetViewHint,sameStreet,streetViewListingUrl} from './import-utils.js?v=4';
 import {reconcileOne,mediaRevision} from './reconcile-media.js?v=1';
 import {createEditHistory} from './edit-history.js?v=2';
 import {analyzeFloorplan,inspectFloorplanImage} from './floorplan-ocr.js?v=16';
@@ -259,7 +259,7 @@ async function importHouse(raw){
   return;
  }
  report('Reading listing and photographs…');
- const data=await extension('IMPORT_URL',{url},70000);
+ const data=await extension('IMPORT_URL',{url:streetViewListingUrl(url)},70000);
  if(!data?.images?.length)throw Error('No photographs found. House not added.');
  data.agency_website=await lookupAgencyWebsite(data);
  const id=crypto.randomUUID();
@@ -272,7 +272,7 @@ async function importHouse(raw){
  const p={id,url,source:data.source,title:data.title||'',address:data.address||'',agency_name:data.agency_name||null,agency_email:data.agency_email||null,agency_website:data.agency_website||null,price:data.price??null,bedrooms:data.bedrooms??null,bathrooms:listingBathrooms(data),wc_count:data.wc_count??null,floors:listingFloors(data),floor_area_sqm:data.floor_area_sqm??null,garden_area_sqm:data.garden_area_sqm??null,garden_description:data.garden_description||'',station_name:'',station_distance_miles:null,station_2_name:'',station_2_distance_miles:null,latitude:null,longitude:null,property_type:data.property_type||null,tenure:data.tenure||null,images,floorplans,import_diagnostics:{source:'original-listing',extension_version:data.extension_version||'unknown',status:data.floorplan_status||'unknown',candidates:floorplanCandidates.length,archived:floorplans.length,checks:planChecks,attempted_at:new Date().toISOString(),media_source_revision:mediaRevision,media_source_result:'completed',source_values:{agency_name:data.agency_name||null,agency_email:data.agency_email||null,agency_website:data.agency_website||null,price:data.price??null,bedrooms:data.bedrooms??null,bathrooms:listingBathrooms(data),wc_count:data.wc_count??null,floors:listingFloors(data),floor_area_sqm:data.floor_area_sqm??null,garden_area_sqm:data.garden_area_sqm??null,garden_description:data.garden_description||'',property_type:data.property_type||null,tenure:data.tenure||null}},created_by:user.id,status:''};
  const hint=data.location_hint;
  if(validStreetViewHint(hint,p.address)){
-  if(/^\s*\d+[a-z]?\s+/i.test(hint.address||'')&&!/^\s*\d+[a-z]?\s+/i.test(p.address))p.address=hint.address;
+  if(sameStreet(hint.address,p.address)&&/^\s*\d+[a-z]?\s+/i.test(hint.address||'')&&!/^\s*\d+[a-z]?\s+/i.test(p.address))p.address=hint.address;
   p.latitude=Number(hint.latitude);p.longitude=Number(hint.longitude);
   p.import_diagnostics.source_location={source:hint.source,listing_url:url,address_input:p.address,latitude:p.latitude,longitude:p.longitude,display_address:hint.address||null};
  }
@@ -766,7 +766,11 @@ async function updateLocationForAddress(id,continueImport=true){
   if(first.error||!first.data)throw first.error||Error('House not found');
   const original=first.data;
   report('Checking Street View and updating routes for '+original.address+'…');
-  const read=await extension('IMPORT_URL',{url:original.url},70000);
+  // With the Google importer, calculate first and replace routes atomically;
+  // an unavailable listing or route must not erase the previous values.
+  let version=0;try{const ping=await extension('PING',{},3500);version=Number(String(ping?.version||'0').split('.')[1]||0)}catch{}
+  if(version>=16){await queueGoogleHouse(id);pendingJourneyImportIds.delete(id);await refresh();return true}
+  const read=await extension('IMPORT_URL',{url:streetViewListingUrl(original.url)},70000);
   const update=buildLocationUpdate(original,read?.location_hint);
   if(!update)throw Error('Street View could not confirm a point on this road');
   let request=sb.from('properties').update(update).eq('id',id).eq('address',original.address);
@@ -797,7 +801,7 @@ let googleMigrationStarted=false;
 async function migrateGoogleRoutes(){
  if(googleMigrationStarted)return;googleMigrationStarted=true;
  try{const ping=await extension('PING',{},3500);if(Number(String(ping?.version||'0').split('.')[1]||0)<16)return;
-  const ids=homes.filter(p=>p.status!=='deleted'&&p.import_diagnostics?.google_routes_version!=='google-maps-ui-v1').map(p=>p.id),failed=[];
+  const ids=homes.filter(p=>p.status!=='deleted'&&(p.import_diagnostics?.google_routes_version!=='google-maps-ui-v1'||p.import_diagnostics?.source_location?.address_input!==p.address||p.import_diagnostics?.source_location?.listing_url!==p.url||Number(p.import_diagnostics?.source_location?.latitude)!==Number(p.latitude)||Number(p.import_diagnostics?.source_location?.longitude)!==Number(p.longitude))).map(p=>p.id),failed=[];
   for(const id of ids){if(!user)break;try{await queueGoogleHouse(id);await refresh()}catch(e){failed.push(String(e?.message||e));console.warn('Google route update failed',id,e);if(String(e?.message||e).includes('GOOGLE_VERIFICATION_REQUIRED'))break}}
   if(ids.length)report(failed.length?'Google route update incomplete for '+failed.length+' house(s): '+failed[0]:'Google routes saved for '+ids.length+' house(s).',!!failed.length);
  }catch(e){console.warn('Google route update unavailable',e)}

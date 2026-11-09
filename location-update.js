@@ -1,4 +1,4 @@
-import {validStreetViewHint} from './import-utils.js?v=3';
+import {validStreetViewHint} from './import-utils.js?v=4';
 
 // Replace only automatic routing data, preserving explicit user corrections.
 export function buildLocationUpdate(property,hint){
@@ -9,13 +9,6 @@ export function buildLocationUpdate(property,hint){
  const history=Array.isArray(previous.routing_history)?previous.routing_history.slice(-4):[];
  history.push({address:previous.source_location?.address_input||property.address,latitude:property.latitude,longitude:property.longitude,stations:priorStations,journeys:priorJourneys});
  const source_location={source:'listing-street-view',listing_url:property.url,address_input:property.address,latitude:Number(hint.latitude),longitude:Number(hint.longitude),display_address:hint.address};
- const updates={latitude:source_location.latitude,longitude:source_location.longitude,import_diagnostics:{...previous,google_routes_version:null,source_location,route_pending:true,routing_history:history},station_commutes:{google_verified:priorStations.google_verified||{}},journey_estimates:Object.fromEntries(Object.entries(priorJourneys).filter(([,v])=>v?.manual_override===true))};
- const stations=['station_name','station_2_name','station_3_name'],distances=['station_distance_miles','station_2_distance_miles','station_3_distance_miles'];
- const normalize=s=>String(s||'').toLowerCase().replace(/\s*\([^)]*\)/g,'').replace(/\b(?:railway|rail|train|station)\b/g,'').replace(/[^a-z0-9]+/g,' ').trim();
- for(let i=0;i<stations.length;i++){
-  const name=property[stations[i]],manual=!!name&&Object.keys(priorStations.google_verified||{}).some(key=>normalize(key)===normalize(name));
-  if(!overrides[stations[i]]&&!manual)updates[stations[i]]='';
-  if(!overrides[distances[i]]&&!manual)updates[distances[i]]=null;
- }
- return updates;
+ // Never blank the previous station and journey values before replacements exist.
+ return {latitude:source_location.latitude,longitude:source_location.longitude,import_diagnostics:{...previous,google_routes_version:null,source_location,route_pending:true,routing_history:history}};
 }
