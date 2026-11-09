@@ -31,14 +31,14 @@ test('a new import carries the source point through photos, plan, stations and s
  }};
  const listing='https://www.zoopla.co.uk/for-sale/details/123';
  const source={source:'Zoopla',title:'Example',address:'Example Road, Isleworth',price:500000,bedrooms:3,bathrooms:1,floors:2,floor_area_sqm:100,extension_version:'0.14.0',images:['photo-one','photo-two'],floorplans:['plan-one'],location_hint:{source:'listing-street-view',latitude:51.469343,longitude:-0.340935,address:'10 Example Road, Isleworth'}};
- const extension=async(action,{url}={})=>action==='IMPORT_URL'?structuredClone(source):{mime:'image/jpeg',base64:Buffer.from(url.repeat(250)).toString('base64')};
+ const extension=async(action,{url}={})=>action==='PING'?{version:'0.16.0'}:action==='IMPORT_URL'?structuredClone(source):{mime:'image/jpeg',base64:Buffer.from(url.repeat(250)).toString('base64')};
  const fetch=async url=>String(url).includes('api.tfl.gov.uk/StopPoint?')?{ok:true,json:async()=>({stopPoints:[
   {commonName:'Alpha Rail Station',lat:51.47,lon:-.341,modes:['national-rail']},
   {commonName:'Beta Rail Station',lat:51.471,lon:-.342,modes:['national-rail']},
   {commonName:'Gamma Rail Station',lat:51.472,lon:-.343,modes:['national-rail']}]})}:{ok:true,json:async()=>({routes:[{distance:1200,duration:900}]})};
  const digest=async blob=>createHash('sha256').update(Buffer.from(await blob.arrayBuffer())).digest('hex');
- const run=new Function('sb','pendingJourneyImportIds','extension','probeImporter','listing','user','crypto','photoDigest','report','mediaRevision','refresh','analyzeFloorplan','photo','finishNewHouseImport','fetch','validateGeocode','routeDelay','haversine','inspectFloorplanImage','validStreetViewHint',code+';return importHouse');
- const importHouse=run(sb,pending,extension,async()=>true,x=>x,{id:'member'},webcrypto,digest,s=>reports.push(s),'v1',async()=>{},async()=>{},async()=>'',async()=>{throw Error('unexpected retry')},fetch,()=>false,async()=>{},()=>500,async()=>({accepted:true}),validStreetViewHint);
+ const run=new Function('sb','pendingJourneyImportIds','extension','probeImporter','listing','user','crypto','photoDigest','report','mediaRevision','refresh','analyzeFloorplan','photo','finishNewHouseImport','fetch','validateGeocode','routeDelay','haversine','inspectFloorplanImage','validStreetViewHint','queueGoogleHouse',code+';return importHouse');
+ const importHouse=run(sb,pending,extension,async()=>true,x=>x,{id:'member'},webcrypto,digest,s=>reports.push(s),'v1',async()=>{},async()=>{},async()=>'',async()=>{throw Error('unexpected retry')},fetch,()=>false,async()=>{},()=>500,async()=>({accepted:true}),validStreetViewHint,async id=>{const p=db.get(id);p.journey_estimates=Object.fromEntries(['waterloo','dilly','dancelab'].map(k=>[k,{minutes:50}]));p.import_diagnostics.route_pending=false});
  await importHouse(listing);
  assert.equal(db.size,1);const p=[...db.values()][0];
  assert.equal(p.latitude,source.location_hint.latitude);assert.equal(p.longitude,source.location_hint.longitude);

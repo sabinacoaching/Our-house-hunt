@@ -102,25 +102,48 @@ Deno.serve(async(req:Request)=>{
   if(who.error||!who.data.user)return reply({error:"Invalid session"},401);
   const member=await admin.from("members").select("id").eq("id",who.data.user.id).maybeSingle();
   if(member.error||!member.data)return reply({error:"Not a member"},403);
-  const {id}=await req.json();
+  const {id,preview,latitude,longitude,discover}=await req.json();
   if(typeof id!=="string"||!/^[a-f0-9-]{36}$/i.test(id))return reply({error:"Invalid property id"},400);
-  const data=await admin.from("properties").select("id,latitude,longitude,station_name,station_distance_miles,station_2_name,station_2_distance_miles,station_3_name,station_3_distance_miles,station_commutes").eq("id",id).single();
+  const data=await admin.from("properties").select("id,latitude,longitude,station_name,station_distance_miles,station_2_name,station_2_distance_miles,station_3_name,station_3_distance_miles,station_commutes,manual_overrides").eq("id",id).single();
   if(data.error||!data.data)return reply({error:"House not found"},404);
-  const p=data.data,origin={lat:Number(p.latitude),lon:Number(p.longitude)};
-  if(p.latitude==null||p.longitude==null||origin.lat<49||origin.lat>61||origin.lon< -9||origin.lon>3)return reply({error:"No reliable geolocation"},422);
-  const date=tuesday(),names=[p.station_name,p.station_2_name,p.station_3_name].map((x:any)=>String(x||"").trim());
+  const p=data.data,lat=preview===true?latitude:p.latitude,lon=preview===true?longitude:p.longitude,origin={lat:Number(lat),lon:Number(lon)};
+  if(lat==null||lon==null||!Number.isFinite(origin.lat)||!Number.isFinite(origin.lon)||origin.lat<49||origin.lat>61||origin.lon< -9||origin.lon>3)return reply({error:"No reliable geolocation"},422);
+  const date=tuesday();let names=[p.station_name,p.station_2_name,p.station_3_name].map((x:any)=>String(x||"").trim());
+  let discovered:any[]=null;
+  if(preview===true&&discover===true){
+   const params=new URLSearchParams({lat:String(origin.lat),lon:String(origin.lon),stopTypes:"NaptanRailStation,NaptanMetroStation",radius:"4000",returnLines:"false"});
+   const near=await fetch("https://api.tfl.gov.uk/StopPoint?"+params,{signal:AbortSignal.timeout(15000),headers:{"Accept":"application/json"}});
+   if(!near.ok)throw Error("Station discovery "+near.status);
+   const payload=await near.json(),seen=new Set<string>(),candidates:any[]=[];
+   for(const stop of payload.stopPoints||[]){
+    const name=String(stop.commonName||"").replace(/\s+(?:rail|underground)\s+station$/i,(x:string)=>/underground/i.test(x)?" Underground":"").trim();
+    if(!name||seen.has(name.toLowerCase())||!stop.modes?.some((m:string)=>["national-rail","overground","tube","tram","dlr","elizabeth-line"].includes(m)))continue;
+    seen.add(name.toLowerCase());candidates.push({name,km:distance(origin,stop)});
+   }
+   candidates.sort((a,b)=>a.km-b.km);
+   discovered=(await Promise.all(candidates.slice(0,8).map(async c=>{try{return {name:c.name,destination:await findStation(c.name,origin)}}catch{return null}}))).filter(Boolean).sort((a:any,b:any)=>a.destination.walking_meters-b.destination.walking_meters);
+   if(!discovered.length)throw Error("No confirmed nearby station entrances");
+   const protectedNames=Object.keys(p.station_commutes?.google_verified||{}).length>0;
+   const used=new Set<string>();
+   names=names.map((name:string,i:number)=>{
+    const key=["station_name","station_2_name","station_3_name"][i];
+    if(name&&(protectedNames||p.manual_overrides?.[key])){used.add(name.toLowerCase());return name}
+    return "";
+   });
+   names=names.map((name:string)=>{if(name)return name;const next=discovered.find((x:any)=>!used.has(x.name.toLowerCase()));if(next){used.add(next.name.toLowerCase());return next.name}return ""});
+  }
   const cache=p.station_commutes||{};
   // Audited homes can have three independently routed stations; never replace them with a two-station cache.
-  if(cache.station_audit&&JSON.stringify((cache.tfl_final?.names||[]).slice(0,2))===JSON.stringify(names))return reply({commutes:cache,cached:true});
-  if(cache.tfl_final?.complete&&cache.tfl_final.version==='tfl-v5'&&cache.tfl_final.origin===origin.lat+","+origin.lon&&JSON.stringify(cache.tfl_final.names)===JSON.stringify(names))return reply({commutes:cache,cached:true});
+  if(preview!==true&&cache.station_audit&&JSON.stringify((cache.tfl_final?.names||[]).slice(0,2))===JSON.stringify(names))return reply({commutes:cache,cached:true});
+  if(preview!==true&&cache.tfl_final?.complete&&cache.tfl_final.version==='tfl-v5'&&cache.tfl_final.origin===origin.lat+","+origin.lon&&JSON.stringify(cache.tfl_final.names)===JSON.stringify(names))return reply({commutes:cache,cached:true});
   const result=[];
   for(let i=0;i<3;i++){
    const name=names[i];
    if(!name){result.push({name:null,avg_minutes:null,samples:[],error:"No station name"});continue}
    try{
-    const destination=await findStation(name,origin);
+    const destination=discovered?.find(x=>x.name===name)?.destination||await findStation(name,origin);
     const samples=[];
-    for(const time of times){samples.push(await sample(origin,destination,date,time));await new Promise(done=>setTimeout(done,260))}
+    if(preview!==true)for(const time of times){samples.push(await sample(origin,destination,date,time));await new Promise(done=>setTimeout(done,260))}
     const googleWalk=null;
     const walking_miles=Math.round(destination.walking_meters/1609.344*100)/100;
     const walking_minutes=Math.max(1,Math.round(destination.walking_seconds/60));
@@ -135,6 +158,7 @@ Deno.serve(async(req:Request)=>{
   const oldResults=cache.results||[];
   const merged=result.map((x:any,i:number)=>({...oldResults[i],...x,walking_miles:x.walking_miles??oldResults[i]?.walking_miles??null,walking_minutes:x.walking_minutes??oldResults[i]?.walking_minutes??null}));
   const out={...cache,origin:final.origin,names,date,times,results:merged,tfl_final:final,calculated_at:final.calculated_at,source:"TfL Journey Planner"};
+  if(preview===true)return reply({commutes:out,preview:true});
   // Only save results for the location and station names actually routed.
   // Tolerate PostgREST's rounding of double precision coordinates.
   let request=admin.from("properties").update({station_commutes:out}).eq("id",id).eq("station_commutes",JSON.stringify(cache))

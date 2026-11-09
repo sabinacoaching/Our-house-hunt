@@ -82,8 +82,9 @@ dialog.hh-photo-viewer[open]{display:flex;flex-direction:column}
 </dialog>
 <script type="module">
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.49.8';
-import {setupComparison,stationOptions,stationDistance,matchesStation} from './comparison.js?v=63';
-import {buildLocationUpdate} from './location-update.js?v=1';
+import {setupComparison,stationOptions,stationDistance,matchesStation} from './comparison.js?v=64';
+import {calculateGoogleRoutes} from './google-routes-runner.js?v=1';
+import {buildLocationUpdate} from './location-update.js?v=2';
 import {setupExports} from './export-tools.js?v=2';
 import {createUniquePhotoStore,photoDigest} from './photo-dedup.js?v=4';
 import {canonicalListing,importChanges,validateGeocode,validStreetViewHint} from './import-utils.js?v=3';
@@ -293,7 +294,7 @@ async function importHouse(raw){
   void finishNewHouseImport(p.id);
  }else report(failures.length?'House imported; unavailable: '+failures.join(', ')+'.':'House imported with saved photos, plans and journeys.',!!failures.length);
 }
-async function calculateImportRoutes(p){
+async function calculateLegacyImportRoutes(p){
  if(!pendingJourneyImportIds.has(p.id))return [];
  const errors=[];
  if(p.import_diagnostics?.require_street_view&&(p.latitude==null||p.longitude==null))return ['Street View map point'];
@@ -329,6 +330,17 @@ async function calculateImportRoutes(p){
   }
  }
  return errors;
+}
+
+async function calculateImportRoutes(p){
+ if(!pendingJourneyImportIds.has(p.id))return [];
+ let version=0;try{const response=await extension('PING',{},3500);version=Number(String(response?.version||'0').split('.')[1]||0)}catch{}
+ if(version<16)return calculateLegacyImportRoutes(p);
+ try{
+  await queueGoogleHouse(p.id);
+  pendingJourneyImportIds.delete(p.id);
+  return [];
+ }catch(e){console.warn('Google routing unavailable',e);return ['Google routes: '+String(e?.message||e)]}
 }
 // Resume only imports that did not finish; completed homes are not recalculated.
 const finishingImports=new Set(),importsRequestedAgain=new Set();
@@ -770,7 +782,7 @@ async function updateLocationForAddress(id,continueImport=true){
   const saved=await request.select('id');
   if(saved.error||!saved.data?.length)throw saved.error||Error('House changed during route calculation; nothing was overwritten');
   pendingJourneyImportIds.add(id);
-  await refresh();if(continueImport)await finishNewHouseImport(id);return true;
+  await refresh();if(continueImport){await finishNewHouseImport(id);try{await queueGoogleHouse(id);await refresh()}catch(e){report('Google route update unavailable: '+e.message,true)}}return true;
  }catch(e){report('Address saved, but automatic route update could not finish: '+(e?.message||e),true);return false}
  finally{updatingLocations.delete(id)}
 }
@@ -779,7 +791,18 @@ async function resumePendingRoutes(id=null){
  for(const p of pending){if(!user)break;pendingJourneyImportIds.add(p.id);await finishNewHouseImport(p.id)}
  return pending.length;
 }
-async function show(){const r=await sb.from('members').select('id,display_name');if(r.error){txt('loginError','Unable to check membership: '+r.error.message);return}people=Object.fromEntries(r.data.map(x=>[x.id,x.display_name]));if(!people[user.id]){txt('loginError','This account is not registered as a household member');return}$('login').hidden=true;$('mainApp').hidden=false;$('logout').hidden=false;$('refresh').hidden=false;$('changePassword').hidden=false;txt('who',people[user.id]);await refresh()}
+const googleRouteJobs=new Map();let googleRouteTail=Promise.resolve();
+function queueGoogleHouse(id){if(googleRouteJobs.has(id))return googleRouteJobs.get(id);const job=googleRouteTail.then(()=>calculateGoogleRoutes(id,{sb,extension,progress:message=>report(message)}));googleRouteTail=job.catch(()=>{});googleRouteJobs.set(id,job);job.finally(()=>googleRouteJobs.delete(id)).catch(()=>{});return job}
+let googleMigrationStarted=false;
+async function migrateGoogleRoutes(){
+ if(googleMigrationStarted)return;googleMigrationStarted=true;
+ try{const ping=await extension('PING',{},3500);if(Number(String(ping?.version||'0').split('.')[1]||0)<16)return;
+  const ids=homes.filter(p=>p.status!=='deleted'&&p.import_diagnostics?.google_routes_version!=='google-maps-ui-v1').map(p=>p.id),failed=[];
+  for(const id of ids){if(!user)break;try{await queueGoogleHouse(id);await refresh()}catch(e){failed.push(String(e?.message||e));console.warn('Google route update failed',id,e);if(String(e?.message||e).includes('GOOGLE_VERIFICATION_REQUIRED'))break}}
+  if(ids.length)report(failed.length?'Google route update incomplete for '+failed.length+' house(s): '+failed[0]:'Google routes saved for '+ids.length+' house(s).',!!failed.length);
+ }catch(e){console.warn('Google route update unavailable',e)}
+}
+async function show(){const r=await sb.from('members').select('id,display_name');if(r.error){txt('loginError','Unable to check membership: '+r.error.message);return}people=Object.fromEntries(r.data.map(x=>[x.id,x.display_name]));if(!people[user.id]){txt('loginError','This account is not registered as a household member');return}$('login').hidden=true;$('mainApp').hidden=false;$('logout').hidden=false;$('refresh').hidden=false;$('changePassword').hidden=false;txt('who',people[user.id]);await refresh();void migrateGoogleRoutes()}
 $('loginForm').onsubmit=async e=>{e.preventDefault();txt('loginError','');const r=await sb.auth.signInWithPassword({email:$('email').value,password:$('password').value});if(r.error){txt('loginError',r.error.message);return}user=r.data.user;await show()};
 $('logout').onclick=async()=>{await sb.auth.signOut();location.reload()};
 $('refresh').onclick=async()=>{await refresh();report('Saved data refreshed. Checking unfinished imports…');try{const stale=homes.filter(p=>p.status!=='deleted'&&p.import_diagnostics?.source_location?.address_input&&p.import_diagnostics.source_location.address_input!==p.address).map(p=>p.id);for(const id of stale)await updateLocationForAddress(id);const count=await resumePendingRoutes();if(!count&&!stale.length)report('Saved data refreshed. No unfinished imports with an address.')}catch(e){report('Could not complete import: '+e.message,true)}};
