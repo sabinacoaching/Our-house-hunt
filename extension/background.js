@@ -524,7 +524,7 @@ async function googleRoute(input){
  if(!target&&!['station_walk','station_transit'].includes(kind))throw Error('Unsupported Google route');
  const station=input.destination,stationNamed=!target&&!!station?.query&&!!station?.station_id;
  const destination=target?target.address:stationNamed?String(station.query):googlePoint(station),mode=target?'arrive':kind==='station_walk'?'walking':'depart',time24=target?.time||'07:30';
- const stationCheck=stationNamed?[String(station.name).replace(/\\b(?:railway|rail|train|station|stop|underground|tube)\\b/gi,'').replace(/\\([^)]*\\)/g,'').toLowerCase().replace(/[^a-z0-9]/g,'')]:[];
+ const stationCheck=stationNamed?String(station.name).replace(/\b(?:railway|rail|train|station|stop|underground|tube)\b/gi,'').replace(/\([^)]*\)/g,'').toLowerCase().split(/\s+/).map(x=>x.replace(/[^a-z0-9]/g,'')).filter(Boolean):[];
 
  const [hour,minute]=time24.split(':').map(Number);
  const date=londonNextTuesday(),dateISO=date.toISOString().slice(0,10);

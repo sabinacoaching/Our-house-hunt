@@ -10,7 +10,7 @@ export function stationTransportType(stop){
 }
 export function namedStationQuery(stop){
  const type=stationTransportType(stop),name=String(stop.name||'').replace(/\s+(?:railway|rail|train)?\s*station$/i,'').replace(/\s+(?:underground|tram stop)$/i,'').trim();
- return name+(type==='rail'?' railway station':type==='tube'?' Underground Station':' Tram Stop')+', United Kingdom';
+ return name+(type==='rail'?' train station':type==='tube'?' Underground Station, London, UK':' Tram Stop, London, UK');
 }
 // Rail and Tube are compared by actual Google walking time. Rail wins a tie;
 // trams fill a slot only when fewer than three eligible rail/Tube stations exist.

@@ -16,6 +16,16 @@ test('route requests from unrelated websites are ignored',()=>{const x=setup();a
 
 test('Google walking-only station card is treated as no public transport',async()=>{const x=setup(false,true),v=await x.context.googleRoute({kind:'station_transit',origin:{lat:51.3770119,lon:-.0867585},destination:{lat:51.37487,lon:-.09289}});assert.equal(v.unavailable,true);assert.equal(v.source,'Google Maps');assert.equal(x.closed(),x.opened.length)});
 
+test('named station validation accepts a reordered Google label such as East Underground Station in Hounslow',async()=>{
+ let request;
+ const chrome={tabs:{create:async()=>({id:1}),get:async()=>({status:'complete'}),remove:async()=>{},onUpdated:{addListener(){},removeListener(){}}},runtime:{onMessage:{addListener(){}}},scripting:{executeScript:async({args})=>{request=args[0];return [{result:{url:'https://www.google.com/maps/test',rows:[{duration:'18 min',distance:'0.8 mile',heading:'via Kingsley Road',modes:['Walking']}]}}]}}};
+ const context=vm.createContext({chrome,URL,URLSearchParams,Intl,Date,setTimeout,clearTimeout,console});
+ vm.runInContext(parser,context);vm.runInContext('async function houseHuntReadMapsPage(){}',context);vm.runInContext(code,context);
+ const result=await context.googleRoute({kind:'station_walk',origin:{lat:51.4631369,lon:-.3552057},destination:{name:'Hounslow East Underground',station_id:'940GZZLUHWE',transport_type:'tube',query:'Hounslow East Underground Station, London, UK'}});
+ assert.deepEqual(Array.from(request.destinationCheck),['hounslow','east']);
+ assert.equal(request.destinationKind,'fixed');assert.equal(result.station_id,'940GZZLUHWE');
+});
+
 test('a faster earlier Google itinerary triggers a later-departure lookup and the real returned 07:38 trip wins',async()=>{
  const opened=[],closed=[],requests=[];
  const chrome={tabs:{create:async info=>{opened.push(info.url);return {id:opened.length}},get:async()=>({status:'complete'}),remove:async id=>closed.push(id),onUpdated:{addListener(){},removeListener(){}}},runtime:{onMessage:{addListener(){}}},scripting:{executeScript:async({args})=>{
