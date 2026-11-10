@@ -22,5 +22,7 @@ jobs:
           node-version: 22
       - run: npm install --no-save --package-lock=false playwright@1.62.1
       - run: npx playwright install --with-deps chromium
+      - name: Check catalogue controls in Chromium
+        run: node scripts/check-catalogue-ui.mjs
       - run: xvfb-run --auto-servernum node scripts/check-native-extension.mjs
       - run: xvfb-run --auto-servernum node scripts/check-routing-live.mjs

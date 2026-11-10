@@ -8,6 +8,21 @@ export function manualJourney(previous,minutes,updatedAt){
 export function setStatusChecks(checks,mode){
  for(const [key,input] of checks)input.checked=mode==='all'||(mode==='active'&&key!=='archived'&&key!=='deleted');
 }
+export const viewingStatuses={'':'No status',interested:'Interested',enquire_viewing:'Enquire a viewing',requested_viewing:'Requested viewing',viewing_booked:'Viewing booked',viewed:'Viewed',only_wo:'Only w/o',under_offer:'Under offer',archived:'Archive (hide)',deleted:'Delete (move to trash)'};
+export const viewingStatusLabels={...viewingStatuses,archived:'Archived',deleted:'Deleted',shortlisted:'Shortlisted',rejected:'Rejected',under_offer_sold:'Under offer'};
+export const viewingStatusKey=status=>status==='under_offer_sold'?'under_offer':status||'';
+export function statusEditorOptions(current=''){
+ const options=Object.entries(viewingStatuses);
+ // Keep a saved legacy value selected until the owner deliberately changes it.
+ if(current==='under_offer_sold')return options.map(([value,label])=>[value==='under_offer'?current:value,label]);
+ if(current&&!Object.hasOwn(viewingStatuses,current))options.push([current,viewingStatusLabels[current]||current]);
+ return options;
+}
+export function compareAgencies(a,b,descending=false){
+ const name=p=>String(p.agency_name||'').trim().replace(/\s+/g,' '),left=name(a),right=name(b);
+ if(!left||!right)return left?-1:right?1:0;
+ return (descending?-1:1)*left.localeCompare(right,'en-GB',{sensitivity:'base',numeric:true});
+}
 export const stationKey=name=>String(name||'').trim().replace(/\s+/g,' ').toLocaleLowerCase('en-GB');
 export function stationOptions(properties){
  const names=new Map();
@@ -46,9 +61,9 @@ export async function openFloorPlan(plan,photo,win=window){
 export function setupComparison({sb,history,photo,displayPhoto,uniquePhotos,openHouse,openPhotoBrowser,onReorder,canReorder,onStatusChange,onAddressChange,shouldAutoCalculate,onRestore,getStatusSelection,onStatusFilterChange,getStations,getStationSelection,onStationFilterChange}){
 const stationAccess=setupStationAccess({sb,history,shouldAutoCalculate});
 const $=id=>document.getElementById(id),node=(tag,cls='',content)=>{const x=document.createElement(tag);x.className=cls;if(content!==undefined)x.textContent=content;return x};
-const statuses={'':'—',interested:'Interested',requested_viewing:'Requested viewing',viewing_booked:'Viewing booked',viewed:'Viewed',shortlisted:'Shortlisted',only_wo:'Only w/o',under_offer_sold:'Under offer / Sold',archived:'Archive (hide)',deleted:'Delete (move to trash)'};
-const labels=['House','Price','Bedrooms','Bathrooms / WC','Floors','Total floor area','Garden','Nearest station','Journey times','Sabina comments','David comments','Viewing status','Viewing date','Agency / email'];
-const extras=[['title','Listing title','text'],['url','Original listing URL','text'],['property_type','Property type','text'],['tenure','Tenure','text'],['latitude','Latitude','number'],['longitude','Longitude','number'],['wc_count','Separate WC','number'],['floors','Floors','number'],['floor_area_sqm','Floor area (m²)','number'],['garden_area_sqm','Garden area (m²)','number'],['garden_description','Garden description','textarea'],['station_name','Nearest station 1','text'],['station_distance_miles','Walking distance 1 (miles)','number'],['station_2_name','Nearest station 2','text'],['station_2_distance_miles','Walking distance 2 (miles)','number'],['station_3_name','Nearest station 3','text'],['station_3_distance_miles','Walking distance 3 (miles)','number'],['comment_sabina','Sabina comments','textarea'],['comment_david','David comments','textarea']];
+const statuses=viewingStatuses;
+const labels=['House','Price','Bedrooms','Bathrooms / WC','Floors','Total floor area','Garden','Nearest station','Journey times','Sabina comments','Current decision','Viewing status','Viewing date','Agency / email'];
+const extras=[['title','Listing title','text'],['url','Original listing URL','text'],['property_type','Property type','text'],['tenure','Tenure','text'],['latitude','Latitude','number'],['longitude','Longitude','number'],['wc_count','Separate WC','number'],['floors','Floors','number'],['floor_area_sqm','Floor area (m²)','number'],['garden_area_sqm','Garden area (m²)','number'],['garden_description','Garden description','textarea'],['station_name','Nearest station 1','text'],['station_distance_miles','Walking distance 1 (miles)','number'],['station_2_name','Nearest station 2','text'],['station_2_distance_miles','Walking distance 2 (miles)','number'],['station_3_name','Nearest station 3','text'],['station_3_distance_miles','Walking distance 3 (miles)','number'],['comment_sabina','Sabina comments','textarea'],['comment_david','Current decision','textarea']];
 const nums=new Set(['latitude','longitude','bedrooms','bathrooms','wc_count','floors','floor_area_sqm','garden_area_sqm','station_distance_miles','station_2_distance_miles','station_3_distance_miles']);
 const money=p=>p==null?'—':new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP',maximumFractionDigits:0}).format(p);
 const clean=x=>String(x||'House').replace(/^\s*\d+\s*bed(?:room)?s?\s+.*?\s+(?:for sale|to rent)\s*/i,'').replace(/^\s*property\s+for\s+sale\s*/i,'').replace(/\s*[-|]\s*zoopla.*$/i,'').replace(/\s*[-|]\s*rightmove.*$/i,'').replace(/,\s*(?:[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}|[A-Z]{1,2}\d[A-Z\d]?)$/i,'').replace(/\s+(?:[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}|[A-Z]{1,2}\d[A-Z\d]?)$/i,'').trim();
@@ -86,7 +101,7 @@ async function save(p,key,value,input){
  if(r.error){flash(r.error.message,true);input?.classList.add('hh-savefail');return}
  input?.classList.remove('hh-savefail');flash('Saved');if(key==='status')await onStatusChange?.(p,val);if(key==='address')await onAddressChange?.(p);
 }
-function editor(p,key,type='text'){let x=node(type==='textarea'?'textarea':type==='select'?'select':'input');if(type==='select'){for(const [v,label] of Object.entries(statuses)){const opt=node('option','',label);opt.value=v;x.append(opt)}x.value=p[key]||''}else{if(type==='number'){x.type='number';x.step='any';x.min='0'}if(type==='textarea')x.rows=6;x.value=p[key]??''}x.setAttribute('aria-label',key+' '+p.address);let tid;if(type==='textarea'){const minimum=(key==='comment_sabina'||key==='comment_david')?230:86;const resize=()=>{x.style.height='auto';x.style.height=Math.max(minimum,x.scrollHeight+8)+'px'};x.style.resize='none';x.style.overflowY='hidden';resize();x.addEventListener('input',()=>{resize();clearTimeout(tid);tid=setTimeout(()=>save(p,key,x.value,x),800)});x.addEventListener('blur',()=>{clearTimeout(tid);save(p,key,x.value,x)})}else x.addEventListener('change',()=>save(p,key,x.value,x));return x}
+function editor(p,key,type='text'){let x=node(type==='textarea'?'textarea':type==='select'?'select':'input');if(type==='select'){for(const [v,label] of statusEditorOptions(p[key])){const opt=node('option','',label);opt.value=v;x.append(opt)}x.value=p[key]||''}else{if(type==='number'){x.type='number';x.step='any';x.min='0'}if(type==='textarea')x.rows=6;x.value=p[key]??''}x.setAttribute('aria-label',key+' '+p.address);let tid;if(type==='textarea'){const minimum=(key==='comment_sabina'||key==='comment_david')?230:86;const resize=()=>{x.style.height='auto';x.style.height=Math.max(minimum,x.scrollHeight+8)+'px'};x.style.resize='none';x.style.overflowY='hidden';resize();x.addEventListener('input',()=>{resize();clearTimeout(tid);tid=setTimeout(()=>save(p,key,x.value,x),800)});x.addEventListener('blur',()=>{clearTimeout(tid);save(p,key,x.value,x)})}else x.addEventListener('change',()=>save(p,key,x.value,x));return x}
 const cell=value=>{const t=node('td');if(value instanceof Node)t.append(value);else t.textContent=value;return t};
 const val=v=>v==null||v===''?'—':String(v);
 

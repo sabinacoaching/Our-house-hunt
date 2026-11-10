@@ -22,7 +22,7 @@ const visibleColumns = [
  ['Nearest stations', stationDetail],
  ['Journey times (min)', p => ['Waterloo: ' + (journey(p, 'waterloo') || '—'), 'The Dilly: ' + (journey(p, 'dilly') || '—'), 'Dance Lab: ' + (journey(p, 'dancelab') || '—')].join('\n')],
  ['Sabina comments', p => p.comment_sabina || ''],
- ['David comments', p => p.comment_david || ''],
+ ['Current decision', p => p.comment_david || ''],
  ['Viewing status', p => p.status || 'No status'],
  ['Viewing date', p => formatDate(p.viewing_at)],
  ['Original listing', p => p.url || ''],
