@@ -54,7 +54,7 @@ jobs:
         run: |
           python - <<'PY'
           import hashlib,pathlib,time,urllib.request,re
-          paths=['index.html','google-routes-runner.js','google-route-update.js','google-station-selection.js','station-commutes.js','comparison.js','station-choice-state.js','manual-station-routes.js','edit-history.js','export-tools.js','downloads/our-house-hunt-importer-v0.18.0.zip']
+          paths=['index.html','comparison.css','google-routes-runner.js','google-route-update.js','google-station-selection.js','station-commutes.js','comparison.js','station-choice-state.js','manual-station-routes.js','edit-history.js','export-tools.js','downloads/our-house-hunt-importer-v0.18.0.zip']
           for path in paths:
             expected=pathlib.Path(path).read_bytes()
             url='https://sabinacoaching.github.io/Our-house-hunt/'+path+'?release-check='+str(time.time_ns())
@@ -66,6 +66,6 @@ jobs:
               except Exception:
                 if attempt==3:raise
                 time.sleep(2)
-            if path=='index.html':assert b'>v58</span>' in actual
+            if path=='index.html':assert b'>v59</span>' in actual
             print('PUBLISHED_FILE_PASS',path,hashlib.sha256(actual).hexdigest())
           PY

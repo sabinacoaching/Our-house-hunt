@@ -245,3 +245,45 @@
 .hh-table th:nth-child(14),.hh-table td:nth-child(14){min-width:190px}
 
 .hh-agency-link{color:#315e50;font-weight:650;text-decoration:underline;overflow-wrap:anywhere}
+
+/* v59: compact top controls, full-viewport table, and short viewing dates. */
+.top{padding:10px 22px;gap:14px}
+.brand{font-size:18px;flex-shrink:0}
+.topright{flex-wrap:nowrap;gap:8px;font-size:12px}
+.topright #who{white-space:nowrap}
+.hh-view-controls{flex:1;min-width:0}
+.hh-views{margin:0;gap:6px;flex-wrap:nowrap}
+.hh-views button,.hh-views .hh-undo,.topright>button,.hh-app-menu>summary{font-size:12px;line-height:1.2;padding:7px 12px;border-radius:7px;white-space:nowrap}
+.hh-notice{flex:1;min-width:0;font-size:11px;margin-left:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hh-app-menu{position:relative}
+.hh-app-menu>summary{list-style:none;cursor:pointer;background:#fff;color:#315e50;border:1px solid #dce4df;font-weight:600}
+.hh-app-menu>summary::-webkit-details-marker{display:none}
+.hh-app-menu>summary::after{content:' ▾'}
+.hh-app-menu[open]>summary{background:#eff3ef}
+.hh-app-menu-items{position:absolute;right:0;top:calc(100% + 6px);z-index:30;min-width:180px;padding:6px;background:#fff;border:1px solid #dce4df;border-radius:9px;box-shadow:0 8px 24px #25463325}
+.hh-app-menu-items button{display:block;width:100%;padding:8px 10px;border:0;border-radius:5px;font-size:12px;text-align:left;white-space:nowrap}
+.hh-app-menu-items button:hover{background:#eff3ef;filter:none}
+.hh-app-menu-items hr{margin:4px 0}
+.filters{gap:10px;margin:14px 0}
+.filters label{font-size:12px;gap:4px}
+.filters input,.filters select{font-size:12px;padding:8px 10px;border-radius:7px}
+.filters input{min-width:200px}
+.filters>button{font-size:12px;padding:8px 11px;border-radius:7px}
+main:has(#mainApp:not([hidden]) .hh-table-shell:not([hidden])){margin-bottom:0}
+.hh-table-shell{height:100vh;height:100dvh;max-height:100vh;max-height:100dvh;overscroll-behavior:auto}
+.hh-table th{font-size:14px;line-height:1.2;padding:8px 10px;white-space:normal}
+.hh-table th:nth-child(13),.hh-table td:nth-child(13){width:104px;min-width:104px;max-width:120px}
+.hh-table .hh-viewing-date{width:100%;min-width:0;padding:4px 3px;border:1px solid transparent;border-radius:5px;background:transparent;color:#253433;white-space:pre-line;text-align:left;font-size:13px;line-height:1.45;font-variant-numeric:tabular-nums;font-weight:400}
+.hh-table .hh-viewing-date:hover,.hh-table .hh-viewing-date:focus{border-color:#a8c4b3;background:#fbfdfb}
+.hh-viewing-dialog{max-width:360px}
+.hh-date-form{display:grid;gap:14px;padding:20px}
+.hh-date-form input{width:100%;min-width:0}
+.hh-date-form .error{margin:0;font-size:13px}
+.hh-date-form .error:empty{display:none}
+.hh-date-form button{font-size:13px;padding:8px 11px}
+@media(max-width:900px){
+ .top{padding:8px 12px;gap:8px;flex-wrap:wrap}
+ .brand{font-size:16px;flex:1}
+ .topright #who{display:none}
+ .hh-view-controls{order:3;flex-basis:100%}
+}
