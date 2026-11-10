@@ -11,7 +11,7 @@ Routing contract updated: 2026-11-09, frontend v55 / Importer 0.18.0. Current re
 
 ## Owner corrections, 2026-11-09
 
-- Rail/Overground stations are the primary station class. A closer Tube station may be included; trams are the last fallback and cannot displace three available rail/Tube stations. Use listing candidates when present, and explicitly record the fallback source when the listing supplies only a map. Read actual Google walking routes to named stations; station links must identify the station.
+- Superseded on 10 November: the owner did not request three rail/Tube stations at the expense of nearby trams. Preference is rail, then Tube, then tram; the set need not contain three rail stations. The v55/v56 selector's exclusion of trams whenever three non-tram candidates exist was the assistant's mistaken interpretation. v57 changes catalogue controls only, pending clarification of the revised selection rule. Use listing candidates when present and route to named Google stations.
 - Remove dominated itineraries before applying the five-minute arrival window. Lyncroft 06:37 to 07:31 (54 min) beats 06:31 to 07:38 (67 min). When a faster earlier service is shown, read later departures to check for a real faster service nearer the deadline. Do not invent the shifted journey.
 - The owner clarified Alpine's East Croydon result: 13 minutes was walking; 8 minutes was public transport.
 - A shortened first gallery heading must not produce an empty catalogue address or a misleading Street View error. Test a gallery heading plus the complete listing heading, rejected incomplete new imports, and recovery of a previously saved empty address.

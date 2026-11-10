@@ -1,6 +1,9 @@
 # Our House Hunt: Recovery and Safe-Change Procedure
 
-## Current project and routing architecture (2026-11-10, v56)
+## Current project and routing architecture (2026-11-10, v57)
+
+- v57 renames the David comments column to Current decision (same `comment_david` values, table/detail/export), adds Enquire a viewing separately from Requested viewing, replaces the combined Under offer / Sold display with Under offer, removes Shortlisted from filters/new choices, and adds agency A-Z/Z-A sorting with missing agencies last. Saved legacy statuses are preserved in editors and undo; no owner record is migrated or archived automatically. Apply `server/catalogue-status-options-20261110.sql` before publishing the frontend.
+- Owner clarification on 10 November: rail preference does not mean all three slots must be rail/Tube; nearby trams must not be excluded solely because three rail/Tube candidates exist. The current station selector still has that disputed rule. v57 does not change station selection or initiate recalculation. Manual station-name editing currently does not trigger fresh Google walking/PT requests; do not tell the owner it does.
 
 - v56 retains Importer 0.18.0 and the existing completed route generation. If an unfinished house crosses Monday midnight in Europe/London and Maps starts returning the following Tuesday, the controller automatically retries that house once on the new common date. It keeps station discovery, Google walking and all manual values, recalculating only dated components. An unrelated date mismatch still fails validation; no catalogue-wide migration is triggered. Regression tests cover winter and summer London midnight.
 
