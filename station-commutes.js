@@ -1,3 +1,4 @@
+import {stationChoice} from './station-choice-state.js?v=1';
 const stationNames=p=>[String(p.station_name||'').trim(),String(p.station_2_name||'').trim(),String(p.station_3_name||'').trim()];
 const normalizedStation=s=>String(s||'').toLowerCase().replace(/\s*\([^)]*\)/g,'').replace(/\b(?:railway|rail|train|station)\b/g,'').replace(/[^a-z0-9]+/g,' ').trim();
 const stationOverride=(c,name)=>{
@@ -13,11 +14,15 @@ const completed=p=>{
 export function stationWalkingMiles(p,i){
  const field=['station_distance_miles','station_2_distance_miles','station_3_distance_miles'][i];
  if(p.manual_overrides?.[field])return p[field]??null;
+ const replacement=stationChoice(p,i);
+ if(replacement)return stationOverride(p.station_commutes||{},stationNames(p)[i]).walking_miles??replacement.walking?.walking_miles??null;
  const c=p.station_commutes||{},name=stationNames(p)[i],r=c.results?.[i]?.name===name?c.results[i]:{},t=completed(p)&&c.tfl_final.results?.[i]?.name===name?c.tfl_final.results[i]:null;
  const google=c.google_routes?.origin===p.address&&c.google_routes?.stations?.[i]===name&&c.google_routes.results?.[i]?.walking_minutes!=null?c.google_routes.results[i]:null;
  return stationOverride(c,name).walking_miles??google?.walking_miles??t?.walking_miles??r.walking_miles??r.google_walking?.miles??p[i===0?'station_distance_miles':i===1?'station_2_distance_miles':'station_3_distance_miles'];
 }
 export function stationWalkingMapUrl(p,i){
+ const replacement=stationChoice(p,i);
+ if(replacement?.origin&&replacement?.destination)return replacement.walking?.url||'https://www.google.com/maps/dir/?'+new URLSearchParams({api:'1',origin:replacement.origin.lat+','+replacement.origin.lon,destination:replacement.destination.query,travelmode:'walking',hl:'en'});
  const name=stationNames(p)[i],c=p.station_commutes||{},location=p.import_diagnostics?.source_location;
  const sourceMatches=location?.source==='listing-street-view'&&location.listing_url===p.url&&location.address_input===p.address&&p.latitude!=null&&p.longitude!=null&&Number(location.latitude)===Number(p.latitude)&&Number(location.longitude)===Number(p.longitude);
  const checked=c.google_routes;
@@ -36,6 +41,15 @@ export function setupStationAccess({sb,history,shouldAutoCalculate}){
  function render(p,i){
   const v=views.get(p.id+':'+i);if(!v)return;
   const c=p.station_commutes||{},r=c.results?.[i]?.name===names(p)[i]?c.results?.[i]:{},t=completed(p)&&c.tfl_final.results?.[i]?.name===names(p)[i]?c.tfl_final.results?.[i]:null,override=stationOverride(c,names(p)[i]);
+  const replacement=stationChoice(p,i);
+  if(replacement){
+   const mi=stationWalkingMiles(p,i),minutes=override.walking_minutes??replacement.walking?.walking_minutes,pt=override.pt_minutes??(replacement.transit?.unavailable?null:replacement.transit?.minutes);
+   v.walk.textContent=replacement.walking||minutes!=null?'Walking: '+(mi==null?'':Number(mi).toFixed(2)+' mi')+(minutes==null?'':' / '+Math.round(minutes)+' min')+(override.walking_minutes!=null?' · manual':' · Google'):'Walking: '+(replacement.error?'pending · Refresh to retry':'pending');
+   v.walk.title=replacement.error||'Click to edit walking miles and minutes';
+   v.link.hidden=!replacement.destination;v.link.href=stationWalkingMapUrl(p,i);
+   v.pt.textContent='PT: '+(pt!=null?Math.round(pt)+' min':replacement.transit?'—':replacement.error?'pending · Refresh to retry':'pending');
+   v.pt.title=replacement.error||'Google Maps';return;
+  }
   const google=c.google_routes?.origin===p.address&&c.google_routes?.stations?.[i]===names(p)[i]&&c.google_routes.results?.[i]?.walking_minutes!=null?c.google_routes.results[i]:null;
   const mi=stationWalkingMiles(p,i);
   const mins=override.walking_minutes??google?.walking_minutes??t?.walking_minutes??r.walking_minutes??r.google_walking?.minutes??null;
@@ -66,11 +80,11 @@ export function setupStationAccess({sb,history,shouldAutoCalculate}){
  function editLine(p,i,kind,host){
   if(host.querySelector('input'))return;
   const orig=host.textContent,which=names(p)[i],cache=p.station_commutes?.results?.[i]||{},manual=p.station_commutes?.google_verified?.[which]||{};
-  const originalMile=p[i===0?'station_distance_miles':i===1?'station_2_distance_miles':'station_3_distance_miles'];
+  const replacement=stationChoice(p,i),originalMile=stationWalkingMiles(p,i);
   const values=kind==='walking'?
      [['walking_miles','Miles',manual.walking_miles??cache.walking_miles??originalMile],
-      ['walking_minutes','Minutes',manual.walking_minutes??cache.walking_minutes]]:
-     [['pt_minutes','Minutes',manual.pt_minutes??cache.avg_minutes]];
+      ['walking_minutes','Minutes',manual.walking_minutes??replacement?.walking?.walking_minutes??cache.walking_minutes]]:
+     [['pt_minutes','Minutes',manual.pt_minutes??replacement?.transit?.minutes??cache.avg_minutes]];
   const box=document.createElement('span');box.className='hh-route-inline-edit';
   const fields=[];
   for(const [key,label,old] of values){
@@ -120,5 +134,5 @@ export function setupStationAccess({sb,history,shouldAutoCalculate}){
   }
   return box;
  }
- return {attach};
+ return {attach,refresh:p=>{for(let i=0;i<3;i++)render(p,i)}};
 }

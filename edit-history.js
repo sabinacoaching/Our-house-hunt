@@ -1,5 +1,5 @@
 // Last 20 manual edits are stored locally. Undo never reverses an automated import.
-export function createEditHistory({sb,onRestored}){
+export function createEditHistory({sb,onRestored,prepareChanges=(_p,changes)=>changes}){
  const key='house-hunt:edit-history:v1',watchers=new Set();
  let stack=[];try{const v=JSON.parse(localStorage.getItem(key)||'[]');if(Array.isArray(v))stack=v.slice(-20)}catch{}
  const canonical=v=>{
@@ -19,6 +19,8 @@ export function createEditHistory({sb,onRestored}){
  const persist=()=>{try{localStorage.setItem(key,JSON.stringify(stack.slice(-20)))}catch{}notify()};
  async function save(p,changes){
   if(!p?.id)return {error:new Error('Property not selected')};
+  const requestedKeys=Object.keys(changes||{}).filter(k=>!eq(p[k],changes[k]));
+  changes=prepareChanges(p,changes);
   const before={},after={};
   for(const [k,v] of Object.entries(changes||{})){
    if(eq(p[k],v))continue;
@@ -28,7 +30,9 @@ export function createEditHistory({sb,onRestored}){
   const r=await sb.from('properties').update(after).eq('id',p.id);
   if(r.error)return r;
   Object.assign(p,after);
-  stack.push({id:p.id,address:p.address||'',before,after,at:new Date().toISOString()});
+  const manualBefore=Object.fromEntries(requestedKeys.filter(k=>Object.hasOwn(before,k)).map(k=>[k,before[k]]));
+  const manualAfter=Object.fromEntries(Object.keys(manualBefore).map(k=>[k,after[k]]));
+  stack.push({id:p.id,address:p.address||'',before:manualBefore,after:manualAfter,at:new Date().toISOString()});
   stack=stack.slice(-20);persist();return {error:null};
  }
  function recordOrder(before,after){
@@ -53,7 +57,7 @@ export function createEditHistory({sb,onRestored}){
   if(r.error)return r;
   for(const [k,v] of Object.entries(last.after))if(!eq(r.data?.[k],v))
    return {error:new Error('This value was changed again. Undo stopped to protect the newer edit.')};
-  const result=await sb.from('properties').update(last.before).eq('id',last.id);
+  const result=await sb.from('properties').update(prepareChanges(r.data,last.before)).eq('id',last.id);
   if(result.error)return result;
   stack.pop();persist();await onRestored?.(last);return {error:null,entry:last};
  }

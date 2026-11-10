@@ -24,3 +24,10 @@ test('a temporary TfL limit is retried and cached metadata is reused',async()=>{
 test('the protected station names remain associated with their original slots',async()=>{
  const x=fixture(),r=await x.discover({lat:51.45,lon:-.3},{station_2_name:'Beta Underground',manual_overrides:{station_2_name:true}});assert.deepEqual(r.protected_names,[null,'Beta Underground',null]);
 });
+test('a resolved manual alias retains its typed label while routing to the canonical TfL station',async()=>{
+ const x=fixture(),origin={lat:51.45,lon:-.3};
+ const r=await x.discover(origin,{station_2_name:'Beta',manual_overrides:{station_2_name:true},station_commutes:{manual_routes:{station_2_name:{station_name:'Beta',origin,destination:{name:'Beta Underground',station_id:'TB'}}}}});
+ assert.equal(r.protected_names[1],'Beta');
+ assert.equal(r.candidates.find(stop=>stop.station_id==='TB').name,'Beta');
+ assert.equal(r.candidates.find(stop=>stop.station_id==='TB').routing_name,'Beta Underground');
+});

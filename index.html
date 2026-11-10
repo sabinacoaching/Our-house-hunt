@@ -37,7 +37,7 @@ dialog.hh-photo-viewer[open]{display:flex;flex-direction:column}
 <link rel="stylesheet" href="./comparison.css?v=26">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css'">
 </head><body>
-<header class="top"><div class="brand">⌂ &nbsp;<span>Our House Hunt</span></div><div class="topright"><strong id="who"></strong><span id="hhVersion" title="Current House Hunt site version" style="font-size:11px;color:#72817f">v57</span><button id="refresh" class="secondary" hidden>Refresh</button><button id="changePassword" class="secondary" hidden>Change password</button><button id="logout" class="secondary" hidden>Sign out</button></div></header>
+<header class="top"><div class="brand">⌂ &nbsp;<span>Our House Hunt</span></div><div class="topright"><strong id="who"></strong><span id="hhVersion" title="Current House Hunt site version" style="font-size:11px;color:#72817f">v58</span><button id="refresh" class="secondary" hidden>Refresh</button><button id="changePassword" class="secondary" hidden>Change password</button><button id="logout" class="secondary" hidden>Sign out</button></div></header>
 <main>
 <section id="login" class="panel login" hidden>
 <h1>Welcome home</h1><p>Your shared shortlist, notes and viewings.</p>
@@ -82,14 +82,16 @@ dialog.hh-photo-viewer[open]{display:flex;flex-direction:column}
 </dialog>
 <script type="module">
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.49.8';
-import {setupComparison,stationOptions,stationDistance,matchesStation,viewingStatuses,viewingStatusLabels,viewingStatusKey,matchesViewingStatus,statusEditorOptions,compareAgencies} from './comparison.js?v=68';
-import {calculateGoogleRoutes,needsGoogleRouteResume} from './google-routes-runner.js?v=8';
+import {setupComparison,stationOptions,stationDistance,matchesStation,viewingStatuses,viewingStatusLabels,viewingStatusKey,matchesViewingStatus,statusEditorOptions,compareAgencies} from './comparison.js?v=69';
+import {calculateGoogleRoutes,needsGoogleRouteResume} from './google-routes-runner.js?v=9';
+import {prepareStationChanges,changedStationNames,hasPendingStationChoices} from './station-choice-state.js?v=1';
+import {calculateManualStationRoutes} from './manual-station-routes.js?v=1';
 import {buildLocationUpdate} from './location-update.js?v=3';
 import {setupExports} from './export-tools.js?v=3';
 import {createUniquePhotoStore,photoDigest} from './photo-dedup.js?v=4';
 import {canonicalListing,importChanges,validateGeocode,validStreetViewHint,sameStreet,streetViewListingUrl} from './import-utils.js?v=4';
 import {reconcileOne,mediaRevision} from './reconcile-media.js?v=1';
-import {createEditHistory} from './edit-history.js?v=2';
+import {createEditHistory} from './edit-history.js?v=3';
 import {analyzeFloorplan,inspectFloorplanImage} from './floorplan-ocr.js?v=16';
 const sb=createClient('https://ficnuovumurmhzdujjvj.supabase.co','sb_publishable_yrArzwZ2GizO5ATuiAkymg_LdpVZKC9');
 const $=id=>document.getElementById(id);
@@ -812,6 +814,21 @@ async function resumePendingRoutes(id=null){
 }
 const googleRouteJobs=new Map();let googleRouteTail=Promise.resolve();
 function queueGoogleHouse(id){if(googleRouteJobs.has(id))return googleRouteJobs.get(id);const job=googleRouteTail.then(async()=>{const ping=await extension('PING',{},3500);if(Number(String(ping?.version||'0').split('.')[1]||0)<18)throw Error('Chrome importer 0.18.0 is required to finish Google Maps routes');return calculateGoogleRoutes(id,{sb,extension,progress:message=>report(message),onPointSaved:refresh,onSaved:p=>{const existing=homes.find(x=>x.id===p.id);if(existing)Object.assign(existing,p);if(selected?.id===p.id)Object.assign(selected,p);render()}})});googleRouteTail=job.catch(()=>{});googleRouteJobs.set(id,job);job.finally(()=>googleRouteJobs.delete(id)).catch(()=>{});return job}
+const manualStationJobs=new Map();
+function applyStationRoutes(p){const existing=homes.find(x=>x.id===p.id);if(existing)Object.assign(existing,p);if(selected?.id===p.id)Object.assign(selected,p);if(document.activeElement?.matches('input,textarea,[contenteditable=true]'))enhancements.refreshStationRoutes(existing||p);else render()}
+function queueManualStationHouse(id){
+ if(manualStationJobs.has(id))return manualStationJobs.get(id);
+ const job=googleRouteTail.then(async()=>{const ping=await extension('PING',{},3500);if(Number(String(ping?.version||'0').split('.')[1]||0)<18)throw Error('Chrome importer 0.18.0 is required to calculate station routes');return calculateManualStationRoutes(id,{sb,extension,progress:message=>report(message),onSaved:applyStationRoutes})});
+ googleRouteTail=job.catch(()=>{});manualStationJobs.set(id,job);job.finally(()=>manualStationJobs.delete(id)).catch(()=>{});return job;
+}
+async function resumeManualStationRoutes(id=null){
+ const pending=homes.filter(p=>(!id||p.id===id)&&hasPendingStationChoices(p));let failed=0;
+ for(const p of pending)try{await queueManualStationHouse(p.id);if(homes.find(home=>home.id===p.id)?.import_diagnostics?.route_pending===true)await queueGoogleHouse(p.id)}catch(error){failed++;report('Station routes incomplete for '+p.address+': '+error.message+'. Refresh will retry.',true)}
+ if(pending.length&&!failed)report('Updated station routes for '+pending.length+' house(s).');
+ return pending.length;
+}
+async function stationNameChanged(p){render();await resumeManualStationRoutes(p.id)}
+async function resumeSavedRouteJobs(){await resumeManualStationRoutes();await migrateGoogleRoutes()}
 let googleMigrationStarted=false;
 async function migrateGoogleRoutes(){
  if(googleMigrationStarted)return;googleMigrationStarted=true;
@@ -821,17 +838,17 @@ async function migrateGoogleRoutes(){
   if(ids.length)report(failed.length?'Google route update incomplete for '+failed.length+' house(s): '+failed[0]:'Google routes saved for '+ids.length+' house(s).',!!failed.length);
  }catch(e){console.warn('Google route update unavailable',e)}
 }
-async function show(){const r=await sb.from('members').select('id,display_name');if(r.error){txt('loginError','Unable to check membership: '+r.error.message);return}people=Object.fromEntries(r.data.map(x=>[x.id,x.display_name]));if(!people[user.id]){txt('loginError','This account is not registered as a household member');return}$('login').hidden=true;$('mainApp').hidden=false;$('logout').hidden=false;$('refresh').hidden=false;$('changePassword').hidden=false;txt('who',people[user.id]);await refresh();void migrateGoogleRoutes()}
+async function show(){const r=await sb.from('members').select('id,display_name');if(r.error){txt('loginError','Unable to check membership: '+r.error.message);return}people=Object.fromEntries(r.data.map(x=>[x.id,x.display_name]));if(!people[user.id]){txt('loginError','This account is not registered as a household member');return}$('login').hidden=true;$('mainApp').hidden=false;$('logout').hidden=false;$('refresh').hidden=false;$('changePassword').hidden=false;txt('who',people[user.id]);await refresh();void resumeSavedRouteJobs()}
 $('loginForm').onsubmit=async e=>{e.preventDefault();txt('loginError','');const r=await sb.auth.signInWithPassword({email:$('email').value,password:$('password').value});if(r.error){txt('loginError',r.error.message);return}user=r.data.user;await show()};
 $('logout').onclick=async()=>{await sb.auth.signOut();location.reload()};
-$('refresh').onclick=async()=>{await refresh();report('Saved data refreshed. Checking unfinished imports…');try{const stale=homes.filter(p=>p.status!=='deleted'&&p.import_diagnostics?.source_location?.address_input&&p.import_diagnostics.source_location.address_input!==p.address).map(p=>p.id);for(const id of stale)await updateLocationForAddress(id);const count=await resumePendingRoutes();if(!count&&!stale.length)report('Saved data refreshed. No unfinished imports with an address.')}catch(e){report('Could not complete import: '+e.message,true)}};
+$('refresh').onclick=async()=>{await refresh();report('Saved data refreshed. Checking unfinished imports…');try{const manualCount=await resumeManualStationRoutes();const stale=homes.filter(p=>p.status!=='deleted'&&p.import_diagnostics?.source_location?.address_input&&p.import_diagnostics.source_location.address_input!==p.address).map(p=>p.id);for(const id of stale)await updateLocationForAddress(id);const count=await resumePendingRoutes();if(!count&&!manualCount&&!stale.length)report('Saved data refreshed. No unfinished imports with an address.')}catch(e){report('Could not complete import: '+e.message,true)}};
 
 $('importForm').onsubmit=async e=>{e.preventDefault();$('importButton').disabled=true;try{await importHouse($('urlInput').value.trim());$('urlInput').value=''}catch(err){report(err.message,true)}finally{$('importButton').disabled=false}};
 for(const id of ['stageFilter','sort','search'])$(id).addEventListener(id==='search'?'input':'change',id==='stageFilter'?()=>{viewingSelections=null;render()}:render);
 $('resetComparisonFilters').onclick=()=>{viewingSelections=null;stationSelection=null;$('stageFilter').value='all';render()};
 $('archiveToggle').onclick=()=>{const inArchive=$('stageFilter').value==='archived'||viewingSelections?.size===1&&viewingSelections.has('archived');viewingSelections=null;$('stageFilter').value=inArchive?'all':'archived';$('search').value='';render();};
 $('close').onclick=()=>$('dialog').close();
-$('save').onclick=async()=>{if(!selected)return;const payload={address:$('editAddress').value.trim(),price:$('editPrice').value?Number($('editPrice').value):null,bedrooms:$('editBeds').value?Number($('editBeds').value):null,bathrooms:$('editBaths').value?Number($('editBaths').value):null,status:$('editStage').value,viewing_at:$('editViewing').value?new Date($('editViewing').value).toISOString():null,...enhancements.edited()};if(payload.status==='deleted'&&!confirm('Move this house to Deleted?'))return;const id=selected.id,addressChanged=payload.address!==selected.address;const overrides={...(selected.manual_overrides||{})};for(const [k,v] of Object.entries(payload)){if(String(selected[k]??'')!==String(v??''))overrides[k]=true;}payload.manual_overrides=overrides;const r=await history.save(selected,payload);if(r.error){alert(r.error.message);return}await refresh();$('dialog').close();if(addressChanged)void updateLocationForAddress(id)};
+$('save').onclick=async()=>{if(!selected)return;const payload={address:$('editAddress').value.trim(),price:$('editPrice').value?Number($('editPrice').value):null,bedrooms:$('editBeds').value?Number($('editBeds').value):null,bathrooms:$('editBaths').value?Number($('editBaths').value):null,status:$('editStage').value,viewing_at:$('editViewing').value?new Date($('editViewing').value).toISOString():null,...enhancements.edited()};if(payload.status==='deleted'&&!confirm('Move this house to Deleted?'))return;const id=selected.id,addressChanged=payload.address!==selected.address,stationsChanged=changedStationNames(selected,payload).length>0;const overrides={...(selected.manual_overrides||{})};for(const [k,v] of Object.entries(payload)){if(String(selected[k]??'')!==String(v??''))overrides[k]=true;}payload.manual_overrides=overrides;const r=await history.save(selected,payload);if(r.error){alert(r.error.message);return}await refresh();$('dialog').close();if(stationsChanged)await resumeManualStationRoutes(id);if(addressChanged)void updateLocationForAddress(id)};
 $('enrich').onclick=updateFromListing;
 $('remove').onclick=async()=>{if(!selected||!confirm('Move this house to Deleted? You can restore it later.'))return;const r=await history.save(selected,{status:'deleted'});if(r.error){alert(r.error.message);return}$('dialog').close();selected=null;await refresh()};
 $('noteForm').onsubmit=async e=>{e.preventDefault();if(!selected)return;const body=$('note').value.trim();if(!body)return;const r=await sb.from('notes').insert({property_id:selected.id,author_id:user.id,body});if(r.error){alert(r.error.message);return}$('note').value='';await loadNotes()};
@@ -861,8 +878,8 @@ $('floorPlanFile').onchange=async()=>{
  }catch(e){alert('Unable to save floor plan: '+(e?.message||e))}
  finally{button.disabled=false;button.textContent='Upload floor plan'}
 };
-const history=createEditHistory({sb,onRestored:async()=>{const wasOpen=$('dialog').open;if(wasOpen)$('dialog').close();await refresh();if(wasOpen&&selected)await openHouse(selected)}});
-const enhancements=setupComparison({sb,history,photo,displayPhoto,uniquePhotos,openHouse,openPhotoBrowser,onReorder:reorderHouses,canReorder:()=> viewingSelections===null&&stationSelection===null&&$('sort').value==='manual'&&$('stageFilter').value==='all'&&!$('search').value.trim(),getStatusSelection:selectedViewingStatuses,onStatusFilterChange:applyViewingStatuses,getStations:()=>stationOptions(homes),getStationSelection:()=>stationSelection,onStationFilterChange:keys=>{const options=stationOptions(homes);stationSelection=keys.length===options.length?null:new Set(keys);render()},onStatusChange:async()=>{await refresh()},onAddressChange:async p=>{await refresh();void updateLocationForAddress(p.id)},shouldAutoCalculate:()=>false,onRestore:restoreHouse});
+const history=createEditHistory({sb,prepareChanges:prepareStationChanges,onRestored:async last=>{const wasOpen=$('dialog').open;if(wasOpen)$('dialog').close();await refresh();if(wasOpen&&selected)await openHouse(selected);if(Object.keys(last.before||{}).some(key=>['station_name','station_2_name','station_3_name'].includes(key)))void resumeManualStationRoutes(last.id)}});
+const enhancements=setupComparison({sb,history,photo,displayPhoto,uniquePhotos,openHouse,openPhotoBrowser,onReorder:reorderHouses,canReorder:()=> viewingSelections===null&&stationSelection===null&&$('sort').value==='manual'&&$('stageFilter').value==='all'&&!$('search').value.trim(),getStatusSelection:selectedViewingStatuses,onStatusFilterChange:applyViewingStatuses,getStations:()=>stationOptions(homes),getStationSelection:()=>stationSelection,onStationFilterChange:keys=>{const options=stationOptions(homes);stationSelection=keys.length===options.length?null:new Set(keys);render()},onStatusChange:async()=>{await refresh()},onAddressChange:async p=>{await refresh();void updateLocationForAddress(p.id)},onStationChange:stationNameChanged,shouldAutoCalculate:()=>false,onRestore:restoreHouse});
 setupExports({getVisible:()=>visibleHomes.slice(),getAll:()=>homes.slice(),photo});
 const session=await sb.auth.getSession();user=session.data.session?.user||null;if(user){await show();}else $('login').hidden=false;
 // No automatic polling: properties are read at sign-in and upon explicit Refresh or a saved edit.

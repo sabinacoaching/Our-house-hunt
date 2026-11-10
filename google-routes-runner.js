@@ -1,6 +1,6 @@
 import {validStreetViewHint,streetViewListingUrl} from './import-utils.js?v=4';
 import {buildGoogleRouteUpdate} from './google-route-update.js?v=3';
-import {selectGoogleStations,stationTransportType} from './google-station-selection.js?v=3';
+import {selectGoogleStations,stationTransportType} from './google-station-selection.js?v=4';
 
 export function needsGoogleRouteResume(p){
  if(p.status==='deleted')return false;
@@ -106,7 +106,7 @@ export async function calculateGoogleRoutes(id,{sb,extension,progress=()=>{},onP
   const normal=s=>String(s||'').toLowerCase().replace(/\([^)]*\)/g,'').replace(/\b(?:railway|rail|train|station|stop|underground|tube)\b/g,'').replace(/[^a-z0-9]/g,'');
   const listed=work.listing_stations||[];
   const matching=work.metadata.candidates.filter(s=>listed.some(x=>normal(x.name)===normal(s.name)));
-  if(matching.filter(s=>stationTransportType(s)!=='tram').length>=3)work.metadata.candidates=matching;
+  if(matching.filter(s=>stationTransportType(s)!=='tram').length>=3)work.metadata.candidates=work.metadata.candidates.filter(s=>matching.includes(s)||(work.metadata.protected_names||[]).some(name=>name&&normal(name)===normal(s.name)));
   work.metadata.listing_stations=listed;
   work.metadata.candidate_source=matching.length?'Original listing stations matched to TfL identities':'TfL station identities; original listing station list unavailable';
  }

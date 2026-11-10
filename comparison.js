@@ -1,4 +1,5 @@
-import {setupStationAccess,stationWalkingMiles} from './station-commutes.js?v=25';
+import {setupStationAccess,stationWalkingMiles} from './station-commutes.js?v=26';
+import {stationChoice} from './station-choice-state.js?v=1';
 export function manualJourney(previous,minutes,updatedAt){
  const old=previous||{};
  const {arrival,departure,arrival_gap_minutes,date,calculated_at,audit_version,calculation_version,...rest}=old;
@@ -62,7 +63,7 @@ export async function openFloorPlan(plan,photo,win=window){
   if(tab)tab.location.replace(url);else win.location.assign(url);
  }catch(error){if(tab)tab.close();throw error}
 }
-export function setupComparison({sb,history,photo,displayPhoto,uniquePhotos,openHouse,openPhotoBrowser,onReorder,canReorder,onStatusChange,onAddressChange,shouldAutoCalculate,onRestore,getStatusSelection,onStatusFilterChange,getStations,getStationSelection,onStationFilterChange}){
+export function setupComparison({sb,history,photo,displayPhoto,uniquePhotos,openHouse,openPhotoBrowser,onReorder,canReorder,onStatusChange,onAddressChange,onStationChange,shouldAutoCalculate,onRestore,getStatusSelection,onStatusFilterChange,getStations,getStationSelection,onStationFilterChange}){
 const stationAccess=setupStationAccess({sb,history,shouldAutoCalculate});
 const $=id=>document.getElementById(id),node=(tag,cls='',content)=>{const x=document.createElement(tag);x.className=cls;if(content!==undefined)x.textContent=content;return x};
 const statuses=viewingStatuses;
@@ -103,7 +104,7 @@ async function save(p,key,value,input){
  const overrides={...(p.manual_overrides||{}),[key]:true};
  const r=await history.save(p,{[key]:val,manual_overrides:overrides});
  if(r.error){flash(r.error.message,true);input?.classList.add('hh-savefail');return}
- input?.classList.remove('hh-savefail');flash('Saved');if(key==='status')await onStatusChange?.(p,val);if(key==='address')await onAddressChange?.(p);
+ input?.classList.remove('hh-savefail');flash('Saved');if(key==='status')await onStatusChange?.(p,val);if(key==='address')await onAddressChange?.(p);if(['station_name','station_2_name','station_3_name'].includes(key))await onStationChange?.(p);
 }
 function editor(p,key,type='text'){let x=node(type==='textarea'?'textarea':type==='select'?'select':'input');if(type==='select'){for(const [v,label] of statusEditorOptions(p[key])){const opt=node('option','',label);opt.value=v;x.append(opt)}x.value=p[key]||''}else{if(type==='number'){x.type='number';x.step='any';x.min='0'}if(type==='textarea')x.rows=6;x.value=p[key]??''}x.setAttribute('aria-label',key+' '+p.address);let tid;if(type==='textarea'){const minimum=(key==='comment_sabina'||key==='comment_david')?230:86;const resize=()=>{x.style.height='auto';x.style.height=Math.max(minimum,x.scrollHeight+8)+'px'};x.style.resize='none';x.style.overflowY='hidden';resize();x.addEventListener('input',()=>{resize();clearTimeout(tid);tid=setTimeout(()=>save(p,key,x.value,x),800)});x.addEventListener('blur',()=>{clearTimeout(tid);save(p,key,x.value,x)})}else x.addEventListener('change',()=>save(p,key,x.value,x));return x}
 const cell=value=>{const t=node('td');if(value instanceof Node)t.append(value);else t.textContent=value;return t};
@@ -368,7 +369,7 @@ function render(list){
    const edit=editor(p,field);
    edit.classList.add('hh-station-name');
    edit.setAttribute('aria-label','Station '+(i+1));
-   const service=p.station_commutes?.results?.[i]?.station_type||'';
+   const service=stationChoice(p,i)?.destination?.transport_type||p.station_commutes?.results?.[i]?.station_type||'';
    const isTube=service==='tube'||/underground|tube|ealing common/i.test(name||'');
    const isOverground=service==='overground'||/^(Wandsworth Road|Clapham High Street|Imperial Wharf|Gunnersbury|Richmond)$/i.test(name||'');
    const isTram=service==='tram'||/tram/i.test(name||'');
@@ -627,5 +628,5 @@ function redraw(){
  scheduleTransport();
 }
 
-return {render,open,edited};
+return {refreshStationRoutes:p=>stationAccess.refresh(p),render,open,edited};
 }
