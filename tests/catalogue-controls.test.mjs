@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {compareAgencies,viewingStatuses,viewingStatusKey,statusEditorOptions} from '../comparison.js';
+import {compareAgencies,viewingStatuses,viewingStatusKey,matchesViewingStatus,statusEditorOptions} from '../comparison.js';
 
 test('agency sorting groups case and whitespace variants and puts missing agencies last in either direction',()=>{
  const rows=[{id:'missing',agency_name:null},{id:'oakhill',agency_name:'Oakhill'},{id:'foxtons-1',agency_name:'  Foxtons   Twickenham '},{id:'chase',agency_name:'Chase Buchanan'},{id:'foxtons-2',agency_name:'foxtons twickenham'},{id:'blank',agency_name:'   '}];
@@ -23,4 +23,11 @@ test('editing a house retains its saved legacy status and Under offer filtering 
  assert.equal(legacy.find(([key])=>key==='under_offer_sold')[1],'Under offer');
  assert.ok(statusEditorOptions('shortlisted').some(([key])=>key==='shortlisted'));
  assert.ok(!statusEditorOptions('interested').some(([key])=>key==='shortlisted'));
+});
+
+test('All statuses retains retired active marks without reclassifying them into a specific filter',()=>{
+ assert.equal(matchesViewingStatus('shortlisted',new Set(Object.keys(viewingStatuses))),true);
+ assert.equal(matchesViewingStatus('shortlisted',new Set(['interested'])),false);
+ assert.equal(matchesViewingStatus('archived',new Set(['interested'])),false);
+ assert.equal(matchesViewingStatus('under_offer_sold',new Set(['under_offer'])),true);
 });

@@ -11,6 +11,10 @@ export function setStatusChecks(checks,mode){
 export const viewingStatuses={'':'No status',interested:'Interested',enquire_viewing:'Enquire a viewing',requested_viewing:'Requested viewing',viewing_booked:'Viewing booked',viewed:'Viewed',only_wo:'Only w/o',under_offer:'Under offer',archived:'Archive (hide)',deleted:'Delete (move to trash)'};
 export const viewingStatusLabels={...viewingStatuses,archived:'Archived',deleted:'Deleted',shortlisted:'Shortlisted',rejected:'Rejected',under_offer_sold:'Under offer'};
 export const viewingStatusKey=status=>status==='under_offer_sold'?'under_offer':status||'';
+export function matchesViewingStatus(status,selected){
+ const key=viewingStatusKey(status);
+ return selected.has(key)||(!Object.hasOwn(viewingStatuses,key)&&Object.keys(viewingStatuses).filter(value=>value!=='archived'&&value!=='deleted').every(value=>selected.has(value)));
+}
 export function statusEditorOptions(current=''){
  const options=Object.entries(viewingStatuses);
  // Keep a saved legacy value selected until the owner deliberately changes it.

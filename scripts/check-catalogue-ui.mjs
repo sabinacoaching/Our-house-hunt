@@ -63,7 +63,9 @@ try{
  const choices=await menu.locator('input[type=checkbox]').evaluateAll(inputs=>inputs.map(input=>input.value));
  assert.ok(choices.includes('enquire_viewing'));assert.ok(choices.includes('requested_viewing'));assert.ok(choices.includes('under_offer'));
  assert.ok(!choices.some(value=>['shortlisted','sold','under_offer_sold'].includes(value)));
- await menu.getByRole('button',{name:'Cancel',exact:true}).click();
+ await menu.getByRole('button',{name:'All statuses',exact:true}).click();
+ await menu.getByRole('button',{name:'Apply',exact:true}).click();
+ assert.equal((await addresses()).length,6,'All statuses must retain legacy Shortlisted houses');
  await page.locator('#stageFilter').selectOption('under_offer');assert.deepEqual(await addresses(),['Offer Road']);
  assert.equal(await page.getByLabel('status Offer Road',{exact:true}).inputValue(),'under_offer_sold');
  await page.locator('#stageFilter').selectOption('all');

@@ -82,7 +82,7 @@ dialog.hh-photo-viewer[open]{display:flex;flex-direction:column}
 </dialog>
 <script type="module">
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.49.8';
-import {setupComparison,stationOptions,stationDistance,matchesStation,viewingStatuses,viewingStatusLabels,viewingStatusKey,statusEditorOptions,compareAgencies} from './comparison.js?v=67';
+import {setupComparison,stationOptions,stationDistance,matchesStation,viewingStatuses,viewingStatusLabels,viewingStatusKey,matchesViewingStatus,statusEditorOptions,compareAgencies} from './comparison.js?v=68';
 import {calculateGoogleRoutes,needsGoogleRouteResume} from './google-routes-runner.js?v=8';
 import {buildLocationUpdate} from './location-update.js?v=3';
 import {setupExports} from './export-tools.js?v=3';
@@ -654,7 +654,7 @@ async function restoreHouse(p){
  await refresh();report('Restored '+(p.address||'house')+' to active houses.');
 }
 function render(){$('resetComparisonFilters').hidden=viewingSelections===null&&stationSelection===null&&$('stageFilter').value==='all';let rows=homes.filter(p=>(
- (viewingSelections!==null?viewingSelections.has(viewingStatusKey(p.status)):($('stageFilter').value==='all'?p.status!=='archived'&&p.status!=='deleted':viewingStatusKey(p.status)===$('stageFilter').value))
+ (viewingSelections!==null?matchesViewingStatus(p.status,viewingSelections):($('stageFilter').value==='all'?p.status!=='archived'&&p.status!=='deleted':viewingStatusKey(p.status)===$('stageFilter').value))
  &&matchesStation(p,stationSelection)
  &&(!$('search').value.trim()||((p.address||'')+' '+(p.title||'')).toLowerCase().includes($('search').value.trim().toLowerCase()))
  ));if($('sort').value==='manual')rows.sort((a,b)=>Number(a.sort_order??0)-Number(b.sort_order??0)||(new Date(b.created_at)-new Date(a.created_at)));if($('sort').value==='price_asc')rows.sort((a,b)=>(a.price??Infinity)-(b.price??Infinity));if($('sort').value==='price_desc')rows.sort((a,b)=>(b.price??0)-(a.price??0));
