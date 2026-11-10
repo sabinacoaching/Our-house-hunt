@@ -18,7 +18,7 @@ function nextTuesday(){const now=new Date(),parts=Object.fromEntries(new Intl.Da
 
 // Every step is validated and saved for the same original-listing point. Failed
 // steps remain pending; a retry resumes them and never discards completed routes.
-export async function calculateGoogleRoutes(id,{sb,extension,progress=()=>{},onPointSaved=async()=>{},onSaved=onPointSaved,routingDate=nextTuesday(),delay=ms=>new Promise(r=>setTimeout(r,ms))}){
+export async function calculateGoogleRoutes(id,{sb,extension,progress=()=>{},onPointSaved=async()=>{},onSaved=onPointSaved,routingDate=null,delay=ms=>new Promise(r=>setTimeout(r,ms))}){
  async function read(){const r=await sb.from('properties').select('*').eq('id',id).single();if(r.error||!r.data)throw r.error||Error('House not found');if(r.data.status==='deleted')throw Error('House was deleted');return r.data}
  let p=await read();
  const saved=p.import_diagnostics||{},savedSource=saved.source_location;
@@ -62,7 +62,7 @@ export async function calculateGoogleRoutes(id,{sb,extension,progress=()=>{},onP
   save=oldOverrides==null?save.is('manual_overrides',null):save.eq('manual_overrides',JSON.stringify(oldOverrides));
   const saved=await save.select('*').maybeSingle();if(saved.error||!saved.data)throw saved.error||Error('House changed while its map point was being saved');p=saved.data;await onPointSaved();
  }
- const date=routingDate,old=p.import_diagnostics?.google_routes_work;
+ const date=routingDate||nextTuesday(),old=p.import_diagnostics?.google_routes_work;
  const reusable=old?.version==='google-pipeline-v3'&&old.origin===originKey&&old.address===p.address&&old.listing_url===p.url;
  const work=reusable?structuredClone(old):{version:'google-pipeline-v3',job_id:crypto.randomUUID(),origin:originKey,address:p.address,listing_url:p.url,walks:{},google:{stations:[],journeys:{}}};
  if(work.date&&work.date!==date){work.google.journeys={};work.google.stations=(work.google.stations||[]).map(x=>x?{walking:x.walking}:null)}
@@ -134,6 +134,17 @@ export async function calculateGoogleRoutes(id,{sb,extension,progress=()=>{},onP
   }
  }
  await save(true);
+ // The existing importer chooses the next Tuesday for each Maps request. A job
+ // crossing Monday midnight can therefore span two timetable dates. Retry this
+ // house once on the new common date, retaining its walks and manual values.
+ // An explicit date bounds the retry and still rejects unrelated wrong dates.
+ if(p.import_diagnostics.route_pending&&routingDate==null&&Object.values(work.errors).some(error=>error.includes('Google returned a different timetable date'))){
+  const currentDate=nextTuesday();
+  if(currentDate!==date){
+   progress('Timetable date changed; resuming this house for '+currentDate+': '+p.address);
+   return calculateGoogleRoutes(id,{sb,extension,progress,onPointSaved,onSaved,routingDate:currentDate,delay});
+  }
+ }
  if(p.import_diagnostics.route_pending)throw Error(Object.entries(work.errors).map(([key,error])=>key+': '+error).join('; ')||'Some Google routes are not yet available');
  return {alreadyDone:false,address:p.address};
 }

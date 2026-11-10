@@ -66,6 +66,6 @@ jobs:
               except Exception:
                 if attempt==3:raise
                 time.sleep(2)
-            if path=='index.html':assert b'>v55</span>' in actual
+            if path=='index.html':assert b'>v56</span>' in actual
             print('PUBLISHED_FILE_PASS',path,hashlib.sha256(actual).hexdigest())
           PY
