@@ -20,16 +20,34 @@ export function createEditHistory({sb,onRestored,prepareChanges=(_p,changes)=>ch
  async function save(p,changes){
   if(!p?.id)return {error:new Error('Property not selected')};
   const requestedKeys=Object.keys(changes||{}).filter(k=>!eq(p[k],changes[k]));
-  changes=prepareChanges(p,changes);
+  const original=changes;changes=prepareChanges(p,changes);let source=p,atomic=false;
+  if(changes!==original){
+   for(let attempt=0;attempt<3;attempt++){
+    const found=await sb.from('properties').select('*').eq('id',p.id).single();if(found.error||!found.data)return {error:found.error||new Error('House not found')};
+    const fresh=found.data,requested={};
+    for(const key of requestedKeys){
+     if(key==='manual_overrides'){
+      const flags={...(fresh.manual_overrides||{})},old=p.manual_overrides||{},next=original.manual_overrides||{};
+      for(const flag of new Set([...Object.keys(old),...Object.keys(next)]))if(!eq(old[flag],next[flag])){if(Object.hasOwn(next,flag))flags[flag]=next[flag];else delete flags[flag]}
+      requested.manual_overrides=flags;continue;
+     }
+     if(!eq(p[key],fresh[key]))return {error:new Error('This value changed while you were editing. Refresh before replacing it.')};
+     requested[key]=original[key];
+    }
+    const patch=prepareChanges(fresh,requested),saved=await sb.rpc('house_hunt_save_manual_edit',{p_id:p.id,p_before:fresh,p_patch:patch});
+    if(saved.error)return saved;
+    if(saved.data===true){source=fresh;changes=patch;atomic=true;break}
+   }
+   if(!atomic)return {error:new Error('The house is being edited. Refresh to retry your station change.')};
+  }
   const before={},after={};
   for(const [k,v] of Object.entries(changes||{})){
-   if(eq(p[k],v))continue;
-   before[k]=clone(p[k]);after[k]=clone(v);
+   if(eq(source[k],v))continue;
+   before[k]=clone(source[k]);after[k]=clone(v);
   }
   if(!Object.keys(after).length)return {error:null,unchanged:true};
-  const r=await sb.from('properties').update(after).eq('id',p.id);
-  if(r.error)return r;
-  Object.assign(p,after);
+  if(!atomic){const r=await sb.from('properties').update(after).eq('id',p.id);if(r.error)return r}
+  Object.assign(p,source,after);
   const manualBefore=Object.fromEntries(requestedKeys.filter(k=>Object.hasOwn(before,k)).map(k=>[k,before[k]]));
   const manualAfter=Object.fromEntries(Object.keys(manualBefore).map(k=>[k,after[k]]));
   stack.push({id:p.id,address:p.address||'',before:manualBefore,after:manualAfter,at:new Date().toISOString()});
@@ -57,8 +75,10 @@ export function createEditHistory({sb,onRestored,prepareChanges=(_p,changes)=>ch
   if(r.error)return r;
   for(const [k,v] of Object.entries(last.after))if(!eq(r.data?.[k],v))
    return {error:new Error('This value was changed again. Undo stopped to protect the newer edit.')};
-  const result=await sb.from('properties').update(prepareChanges(r.data,last.before)).eq('id',last.id);
+  const patch=prepareChanges(r.data,last.before);
+  const result=patch===last.before?await sb.from('properties').update(patch).eq('id',last.id):await sb.rpc('house_hunt_save_manual_edit',{p_id:last.id,p_before:r.data,p_patch:patch});
   if(result.error)return result;
+  if(patch!==last.before&&result.data!==true)return {error:new Error('The house changed during Undo. Newer data was retained.')};
   stack.pop();persist();await onRestored?.(last);return {error:null,entry:last};
  }
  return {save,undo,recordOrder,subscribe(fn){watchers.add(fn);fn(stack.length);return()=>watchers.delete(fn)},canUndo:()=>stack.length>0};

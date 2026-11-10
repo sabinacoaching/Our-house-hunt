@@ -18,9 +18,11 @@ function fixture({onRoute=()=>{},conflict=false,noSource=false,failTransit=false
   if(patch){patches.push(copy(patch));row={...row,...copy(patch)}}return {data:copy(row),error:null};
  };return {select(){return this},eq(key,value){filters.push([key,value]);return this},is(key,value){filters.push([key,value]);return this},update(value){patch=value;return this},single:async()=>result(),maybeSingle:async()=>result(),then:done=>Promise.resolve(result()).then(done)}}};
  sb.rpc=async(name,{p_before,p_patch})=>{
-  assert.equal(name,'house_hunt_save_google_routes');
-  assert.notEqual(p_patch.latitude,null);assert.notEqual(p_patch.longitude,null);
-  assert.deepEqual(p_patch.station_commutes.google_verified,Object.hasOwn(p_before.station_commutes||{},'google_verified')?p_before.station_commutes.google_verified:{});
+  assert.ok(['house_hunt_save_google_routes','house_hunt_save_manual_edit'].includes(name));
+  if(name==='house_hunt_save_google_routes'){
+   assert.notEqual(p_patch.latitude,null);assert.notEqual(p_patch.longitude,null);
+   assert.deepEqual(p_patch.station_commutes.google_verified,Object.hasOwn(p_before.station_commutes||{},'google_verified')?p_before.station_commutes.google_verified:{});
+  }
   if(conflicts-->0){row.station_commutes.google_verified.Other={walking_minutes:17,source:'manual'};return {data:false}}
   if(JSON.stringify(canonical(p_before))!==JSON.stringify(canonical(row)))return {data:false};
   patches.push(copy(p_patch));row={...row,...copy(p_patch)};return {data:true};
@@ -120,5 +122,39 @@ test('Undo can restore the original station and its manual distance after automa
   await calculateManualStationRoutes('house-a',x.options());const undone=await history.undo();assert.equal(undone.error,null);
   assert.equal(x.row().station_3_name,'Gamma');assert.equal(x.row().station_3_distance_miles,.8);assert.equal(x.row().manual_overrides.station_3_distance_miles,true);
   assert.equal(pendingStationChoices(x.row()).length,1);
+ }finally{globalThis.localStorage=previous}
+});
+
+test('a station edit merges fresh annotations and manual flags even when the open editor holds an older row',async()=>{
+ const previous=globalThis.localStorage;globalThis.localStorage={getItem:()=>null,setItem(){}};
+ try{
+  const x=fixture(),p=copy(x.row());
+  x.row().station_commutes.google_verified.Beta={walking_minutes:27,source:'manual'};
+  x.row().manual_overrides.station_2_distance_miles=true;x.row().station_2_distance_miles=.9;
+  x.row().comment_david='A newer decision';
+  const history=createEditHistory({sb:x.sb,prepareChanges:prepareStationChanges});
+  const saved=await history.save(p,{station_name:'New tram',manual_overrides:{station_name:true}});
+  assert.equal(saved.error,null);assert.equal(x.row().station_commutes.google_verified.Beta.walking_minutes,27);
+  assert.equal(x.row().station_2_distance_miles,.9);assert.equal(x.row().manual_overrides.station_2_distance_miles,true);
+  assert.equal(x.row().manual_overrides.station_name,true);assert.equal(x.row().comment_david,'A newer decision');
+  assert.equal(pendingStationChoices(x.row()).length,1);
+ }finally{globalThis.localStorage=previous}
+});
+test('the initial station edit retries a concurrent save without losing the newer route annotation',async()=>{
+ const previous=globalThis.localStorage;globalThis.localStorage={getItem:()=>null,setItem(){}};
+ try{
+  const x=fixture({conflict:true}),history=createEditHistory({sb:x.sb,prepareChanges:prepareStationChanges});
+  const saved=await history.save(copy(x.row()),{station_name:'New tram',manual_overrides:{station_name:true}});
+  assert.equal(saved.error,null);assert.equal(x.row().station_name,'New tram');
+  assert.equal(x.row().station_commutes.google_verified.Other.walking_minutes,17);
+ }finally{globalThis.localStorage=previous}
+});
+test('an older station editor cannot replace a newer station name',async()=>{
+ const previous=globalThis.localStorage;globalThis.localStorage={getItem:()=>null,setItem(){}};
+ try{
+  const x=fixture(),p=copy(x.row());x.rename({station_name:'A newer choice'});
+  const history=createEditHistory({sb:x.sb,prepareChanges:prepareStationChanges});
+  const saved=await history.save(p,{station_name:'An older choice',manual_overrides:{station_name:true}});
+  assert.match(saved.error.message,/changed while you were editing/);assert.equal(x.row().station_name,'A newer choice');assert.equal(history.canUndo(),false);
  }finally{globalThis.localStorage=previous}
 });
