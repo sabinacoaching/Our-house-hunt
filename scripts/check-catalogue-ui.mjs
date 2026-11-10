@@ -82,7 +82,7 @@ await page.route('**/*',route=>{
 });
 const addresses=()=>page.locator('.hh-table tbody .hh-address').allTextContents();
 const enterViewing=async(scope,{day,month,hours,minutes})=>{
- for(const [title,value] of [['Day',day],['Hours',hours],['Minutes',minutes]]){const input=scope.getByLabel(title,{exact:true});await input.fill('');await input.pressSequentially(String(value))}
+ for(const [title,value] of [['Day',day],['Hours',hours],['Minutes',minutes]]){const input=scope.getByLabel(title,{exact:true});await input.focus();await input.pressSequentially(String(value))}
  await scope.getByLabel('Month',{exact:true}).selectOption(String(month));
 };
 const snapshot=async name=>{if(process.env.HH_UI_SNAPSHOT_LOG)console.log('CATALOGUE_SNAPSHOT '+name+' '+(await page.screenshot({fullPage:false})).toString('base64'))};

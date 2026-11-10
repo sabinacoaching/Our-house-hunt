@@ -43,11 +43,11 @@ export function createViewingDateFields(container){
  container.classList.add('hh-date-fields');container.setAttribute('role','group');container.setAttribute('aria-label','Viewing date');
  for(const [key,title,placeholder] of [['day','Day','DD'],['month','Month',''],['hours','Hours','HH'],['minutes','Minutes','MM']]){
   const label=document.createElement('label'),input=document.createElement(key==='month'?'select':'input');
-  label.textContent=title;input.id=prefix+'-'+key;label.htmlFor=input.id;
+  label.textContent=title;input.id=prefix+'-'+key;label.htmlFor=input.id;input.setAttribute('aria-label',title);
   if(key==='month'){
    const blank=document.createElement('option');blank.value='';blank.textContent='Choose month';input.append(blank);
    monthNames.forEach((name,index)=>{const option=document.createElement('option');option.value=String(index+1);option.textContent=name;input.append(option)});
-  }else{input.type='text';input.inputMode='numeric';input.maxLength=2;input.placeholder=placeholder;input.autocomplete='off'}
+  }else{input.type='text';input.inputMode='numeric';input.maxLength=2;input.placeholder=placeholder;input.autocomplete='off';input.addEventListener('focus',()=>input.select())}
   label.append(input);container.append(label);fields[key]=input;
  }
  const error=document.createElement('p');error.className='hh-date-error error';error.setAttribute('role','alert');container.append(error);
