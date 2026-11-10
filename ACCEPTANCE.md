@@ -1,3 +1,10 @@
+## v60 Viewing date repair (2026-11-10)
+
+- Table and Details both use Day / Month / Hours / Minutes controls. No year/seconds segment or native datetime-local control appears.
+- Type 12 December, 12:02 through actual keyboard input, save, Refresh, reload and reopen. The stored value is 2026-12-12T12:02:00.000Z and the column reads 12 Dec / 12:02.
+- Partial/impossible dates leave the saved value untouched and show copyable inline validation text. Clear and Cancel remain functional. Saving unrelated Details fields retains the exact original viewing timestamp.
+- New day/month choices use the next London occurrence; a time-only change retains the saved date/year. London summer time is independent of the device time zone. Test with a Russian browser locale, plus calendar/time-zone regression cases.
+
 ## v59 compact catalogue controls (2026-11-10)
 
 - At desktop widths, Table / Map / Cards / Undo share the top account row. Menu contains the existing Excel/PDF exports, Change password and Sign out. Export downloads and password-dialog opening must remain functional.

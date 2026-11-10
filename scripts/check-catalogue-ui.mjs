@@ -49,7 +49,7 @@ const server=createServer(async(req,res)=>{
 await new Promise(done=>server.listen(0,'127.0.0.1',done));
 const origin='http://127.0.0.1:'+server.address().port;
 const browser=await chromium.launch({headless:true,...(process.env.HH_CHROMIUM_EXECUTABLE?{executablePath:process.env.HH_CHROMIUM_EXECUTABLE}:{})});
-const page=await browser.newPage({viewport:{width:1500,height:950},timezoneId:'Europe/London'}),errors=[];
+const page=await browser.newPage({viewport:{width:1500,height:950},timezoneId:'Europe/London',locale:'ru-RU'}),errors=[];
 page.on('pageerror',error=>errors.push(String(error)));
 await page.addInitScript(()=>{
  window.__extensionCalls=[];
@@ -81,8 +81,13 @@ await page.route('**/*',route=>{
  return route.abort();
 });
 const addresses=()=>page.locator('.hh-table tbody .hh-address').allTextContents();
+const enterViewing=async(scope,{day,month,hours,minutes})=>{
+ for(const [title,value] of [['Day',day],['Hours',hours],['Minutes',minutes]]){const input=scope.getByLabel(title,{exact:true});await input.fill('');await input.pressSequentially(String(value))}
+ await scope.getByLabel('Month',{exact:true}).selectOption(String(month));
+};
 const snapshot=async name=>{if(process.env.HH_UI_SNAPSHOT_LOG)console.log('CATALOGUE_SNAPSHOT '+name+' '+(await page.screenshot({fullPage:false})).toString('base64'))};
 try{
+ await page.clock.setFixedTime(new Date('2026-11-10T10:00:00Z'));
  await page.goto(origin);await page.locator('.hh-table tbody tr').first().waitFor();
  const views=page.locator('#viewControls'),appMenu=page.locator('#appMenu'),dateDialog=page.locator('.hh-viewing-dialog');
  assert.equal(await page.locator('.filters #exportExcel,.filters #exportPdf').count(),0);
@@ -110,15 +115,36 @@ try{
  await views.getByRole('button',{name:'Table',exact:true}).click();
  const dateButton=()=>page.getByRole('button',{name:'Viewing date Alpha Road',exact:true});
  assert.equal(await dateButton().innerText(),'15 Nov\n14:05');
- await dateButton().click();assert.equal(await dateDialog.getByLabel('Date and time').inputValue(),'2026-11-15T14:05');
+ await dateButton().click();
+ assert.equal(await dateDialog.getByLabel('Day',{exact:true}).inputValue(),'15');
+ assert.equal(await dateDialog.getByLabel('Month',{exact:true}).inputValue(),'11');
+ assert.equal(await dateDialog.getByLabel('Hours',{exact:true}).inputValue(),'14');
+ assert.equal(await dateDialog.getByLabel('Minutes',{exact:true}).inputValue(),'05');
+ assert.deepEqual(await dateDialog.locator('label').evaluateAll(labels=>labels.map(label=>label.childNodes[0].textContent)),['Day','Month','Hours','Minutes']);
+ assert.equal(await page.locator('input[type=datetime-local]').count(),0);
  await dateDialog.getByRole('button',{name:'Cancel',exact:true}).click();
  assert.equal(await page.evaluate(()=>window.__fixtureRows[0].viewing_at),'2026-11-15T14:05:37Z','Cancelling retains the exact saved timestamp');
- await dateButton().click();await dateDialog.getByLabel('Date and time').fill('2026-11-17T09:10');
+ await dateButton().click();
+ await enterViewing(dateDialog,{day:12,month:12,hours:12,minutes:'02'});
+ await snapshot('viewing-editor-december');
  await dateDialog.getByRole('button',{name:'Save date',exact:true}).click();
- await page.waitForFunction(()=>window.__fixtureRows[0].viewing_at==='2026-11-17T09:10:00.000Z');
- await page.locator('#refresh').click();assert.equal(await dateButton().innerText(),'17 Nov\n09:10');
+ await page.waitForFunction(()=>window.__fixtureRows[0].viewing_at==='2026-12-12T12:02:00.000Z');
+ await page.locator('#refresh').click();assert.equal(await dateButton().innerText(),'12 Dec\n12:02');
+ await page.reload();await page.locator('.hh-table tbody tr').first().waitFor();
+ assert.equal(await dateButton().innerText(),'12 Dec\n12:02');
+ await dateButton().click();
+ assert.equal(await dateDialog.getByLabel('Minutes',{exact:true}).inputValue(),'02');
+ await enterViewing(dateDialog,{day:31,month:4,hours:12,minutes:'02'});
+ await dateDialog.getByRole('button',{name:'Save date',exact:true}).click();
+ assert.match(await dateDialog.locator('.hh-date-error').innerText(),/April has 30 days/);
+ assert.equal(await page.evaluate(()=>window.__fixtureRows[0].viewing_at),'2026-12-12T12:02:00.000Z','An impossible date must not overwrite the saved viewing');
+ await dateDialog.getByLabel('Day',{exact:true}).fill('');
+ await dateDialog.getByRole('button',{name:'Save date',exact:true}).click();
+ assert.match(await dateDialog.locator('.hh-date-error').innerText(),/Enter day, month, hours and minutes/);
+ await dateDialog.getByRole('button',{name:'Cancel',exact:true}).click();
  await dateButton().click();await dateDialog.getByRole('button',{name:'Clear date',exact:true}).click();
  await page.waitForFunction(()=>window.__fixtureRows[0].viewing_at===null);assert.equal(await dateButton().innerText(),'Set date');
+ console.log('VIEWING_DATE_UI_PASS typed 12 December 12:02, Save/Refresh/reopen, Russian browser locale, no year/seconds/native datetime, impossible/partial validation, clear/cancel');
  await page.evaluate(()=>{window.scrollTo(0,0);const shell=document.querySelector('.hh-table-shell');shell.scrollTop=0;shell.scrollLeft=0});
  await snapshot('desktop-top');
  const shell=page.locator('.hh-table-shell'),rect=await shell.boundingBox();
@@ -183,8 +209,14 @@ try{
  await legacy.getByRole('button',{name:'Details',exact:true}).click();
  assert.equal(await page.locator('#editStage').inputValue(),'shortlisted');
  assert.equal(await page.locator('#editStage option:checked').innerText(),'Shortlisted');
+ await enterViewing(page.locator('#editViewing'),{day:12,month:12,hours:12,minutes:'02'});
  await page.locator('#editPrice').fill('505000');await page.getByRole('button',{name:'Save changes',exact:true}).click();
  await page.waitForFunction(()=>window.__fixtureWrites.some(x=>x.id==='legacy'&&x.patch.price===505000));
+ assert.equal(await page.evaluate(()=>window.__fixtureRows.find(p=>p.id==='legacy').viewing_at),'2026-12-12T12:02:00.000Z');
+ await legacy.getByRole('button',{name:'Details',exact:true}).click();await page.locator('#editPrice').fill('506000');await page.getByRole('button',{name:'Save changes',exact:true}).click();
+ await page.waitForFunction(()=>window.__fixtureRows.find(p=>p.id==='legacy').price===506000);
+ assert.equal(await page.evaluate(()=>window.__fixtureRows.find(p=>p.id==='legacy').viewing_at),'2026-12-12T12:02:00.000Z');
+ console.log('VIEWING_DATE_DETAILS_PASS same day/month/HH:mm editor saves, preserves date on unrelated edits');
  assert.equal(await page.getByLabel('status Legacy Road',{exact:true}).inputValue(),'shortlisted');
 
  await page.locator('#stageFilter').selectOption('archived');

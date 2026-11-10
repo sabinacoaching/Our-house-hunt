@@ -1,6 +1,8 @@
 # Our House Hunt: Recovery and Safe-Change Procedure
 
-## Current project and routing architecture (2026-11-10, v59)
+## Current project and routing architecture (2026-11-10, v60)
+
+- v60 replaces both native Viewing date editors with the same explicit Day / Month / Hours / Minutes component. No year/seconds segment or locale-dependent native datetime parsing remains. New day/month choices use the next occurrence in Europe/London; changing only time keeps the saved year. Unchanged fields retain the original stored timestamp exactly. Validate partial/impossible dates before saving, display copyable inline errors, and convert valid London wall-clock values to ISO timestamps. Regression: type 12 December, 12:02, Save, Refresh, reopen; include Russian browser locale and Details. Checkpoint: backup-before-viewing-date-editor-20261110 at fcf066de5fb3b2d08b492c27533a00dacf96c2a2.
 
 - v59 compacts Table/Map/Cards/Undo into the top account row and moves exports, Change password and Sign out into Menu. The table fills one viewport; downward wheel scrolling first moves the outer page to the column headings, then scrolls table rows. Scrolling outside the table remains normal. Header labels use 14px text without widening other columns. Viewing date uses a narrow day/month and HH:mm display; clicking opens a minute-resolution date/time editor. Merely displaying or cancelling never changes stored dates. Both date editors convert stored timestamps to the browser's local calendar fields instead of slicing UTC text. Routes, import generation, database and extension are unchanged. Checkpoint: backup-before-compact-table-20261110 at 1e28e11499a833849c53efe341bcf9d329ab581a.
 

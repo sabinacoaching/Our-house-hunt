@@ -287,3 +287,11 @@ main:has(#mainApp:not([hidden]) .hh-table-shell:not([hidden])){margin-bottom:0}
  .topright #who{display:none}
  .hh-view-controls{order:3;flex-basis:100%}
 }
+
+/* v60: explicit day/month and HH:mm fields, without native year/seconds segments. */
+.hh-date-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.hh-date-fields label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:650;color:#455e51}
+.hh-date-fields input,.hh-date-fields select{width:100%;min-width:0;padding:8px 10px;font-size:14px}
+.hh-date-fields .hh-date-error{grid-column:1/-1;margin:0;font-size:13px;color:#b73b38}
+.hh-date-fields .hh-date-error:empty{display:none}
+.hh-detail-viewing>span{display:block;margin-bottom:5px;font-size:13px;font-weight:650}
