@@ -38,7 +38,12 @@ export async function discoverStationEntrances(origin:{lat:number,lon:number},pr
  const nearby=await tfl('/StopPoint?'+query),raw=(nearby.stopPoints||[]).filter((s:any)=>point(s)&&s.id&&!String(s.id).startsWith('HUB')&&s.modes?.some((m:string)=>['national-rail','overground','tube','tram','dlr','elizabeth-line'].includes(m)));
  const fields=['station_name','station_2_name','station_3_name'];
  const manual=Object.keys(property.station_commutes?.google_verified||{}).length>0;
- const protectedNames=fields.map(f=>property[f]&&(manual||property.manual_overrides?.[f])?String(property[f]).trim():null);
+ const requestedNames=fields.map(f=>property[f]&&(manual||property.manual_overrides?.[f])?String(property[f]).trim():null);
+ const aliases=fields.map((field,i)=>{
+  const choice=property.station_commutes?.manual_routes?.[field];
+  return choice?.station_name===requestedNames[i]&&choice.destination?.station_id&&Number(choice.origin?.lat)===origin.lat&&Number(choice.origin?.lon)===origin.lon?choice.destination:null;
+ });
+ const protectedNames=requestedNames.map((name,i)=>aliases[i]?.name||name);
  for(const name of protectedNames.filter(Boolean)){
   if(raw.some((s:any)=>key(display(s.commonName))===key(name)))continue;
   const search=await tfl('/StopPoint/Search/'+encodeURIComponent(String(name).replace(/\s+Underground$/i,''))+'?modes=national-rail,overground,tube,tram,dlr');
@@ -64,5 +69,9 @@ export async function discoverStationEntrances(origin:{lat:number,lon:number},pr
  const candidates=found.filter(Boolean);
  if(!candidates.length)throw Error('No station entrances found: '+errors.map(e=>e.error).join('; '));
  for(const name of protectedNames.filter(Boolean))if(!candidates.some((s:any)=>key(s.name)===key(name)))throw Error('Manually selected station entrance unavailable: '+name);
- return {version:'tfl-entrances-v1',origin:origin.lat+','+origin.lon,candidates,protected_names:protectedNames,errors,source:'TfL StopPoint public entrance metadata'};
+ for(let i=0;i<aliases.length;i++)if(aliases[i]){
+  const station=candidates.find((candidate:any)=>candidate.station_id===aliases[i].station_id);
+  if(station){station.routing_name=station.name;station.name=requestedNames[i]}
+ }
+ return {version:'tfl-entrances-v1',origin:origin.lat+','+origin.lon,candidates,protected_names:requestedNames,errors,source:'TfL StopPoint public entrance metadata'};
 }

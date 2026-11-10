@@ -6,6 +6,8 @@ import {stripTypeScriptTypes} from 'node:module';
 import {fileURLToPath} from 'node:url';
 import assert from 'node:assert/strict';
 import {calculateGoogleRoutes} from '../google-routes-runner.js';
+import {calculateManualStationRoutes,resolveManualStation} from '../manual-station-routes.js';
+import {prepareStationChanges,stationChoice} from '../station-choice-state.js';
 const read=path=>readFileSync(new URL(path,import.meta.url),'utf8');
 const metadata=read('../server/house-hunt-station-commutes/station-discovery.ts').replace(/^export /gm,'');
 const edge=read('../server/house-hunt-station-commutes/index.ts').replace(/^import .*;\s*$/gm,'');
@@ -20,7 +22,10 @@ try{
   let row={id,url,address,latitude,longitude,manual_overrides:{},journey_estimates:{},station_commutes:{},station_name:'',station_2_name:'',station_3_name:null,import_diagnostics:{nearby_stations:[],route_pending:true,source_location:{source:'listing-street-view',listing_url:url,address_input:address,latitude,longitude}}},writes=0,requests=0,handler;
   const admin={auth:{getUser:async()=>({data:{user:{id:'test'}}})},from:()=>({select(){return this},eq(){return this},single:async()=>({data:row}),maybeSingle:async()=>({data:{id:'test'}}),update(){throw Error('Live test must not write to Supabase')}})};
   new Function('Deno','createClient','fetch',edgeCode)({env:{get:()=>''},serve:fn=>handler=fn},()=>admin,async(...args)=>{requests++;return fetch(...args)});
-  const sb={from:()=>({select(){return this},eq(){return this},single:async()=>({data:structuredClone(row)})}),functions:{invoke:async(_name,{body})=>{const response=await handler(new Request('https://example.test',{method:'POST',headers:{authorization:'Bearer test','content-type':'application/json'},body:JSON.stringify(body)}));return response.ok?{data:await response.json()}:{error:{message:'non-2xx',context:response}}}},rpc:async(_name,args)=>{assert.deepEqual(args.p_before,row);row={...row,...structuredClone(args.p_patch)};writes++;return {data:true}}};
+  const sb={from:()=>{let patch,filters=[];return {select(){return this},eq(key,value){filters.push([key,value]);return this},is(key,value){filters.push([key,value]);return this},update(value){patch=value;return this},single:async()=>({data:structuredClone(row)}),maybeSingle:async()=>{
+   const matches=filters.every(([key,value])=>{if(typeof value==='string'&&/^[{[]/.test(value))try{value=JSON.parse(value)}catch{}return JSON.stringify(row[key]??null)===JSON.stringify(value??null)});
+   if(!matches)return {data:null};row={...row,...structuredClone(patch)};writes++;return {data:structuredClone(row)};
+  }}},functions:{invoke:async(_name,{body})=>{const response=await handler(new Request('https://example.test',{method:'POST',headers:{authorization:'Bearer test','content-type':'application/json'},body:JSON.stringify(body)}));return response.ok?{data:await response.json()}:{error:{message:'non-2xx',context:response}}}},rpc:async(_name,args)=>{assert.deepEqual(args.p_before,row);row={...row,...structuredClone(args.p_patch)};writes++;return {data:true}}};
   const start=Date.now(),calls=[];
   try{
    await calculateGoogleRoutes(id,{sb,extension:async(action,{route})=>{assert.equal(action,'GOOGLE_ROUTE');calls.push(route.kind);return extensionWorker.evaluate(async route=>googleRoute(route),route)},progress:message=>console.log('PROGRESS '+message)});
@@ -31,6 +36,22 @@ try{
    if(address==='Lyncroft Gardens')assert.ok(row.journey_estimates.waterloo.minutes<=54,'the dominated 67-minute route must not be selected');
    const before=calls.length;await calculateGoogleRoutes(id,{sb,extension:async()=>{throw Error('Completed home must not recalculate')}});assert.equal(calls.length,before);
    console.log('LIVE_RESULT '+JSON.stringify({address,complete:true,ms:Date.now()-start,requests,writes,calls,journeys:row.journey_estimates,stations:row.station_commutes.google_routes,entrances:row.station_commutes.tfl_final.results}));
+   if(address==='Alpine Close'){
+    const beforeJourneys=structuredClone(row.journey_estimates),beforeStations=row.station_commutes.google_routes.results.slice(0,2),manualCalls=[];
+    row={...row,...prepareStationChanges(row,{station_3_name:'Lebanon Road',manual_overrides:{...row.manual_overrides,station_3_name:true}})};
+    const publicPage=await browser.newPage();await publicPage.goto('https://sabinacoaching.github.io/Our-house-hunt/');
+    const fetcher=async url=>{
+     const value=await publicPage.evaluate(async url=>{const response=await fetch(url);return {ok:response.ok,status:response.status,body:await response.json()}},url);
+     return {...value,json:async()=>value.body};
+    };
+    try{
+     await calculateManualStationRoutes(id,{sb,resolveStation:(p,name,origin)=>resolveManualStation(p,name,origin,{fetcher}),extension:async(action,{route})=>{assert.equal(action,'GOOGLE_ROUTE');manualCalls.push(route.kind);return extensionWorker.evaluate(async route=>googleRoute(route),route)},progress:message=>console.log('MANUAL_PROGRESS '+message)});
+     const chosen=stationChoice(row,2);assert.equal(chosen.state,'complete');assert.equal(chosen.destination.transport_type,'tram');assert.match(chosen.destination.query,/Tram Stop/);assert.ok(chosen.walking.walking_minutes>0);
+     assert.deepEqual(row.journey_estimates,beforeJourneys);assert.deepEqual(row.station_commutes.google_routes.results.slice(0,2),beforeStations);assert.deepEqual(manualCalls,['station_walk','station_transit']);
+     const noMore=manualCalls.length;await calculateManualStationRoutes(id,{sb,extension:async()=>{throw Error('Completed manual station must not recalculate')}});assert.equal(manualCalls.length,noMore);
+     console.log('MANUAL_STATION_LIVE_PASS '+JSON.stringify({address,station:row.station_3_name,walking:chosen.walking,transport:chosen.transit,calls:manualCalls}));
+    }finally{await publicPage.close()}
+   }
   }catch(error){process.exitCode=1;console.log('LIVE_RESULT '+JSON.stringify({address,complete:false,ms:Date.now()-start,requests,writes,calls,error:String(error),errors:row.import_diagnostics.google_routes_work?.errors,journeys:row.journey_estimates,stations:row.station_commutes.google_routes}))}
  }
 }finally{await browser.close()}
