@@ -34,10 +34,10 @@ dialog.hh-photo-viewer[open]{display:flex;flex-direction:column}
 .gallery img{cursor:zoom-in}
 @media(max-width:600px){.hh-photo-stage{gap:3px;padding:4px}.hh-photo-stage img{max-width:calc(100% - 78px)}.hh-photo-viewer .hh-photo-prev,.hh-photo-viewer .hh-photo-next{flex-basis:36px;min-width:36px;padding:5px}}
 </style>
-<link rel="stylesheet" href="./comparison.css?v=28">
+<link rel="stylesheet" href="./comparison.css?v=29">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css'">
 </head><body>
-<header class="top"><div class="brand">⌂ &nbsp;<span>Our House Hunt</span></div><div id="viewControls" class="hh-view-controls" hidden></div><div class="topright"><strong id="who"></strong><span id="hhVersion" title="Current House Hunt site version" style="font-size:11px;color:#72817f">v60</span><button id="refresh" class="secondary" hidden>Refresh</button><details id="appMenu" class="hh-app-menu" hidden><summary>Menu</summary><div class="hh-app-menu-items"><button id="exportExcel" class="secondary" type="button">Export Excel</button><button id="exportPdf" class="secondary" type="button">Export PDF</button><hr><button id="changePassword" class="secondary" hidden>Change password</button><button id="logout" class="secondary" hidden>Sign out</button></div></details></div></header>
+<header class="top"><div class="brand">⌂ &nbsp;<span>Our House Hunt</span></div><div id="viewControls" class="hh-view-controls" hidden></div><div class="topright"><strong id="who"></strong><span id="hhVersion" title="Current House Hunt site version" style="font-size:11px;color:#72817f">v61</span><button id="refresh" class="secondary" hidden>Refresh</button><details id="appMenu" class="hh-app-menu" hidden><summary>Menu</summary><div class="hh-app-menu-items"><button id="exportExcel" class="secondary" type="button">Export Excel</button><button id="exportPdf" class="secondary" type="button">Export PDF</button><hr><button id="changePassword" class="secondary" hidden>Change password</button><button id="logout" class="secondary" hidden>Sign out</button></div></details></div></header>
 <main>
 <section id="login" class="panel login" hidden>
 <h1>Welcome home</h1><p>Your shared shortlist, notes and viewings.</p>
@@ -82,8 +82,8 @@ dialog.hh-photo-viewer[open]{display:flex;flex-direction:column}
 </dialog>
 <script type="module">
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.49.8';
-import {createViewingDateFields} from './viewing-date.js?v=1';
-import {setupComparison,stationOptions,stationDistance,matchesStation,viewingStatuses,viewingStatusLabels,viewingStatusKey,matchesViewingStatus,statusEditorOptions,compareAgencies} from './comparison.js?v=71';
+import {createViewingDateFields} from './viewing-date.js?v=2';
+import {setupComparison,stationOptions,stationDistance,matchesStation,viewingStatuses,viewingStatusLabels,viewingStatusKey,matchesViewingStatus,statusEditorOptions,compareAgencies} from './comparison.js?v=72';
 import {calculateGoogleRoutes,needsGoogleRouteResume} from './google-routes-runner.js?v=9';
 import {prepareStationChanges,changedStationNames,hasPendingStationChoices} from './station-choice-state.js?v=1';
 import {calculateManualStationRoutes} from './manual-station-routes.js?v=1';
@@ -92,11 +92,11 @@ import {setupExports} from './export-tools.js?v=3';
 import {createUniquePhotoStore,photoDigest} from './photo-dedup.js?v=4';
 import {canonicalListing,importChanges,validateGeocode,validStreetViewHint,sameStreet,streetViewListingUrl} from './import-utils.js?v=4';
 import {reconcileOne,mediaRevision} from './reconcile-media.js?v=1';
-import {createEditHistory} from './edit-history.js?v=3';
+import {createEditHistory} from './edit-history.js?v=4';
 import {analyzeFloorplan,inspectFloorplanImage} from './floorplan-ocr.js?v=16';
 const sb=createClient('https://ficnuovumurmhzdujjvj.supabase.co','sb_publishable_yrArzwZ2GizO5ATuiAkymg_LdpVZKC9');
 const $=id=>document.getElementById(id);
-const detailViewingDate=createViewingDateFields($('editViewing'));
+const detailViewingDate=createViewingDateFields($('editViewing'),{clearButton:true});
 const labels=viewingStatusLabels;
 let user=null,people={},homes=[],visibleHomes=[],selected=null;
 let viewingSelections=null,stationSelection=null;
@@ -854,7 +854,7 @@ for(const id of ['stageFilter','sort','search'])$(id).addEventListener(id==='sea
 $('resetComparisonFilters').onclick=()=>{viewingSelections=null;stationSelection=null;$('stageFilter').value='all';render()};
 $('archiveToggle').onclick=()=>{const inArchive=$('stageFilter').value==='archived'||viewingSelections?.size===1&&viewingSelections.has('archived');viewingSelections=null;$('stageFilter').value=inArchive?'all':'archived';$('search').value='';render();};
 $('close').onclick=()=>$('dialog').close();
-$('save').onclick=async()=>{if(!selected)return;const viewing=detailViewingDate.read();if(viewing.error)return;const payload={address:$('editAddress').value.trim(),price:$('editPrice').value?Number($('editPrice').value):null,bedrooms:$('editBeds').value?Number($('editBeds').value):null,bathrooms:$('editBaths').value?Number($('editBaths').value):null,status:$('editStage').value,viewing_at:viewing.value,...enhancements.edited()};if(payload.status==='deleted'&&!confirm('Move this house to Deleted?'))return;const id=selected.id,addressChanged=payload.address!==selected.address,stationsChanged=changedStationNames(selected,payload).length>0;const overrides={...(selected.manual_overrides||{})};for(const [k,v] of Object.entries(payload)){if(String(selected[k]??'')!==String(v??''))overrides[k]=true;}payload.manual_overrides=overrides;const r=await history.save(selected,payload);if(r.error){alert(r.error.message);return}await refresh();$('dialog').close();if(stationsChanged)await resumeManualStationRoutes(id);if(addressChanged)void updateLocationForAddress(id)};
+$('save').onclick=async()=>{if(!selected)return;const viewing=detailViewingDate.read();if(viewing.error)return;const payload={address:$('editAddress').value.trim(),price:$('editPrice').value?Number($('editPrice').value):null,bedrooms:$('editBeds').value?Number($('editBeds').value):null,bathrooms:$('editBaths').value?Number($('editBaths').value):null,status:$('editStage').value,...enhancements.edited()};if(viewing.changed)payload.viewing_at=viewing.value;if(payload.status==='deleted'&&!confirm('Move this house to Deleted?'))return;const id=selected.id,addressChanged=payload.address!==selected.address,stationsChanged=changedStationNames(selected,payload).length>0;const overrides={...(selected.manual_overrides||{})};for(const [k,v] of Object.entries(payload)){if(String(selected[k]??'')!==String(v??''))overrides[k]=true;}payload.manual_overrides=overrides;const r=await history.save(selected,payload);if(r.error){alert(r.error.message);return}await refresh();$('dialog').close();if(stationsChanged)await resumeManualStationRoutes(id);if(addressChanged)void updateLocationForAddress(id)};
 $('enrich').onclick=updateFromListing;
 $('remove').onclick=async()=>{if(!selected||!confirm('Move this house to Deleted? You can restore it later.'))return;const r=await history.save(selected,{status:'deleted'});if(r.error){alert(r.error.message);return}$('dialog').close();selected=null;await refresh()};
 $('noteForm').onsubmit=async e=>{e.preventDefault();if(!selected)return;const body=$('note').value.trim();if(!body)return;const r=await sb.from('notes').insert({property_id:selected.id,author_id:user.id,body});if(r.error){alert(r.error.message);return}$('note').value='';await loadNotes()};

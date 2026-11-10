@@ -1,3 +1,9 @@
+## v61 calendar and preservation (2026-11-10)
+
+- Open an existing date: its day is selected in the calendar and its exact HH:MM is prefilled. Pick another day by click/touch, then type 12:11 or 12:00 in one field without moving between hour/minute cells. No year/seconds controls.
+- Cancel/open/Refresh and unrelated Details saves preserve every original timestamp, including its year, seconds and explicit UTC offset. Blank/invalid time is a validation error, not deletion. Only Clear date clears a value.
+- Date edits and Undo reject stale concurrent date changes. Production dates are backed up privately before changes and compared after publication. Tests use fixture data only.
+
 ## v60 Viewing date repair (2026-11-10)
 
 - Table and Details both use Day / Month / Hours / Minutes controls. No year/seconds segment or native datetime-local control appears.

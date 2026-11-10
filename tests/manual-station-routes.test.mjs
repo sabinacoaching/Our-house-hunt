@@ -158,3 +158,30 @@ test('an older station editor cannot replace a newer station name',async()=>{
   assert.match(saved.error.message,/changed while you were editing/);assert.equal(x.row().station_name,'A newer choice');assert.equal(history.canUndo(),false);
  }finally{globalThis.localStorage=previous}
 });
+
+test('an older date editor cannot replace a newer saved viewing date',async()=>{
+ const previous=globalThis.localStorage;globalThis.localStorage={getItem:()=>null,setItem(){}};
+ try{
+  const x=fixture();x.row().viewing_at='2026-12-12T12:00:00Z';const p=copy(x.row());x.row().viewing_at='2026-12-13T13:00:00Z';
+  const history=createEditHistory({sb:x.sb});const saved=await history.save(p,{viewing_at:'2026-12-14T14:00:00Z'});
+  assert.match(saved.error.message,/changed while you were editing/);assert.equal(x.row().viewing_at,'2026-12-13T13:00:00Z');assert.equal(x.patches.length,0);
+ }finally{globalThis.localStorage=previous}
+});
+test('a price-only save cannot overwrite a viewing date changed elsewhere',async()=>{
+ const previous=globalThis.localStorage;globalThis.localStorage={getItem:()=>null,setItem(){}};
+ try{
+  const x=fixture();x.row().viewing_at='2026-12-12T12:00:00Z';const p=copy(x.row());x.row().viewing_at='2026-12-13T13:00:00Z';
+  const history=createEditHistory({sb:x.sb});assert.equal((await history.save(p,{price:501000})).error,null);
+  assert.equal(x.row().viewing_at,'2026-12-13T13:00:00Z');assert.ok(x.patches.every(patch=>!Object.hasOwn(patch,'viewing_at')));
+ }finally{globalThis.localStorage=previous}
+});
+test('Undo retains a date saved concurrently after its comparison read',async()=>{
+ const previous=globalThis.localStorage;globalThis.localStorage={getItem:()=>null,setItem(){}};
+ try{
+  const x=fixture();x.row().viewing_at='2026-12-12T12:00:00Z';const history=createEditHistory({sb:x.sb}),p=copy(x.row());
+  assert.equal((await history.save(p,{viewing_at:'2026-12-13T13:00:00Z'})).error,null);
+  const rpc=x.sb.rpc;x.sb.rpc=async(name,args)=>{x.row().viewing_at='2026-12-14T14:00:00Z';return rpc(name,args)};
+  const undone=await history.undo();assert.match(undone.error.message,/Newer data was retained/);
+  assert.equal(x.row().viewing_at,'2026-12-14T14:00:00Z');assert.equal(history.canUndo(),true);
+ }finally{globalThis.localStorage=previous}
+});

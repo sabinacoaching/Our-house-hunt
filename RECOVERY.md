@@ -1,6 +1,9 @@
 # Our House Hunt: Recovery and Safe-Change Procedure
 
-## Current project and routing architecture (2026-11-10, v60)
+## Current project and routing architecture (2026-11-10, v61)
+
+- v61 restores a clickable month calendar, month arrows and one HH:MM field in both date editors. It has no year or seconds controls. Calendar month navigation carries the year internally. Date selection focuses the time input for typing 12:11/12:00 in one field. Preserve exact existing timestamps until an explicit date/time change; blank/invalid time cannot erase a saved date. Clear date is the only explicit clearing action. Details omits viewing_at entirely for unrelated saves. Explicit date edits and Undo use the existing full-row comparison/RLS manual-edit RPC to reject stale overwrites.
+- Private data checkpoint: house_hunt_backup.viewing_dates_before_calendar_20261110_v60, 35 records including 6 non-null viewing dates at creation. Schema/table are inaccessible to anon/authenticated. Never restore this snapshot over later owner edits automatically. Code checkpoint: backup-before-calendar-time-editor-20261110 at 15563a00f99a0b63300266d068bcfcc155211267.
 
 - v60 replaces both native Viewing date editors with the same explicit Day / Month / Hours / Minutes component. No year/seconds segment or locale-dependent native datetime parsing remains. New day/month choices use the next occurrence in Europe/London; changing only time keeps the saved year. Unchanged fields retain the original stored timestamp exactly. Validate partial/impossible dates before saving, display copyable inline errors, and convert valid London wall-clock values to ISO timestamps. Regression: type 12 December, 12:02, Save, Refresh, reopen; include Russian browser locale and Details. Checkpoint: backup-before-viewing-date-editor-20261110 at fcf066de5fb3b2d08b492c27533a00dacf96c2a2.
 
