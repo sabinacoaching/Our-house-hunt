@@ -827,7 +827,7 @@ async function resumeManualStationRoutes(id=null){
  if(pending.length&&!failed)report('Updated station routes for '+pending.length+' house(s).');
  return pending.length;
 }
-async function stationNameChanged(p){render();await resumeManualStationRoutes(p.id)}
+async function stationNameChanged(p){applyStationRoutes(p);await resumeManualStationRoutes(p.id)}
 async function resumeSavedRouteJobs(){await resumeManualStationRoutes();await migrateGoogleRoutes()}
 let googleMigrationStarted=false;
 async function migrateGoogleRoutes(){

@@ -33,7 +33,7 @@ const transport=`export function createClient(){
   from(table){let patch=null,filters=[];const result=()=>{const data=table==='members'?[{id:'fixture-member',display_name:'Fixture household'}]:table==='notes'?[]:rows.filter(p=>filters.every(([key,value])=>equal(p[key],value)));
     if(patch){for(const p of data){window.__fixtureWrites.push({id:p.id,patch:structuredClone(patch)});Object.assign(p,structuredClone(patch))}localStorage.setItem('catalogue-fixture-rows',JSON.stringify(rows))}
     return {data:structuredClone(data),error:null}};
-   const api={select(){return this},order(){return this},eq(key,value){filters.push([key,value]);return this},is(key,value){filters.push([key,value]);return this},update(value){patch=value;return this},single:async()=>{const r=result();return {...r,data:r.data[0]||null}},maybeSingle:async()=>{const r=result();return {...r,data:r.data[0]||null}},then:done=>Promise.resolve(result()).then(done)
+   const api={select(){return this},order(){return this},eq(key,value){filters.push([key,value]);return this},is(key,value){filters.push([key,value]);return this},update(value){patch=value;return this},single:async()=>{const r=result();return {...r,data:r.data[0]||null}},maybeSingle:async()=>{const r=result();return {...r,data:r.data[0]||null}},then:done=>(patch&&['station_name','station_2_name','station_3_name'].some(key=>Object.hasOwn(patch,key))?new Promise(resolve=>setTimeout(resolve,window.__delayStationSave||0)).then(result):Promise.resolve(result())).then(done)
   };return api}
  }
 }`;
@@ -131,9 +131,9 @@ try{
  assert.match(await alphaRow().locator('.hh-station-entry').nth(2).innerText(),/7 min/);
  assert.equal(await page.evaluate(()=>window.__extensionCalls.length),2);
 
- await page.evaluate(()=>{window.__failNextWalk=true});
+ await page.evaluate(()=>{window.__failNextWalk=true;window.__delayStationSave=100});
  await alphaRow().getByLabel('Station 2',{exact:true}).fill('Example tram');
- await alphaRow().getByLabel('Station 2',{exact:true}).press('Tab');
+ await page.locator('#refresh').click();
  await page.waitForFunction(()=>window.__fixtureRows.find(p=>p.id==='alpha').station_commutes.manual_routes?.station_2_name?.error==='test pause');
  assert.doesNotMatch(await alphaRow().locator('.hh-station-entry').nth(1).innerText(),/15 min/);
  await alphaRow().locator('.hh-station-walk').nth(1).click();
