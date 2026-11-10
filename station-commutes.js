@@ -79,7 +79,7 @@ export function setupStationAccess({sb,history,shouldAutoCalculate}){
  }
  function editLine(p,i,kind,host){
   if(host.querySelector('input'))return;
-  const orig=host.textContent,which=names(p)[i],cache=p.station_commutes?.results?.[i]||{},manual=p.station_commutes?.google_verified?.[which]||{};
+  const orig=host.textContent,which=names(p)[i],previous=p.station_commutes?.results?.[i],cache=previous?.name===which?previous:{},manual=stationOverride(p.station_commutes||{},which);
   const replacement=stationChoice(p,i),originalMile=stationWalkingMiles(p,i);
   const values=kind==='walking'?
      [['walking_miles','Miles',manual.walking_miles??cache.walking_miles??originalMile],
@@ -98,7 +98,7 @@ export function setupStationAccess({sb,history,shouldAutoCalculate}){
   cancel.type='button';cancel.textContent='Cancel';cancel.className='hh-route-cancel';
   const revert=()=>{host.replaceChildren();host.textContent=orig};
   save.onclick=async()=>{
-    const next={...(p.station_commutes?.google_verified?.[which]||{}),source:'manual',updated_at:new Date().toISOString()};
+    const next={...stationOverride(p.station_commutes||{},which),source:'manual',updated_at:new Date().toISOString()};
     for(const [key,input] of fields){
      const n=input.value.trim()===''?null:Number(input.value);
      if(n!=null&&(!Number.isFinite(n)||n<0)){alert('Enter a valid number');return}

@@ -17,7 +17,7 @@ const fixtures=[
  ['archive','Archive Road','Oakhill','archived']
 ].map(([id,address,agency_name,status],i)=>{
  const latitude=51.3694953+i*.001,longitude=-.0883864,url='https://example.test/'+id;
- return {id,address,agency_name,status,source:'Zoopla',url,price:500000,bedrooms:2,bathrooms:1,latitude,longitude,sort_order:i,created_at:'2026-11-01T12:00:00Z',comment_david:'Keep decision '+id,comment_sabina:'Keep comment '+id,manual_overrides:{},images:[],floorplans:[],journey_estimates:{},station_name:'Alpha Station',station_2_name:'Beta Station',station_3_name:'Gamma Station',station_distance_miles:.5,station_2_distance_miles:.6,station_3_distance_miles:.7,station_commutes:{google_routes:{origin:address,stations:['Alpha Station','Beta Station','Gamma Station'],results:[{walking_minutes:10,walking_miles:.5},{walking_minutes:15,walking_miles:.6},{walking_minutes:20,walking_miles:.7}]}},import_diagnostics:{route_pending:false,source_location:{source:'listing-street-view',listing_url:url,address_input:address,latitude,longitude}}};
+ return {id,address,agency_name,status,source:'Zoopla',url,price:500000,bedrooms:2,bathrooms:1,latitude,longitude,sort_order:i,created_at:'2026-11-01T12:00:00Z',comment_david:'Keep decision '+id,comment_sabina:'Keep comment '+id,manual_overrides:{},images:[],floorplans:[],journey_estimates:{},station_name:'Alpha Station',station_2_name:'Beta Station',station_3_name:'Gamma Station',station_distance_miles:.5,station_2_distance_miles:.6,station_3_distance_miles:.7,station_commutes:{results:[{name:'Alpha Station',walking_minutes:10,walking_miles:.5},{name:'Beta Station',walking_minutes:15,walking_miles:.6},{name:'Gamma Station',walking_minutes:20,walking_miles:.7}],google_routes:{origin:address,stations:['Alpha Station','Beta Station','Gamma Station'],results:[{walking_minutes:10,walking_miles:.5},{walking_minutes:15,walking_miles:.6},{walking_minutes:20,walking_miles:.7}]}},import_diagnostics:{route_pending:false,source_location:{source:'listing-street-view',listing_url:url,address_input:address,latitude,longitude}}};
 });
 const transport=`export function createClient(){
  const rows=JSON.parse(localStorage.getItem('catalogue-fixture-rows')||'null')||${JSON.stringify(fixtures)};window.__fixtureRows=rows;window.__fixtureWrites=[];
@@ -131,6 +131,9 @@ try{
  await alphaRow().getByLabel('Station 2',{exact:true}).press('Tab');
  await page.waitForFunction(()=>window.__fixtureRows.find(p=>p.id==='alpha').station_commutes.manual_routes?.station_2_name?.error==='test pause');
  assert.doesNotMatch(await alphaRow().locator('.hh-station-entry').nth(1).innerText(),/15 min/);
+ await alphaRow().locator('.hh-station-walk').nth(1).click();
+ assert.equal(await page.getByLabel('Minutes to Example tram',{exact:true}).inputValue(),'');
+ await alphaRow().locator('.hh-route-cancel').click();
  await page.locator('#refresh').click();
  await page.waitForFunction(()=>window.__fixtureRows.find(p=>p.id==='alpha').station_commutes.manual_routes?.station_2_name?.state==='complete');
 
