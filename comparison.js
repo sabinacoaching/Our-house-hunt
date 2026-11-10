@@ -1,5 +1,6 @@
 import {setupStationAccess,stationWalkingMiles} from './station-commutes.js?v=26';
 import {stationChoice} from './station-choice-state.js?v=1';
+import {createViewingDateFields,formatViewingDate} from './viewing-date.js?v=1';
 export function manualJourney(previous,minutes,updatedAt){
  const old=previous||{};
  const {arrival,departure,arrival_gap_minutes,date,calculated_at,audit_version,calculation_version,...rest}=old;
@@ -63,15 +64,6 @@ export async function openFloorPlan(plan,photo,win=window){
   if(tab)tab.location.replace(url);else win.location.assign(url);
  }catch(error){if(tab)tab.close();throw error}
 }
-export function viewingDateInputValue(value){
- const date=new Date(value);if(!value||!Number.isFinite(date.getTime()))return '';
- const pad=n=>String(n).padStart(2,'0');
- return date.getFullYear()+'-'+pad(date.getMonth()+1)+'-'+pad(date.getDate())+'T'+pad(date.getHours())+':'+pad(date.getMinutes());
-}
-export function formatViewingDate(value){
- const date=new Date(value);if(!value||!Number.isFinite(date.getTime()))return 'Set date';
- return new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short'}).format(date)+'\n'+new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(date);
-}
 export function setupComparison({sb,history,photo,displayPhoto,uniquePhotos,openHouse,openPhotoBrowser,onReorder,canReorder,onStatusChange,onAddressChange,onStationChange,shouldAutoCalculate,onRestore,getStatusSelection,onStatusFilterChange,getStations,getStationSelection,onStationFilterChange}){
 const stationAccess=setupStationAccess({sb,history,shouldAutoCalculate});
 const $=id=>document.getElementById(id),node=(tag,cls='',content)=>{const x=document.createElement(tag);x.className=cls;if(content!==undefined)x.textContent=content;return x};
@@ -128,26 +120,26 @@ async function save(p,key,value,input){
  if(r.error){flash(r.error.message,true);input?.classList.add('hh-savefail');return}
  input?.classList.remove('hh-savefail');flash('Saved');if(key==='status')await onStatusChange?.(p,val);if(key==='address')await onAddressChange?.(p);if(['station_name','station_2_name','station_3_name'].includes(key))await onStationChange?.(p);
 }
-const viewingDialog=node('dialog','hh-viewing-dialog'),viewingTop=node('div','dialogtop'),viewingTitle=node('h2','','Viewing date'),viewingForm=node('form','hh-date-form'),viewingInput=node('input'),viewingError=node('p','error'),viewingActions=node('div','actions');
+const viewingDialog=node('dialog','hh-viewing-dialog'),viewingTop=node('div','dialogtop'),viewingTitle=node('h2','','Viewing date'),viewingForm=node('form','hh-date-form'),viewingFields=node('div'),viewingError=node('p','error'),viewingActions=node('div','actions');
 viewingTitle.id='hhViewingTitle';viewingDialog.setAttribute('aria-labelledby',viewingTitle.id);viewingTop.append(viewingTitle);
-viewingInput.type='datetime-local';viewingInput.step='60';viewingInput.setAttribute('aria-label','Date and time');
+const viewingPicker=createViewingDateFields(viewingFields);
 viewingError.setAttribute('role','alert');
 const viewingSave=node('button','','Save date'),viewingClear=node('button','secondary','Clear date'),viewingCancel=node('button','secondary','Cancel');
 viewingSave.type='submit';viewingClear.type=viewingCancel.type='button';
-viewingActions.append(viewingSave,viewingClear,viewingCancel);viewingForm.append(viewingInput,viewingError,viewingActions);viewingDialog.append(viewingTop,viewingForm);document.body.append(viewingDialog);
+viewingActions.append(viewingSave,viewingClear,viewingCancel);viewingForm.append(viewingFields,viewingError,viewingActions);viewingDialog.append(viewingTop,viewingForm);document.body.append(viewingDialog);
 let viewingEdit=null;
-function editViewingDate(p,button){viewingEdit={p,button};viewingInput.value=viewingDateInputValue(p.viewing_at);viewingError.textContent='';viewingDialog.showModal();viewingInput.focus()}
+function editViewingDate(p,button){viewingEdit={p,button};viewingPicker.setValue(p.viewing_at);viewingError.textContent='';viewingDialog.showModal();viewingPicker.focus()}
 viewingCancel.onclick=()=>viewingDialog.close();
-viewingClear.onclick=()=>{viewingInput.value='';viewingForm.requestSubmit()};
+viewingClear.onclick=()=>{viewingPicker.clear();viewingForm.requestSubmit()};
 viewingForm.onsubmit=async event=>{
  event.preventDefault();if(!viewingEdit)return;
- const {p,button}=viewingEdit,value=viewingInput.value?new Date(viewingInput.value).toISOString():null;
+ const {p,button}=viewingEdit,parsed=viewingPicker.read();if(parsed.error)return;const value=parsed.value;
  viewingSave.disabled=viewingClear.disabled=true;viewingError.textContent='';
  try{
   const result=await history.save(p,{viewing_at:value,manual_overrides:{...(p.manual_overrides||{}),viewing_at:true}});
   if(result.error){viewingError.textContent=result.error.message;return}
   button.textContent=formatViewingDate(p.viewing_at);viewingDialog.close();flash('Saved');
- }finally{viewingSave.disabled=viewingClear.disabled=false}
+ }catch(error){viewingError.textContent=error.message||String(error)}finally{viewingSave.disabled=viewingClear.disabled=false}
 };
 function editor(p,key,type='text'){let x=node(type==='textarea'?'textarea':type==='select'?'select':'input');if(type==='select'){for(const [v,label] of statusEditorOptions(p[key])){const opt=node('option','',label);opt.value=v;x.append(opt)}x.value=p[key]||''}else{if(type==='number'){x.type='number';x.step='any';x.min='0'}if(type==='textarea')x.rows=6;x.value=p[key]??''}x.setAttribute('aria-label',key+' '+p.address);let tid;if(type==='textarea'){const minimum=(key==='comment_sabina'||key==='comment_david')?230:86;const resize=()=>{x.style.height='auto';x.style.height=Math.max(minimum,x.scrollHeight+8)+'px'};x.style.resize='none';x.style.overflowY='hidden';resize();x.addEventListener('input',()=>{resize();clearTimeout(tid);tid=setTimeout(()=>save(p,key,x.value,x),800)});x.addEventListener('blur',()=>{clearTimeout(tid);save(p,key,x.value,x)})}else x.addEventListener('change',()=>save(p,key,x.value,x));return x}
 const cell=value=>{const t=node('td');if(value instanceof Node)t.append(value);else t.textContent=value;return t};
