@@ -63,6 +63,15 @@ export async function openFloorPlan(plan,photo,win=window){
   if(tab)tab.location.replace(url);else win.location.assign(url);
  }catch(error){if(tab)tab.close();throw error}
 }
+export function viewingDateInputValue(value){
+ const date=new Date(value);if(!value||!Number.isFinite(date.getTime()))return '';
+ const pad=n=>String(n).padStart(2,'0');
+ return date.getFullYear()+'-'+pad(date.getMonth()+1)+'-'+pad(date.getDate())+'T'+pad(date.getHours())+':'+pad(date.getMinutes());
+}
+export function formatViewingDate(value){
+ const date=new Date(value);if(!value||!Number.isFinite(date.getTime()))return 'Set date';
+ return new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short'}).format(date)+'\n'+new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(date);
+}
 export function setupComparison({sb,history,photo,displayPhoto,uniquePhotos,openHouse,openPhotoBrowser,onReorder,canReorder,onStatusChange,onAddressChange,onStationChange,shouldAutoCalculate,onRestore,getStatusSelection,onStatusFilterChange,getStations,getStationSelection,onStationFilterChange}){
 const stationAccess=setupStationAccess({sb,history,shouldAutoCalculate});
 const $=id=>document.getElementById(id),node=(tag,cls='',content)=>{const x=document.createElement(tag);x.className=cls;if(content!==undefined)x.textContent=content;return x};
@@ -72,10 +81,23 @@ const extras=[['title','Listing title','text'],['url','Original listing URL','te
 const nums=new Set(['latitude','longitude','bedrooms','bathrooms','wc_count','floors','floor_area_sqm','garden_area_sqm','station_distance_miles','station_2_distance_miles','station_3_distance_miles']);
 const money=p=>p==null?'—':new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP',maximumFractionDigits:0}).format(p);
 const clean=x=>String(x||'House').replace(/^\s*\d+\s*bed(?:room)?s?\s+.*?\s+(?:for sale|to rent)\s*/i,'').replace(/^\s*property\s+for\s+sale\s*/i,'').replace(/\s*[-|]\s*zoopla.*$/i,'').replace(/\s*[-|]\s*rightmove.*$/i,'').replace(/,\s*(?:[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}|[A-Z]{1,2}\d[A-Z\d]?)$/i,'').replace(/\s+(?:[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}|[A-Z]{1,2}\d[A-Z\d]?)$/i,'').trim();
-const bar=node('div','hh-views'),tableBtn=node('button','active','Table'),mapBtn=node('button','','Map'),cardsBtn=node('button','','Cards'),undoBtn=node('button','hh-undo','Undo last edit'),notice=node('span','hh-notice','Changes save automatically.');
+const bar=node('div','hh-views'),tableBtn=node('button','active','Table'),mapBtn=node('button','','Map'),cardsBtn=node('button','','Cards'),undoBtn=node('button','hh-undo','Undo'),notice=node('span','hh-notice','Changes save automatically.');
+bar.setAttribute('aria-label','Catalogue views');notice.setAttribute('role','status');
 bar.append(tableBtn,mapBtn,cardsBtn,undoBtn,notice);
 const wrap=node('section','hh-table-shell'),table=node('table','hh-table'),mapPanel=node('section'),mapMsg=node('p','hh-mapmsg','Map shows approximate positions when coordinates are available.'),mapDiv=node('div','hh-map'),missingDiv=node('div','hh-maplist');
-wrap.append(table);mapPanel.append(mapMsg,mapDiv,missingDiv);mapPanel.hidden=true;$('cards').before(bar,wrap,mapPanel);
+wrap.append(table);mapPanel.append(mapMsg,mapDiv,missingDiv);mapPanel.hidden=true;
+if($('viewControls'))$('viewControls').append(bar);else $('cards').before(bar);
+$('cards').before(wrap,mapPanel);
+// Scroll the page to its column headings before consuming downward table scroll.
+wrap.addEventListener('wheel',event=>{
+ if(event.ctrlKey||event.shiftKey||Math.abs(event.deltaX)>Math.abs(event.deltaY)||event.deltaY<=0||event.target.closest('.hh-status-filter-menu'))return;
+ const top=wrap.getBoundingClientRect().top;if(top<=1)return;
+ const delta=event.deltaY*(event.deltaMode===1?16:event.deltaMode===2?window.innerHeight:1);
+ const pagePart=Math.min(delta,top),before=window.scrollY;
+ window.scrollBy({top:pagePart,behavior:'instant'});
+ const moved=window.scrollY-before;
+ if(moved>0){event.preventDefault();wrap.scrollTop+=Math.max(0,delta-moved)}
+},{passive:false});
 let rows=[],mode='table',L=null,map=null,markers=null,mapFramed=false,lastMapSig='';
 const columnWidths=new Map();
 function applyColumnWidth(index,width){
@@ -92,7 +114,7 @@ function addColumnResize(th,index){
 }
  history.subscribe(n=>{undoBtn.disabled=n===0;undoBtn.title=n?n+' manual changes can be undone':'No manual changes to undo'});
  undoBtn.onclick=async()=>{undoBtn.disabled=true;const r=await history.undo();if(r.error)flash(r.error.message,true);else flash('Last change undone');undoBtn.disabled=!history.canUndo()};
-function flash(msg,fail=false){notice.textContent=msg;notice.style.color=fail?'#af4b45':'#315e50';setTimeout(()=>{notice.textContent='Changes save for both of you.';notice.style.color=''},3000)}
+function flash(msg,fail=false){notice.textContent=msg;notice.title=msg;notice.style.color=fail?'#af4b45':'#315e50';setTimeout(()=>{notice.textContent='Changes save for both of you.';notice.title='';notice.style.color=''},3000)}
 function selectMode(which){mode=which;tableBtn.classList.toggle('active',which==='table');mapBtn.classList.toggle('active',which==='map');cardsBtn.classList.toggle('active',which==='cards');wrap.hidden=which!=='table';mapPanel.hidden=which!=='map';$('cards').style.display=which==='cards'?'':'none';$('empty').hidden=which!=='cards'||!!rows.length;if(which==='map')showMap().catch(e=>{console.error('Property map',e);mapMsg.textContent='Map could not be loaded: '+e.message+' Select Table and then Map to retry.'})}
 tableBtn.onclick=()=>selectMode('table');mapBtn.onclick=()=>selectMode('map');cardsBtn.onclick=()=>selectMode('cards');selectMode('table');
 function cast(k,v){return nums.has(k)?(v===''?null:Number(v)):v}
@@ -106,6 +128,27 @@ async function save(p,key,value,input){
  if(r.error){flash(r.error.message,true);input?.classList.add('hh-savefail');return}
  input?.classList.remove('hh-savefail');flash('Saved');if(key==='status')await onStatusChange?.(p,val);if(key==='address')await onAddressChange?.(p);if(['station_name','station_2_name','station_3_name'].includes(key))await onStationChange?.(p);
 }
+const viewingDialog=node('dialog','hh-viewing-dialog'),viewingTop=node('div','dialogtop'),viewingTitle=node('h2','','Viewing date'),viewingForm=node('form','hh-date-form'),viewingInput=node('input'),viewingError=node('p','error'),viewingActions=node('div','actions');
+viewingTitle.id='hhViewingTitle';viewingDialog.setAttribute('aria-labelledby',viewingTitle.id);viewingTop.append(viewingTitle);
+viewingInput.type='datetime-local';viewingInput.step='60';viewingInput.setAttribute('aria-label','Date and time');
+viewingError.setAttribute('role','alert');
+const viewingSave=node('button','','Save date'),viewingClear=node('button','secondary','Clear date'),viewingCancel=node('button','secondary','Cancel');
+viewingSave.type='submit';viewingClear.type=viewingCancel.type='button';
+viewingActions.append(viewingSave,viewingClear,viewingCancel);viewingForm.append(viewingInput,viewingError,viewingActions);viewingDialog.append(viewingTop,viewingForm);document.body.append(viewingDialog);
+let viewingEdit=null;
+function editViewingDate(p,button){viewingEdit={p,button};viewingInput.value=viewingDateInputValue(p.viewing_at);viewingError.textContent='';viewingDialog.showModal();viewingInput.focus()}
+viewingCancel.onclick=()=>viewingDialog.close();
+viewingClear.onclick=()=>{viewingInput.value='';viewingForm.requestSubmit()};
+viewingForm.onsubmit=async event=>{
+ event.preventDefault();if(!viewingEdit)return;
+ const {p,button}=viewingEdit,value=viewingInput.value?new Date(viewingInput.value).toISOString():null;
+ viewingSave.disabled=viewingClear.disabled=true;viewingError.textContent='';
+ try{
+  const result=await history.save(p,{viewing_at:value,manual_overrides:{...(p.manual_overrides||{}),viewing_at:true}});
+  if(result.error){viewingError.textContent=result.error.message;return}
+  button.textContent=formatViewingDate(p.viewing_at);viewingDialog.close();flash('Saved');
+ }finally{viewingSave.disabled=viewingClear.disabled=false}
+};
 function editor(p,key,type='text'){let x=node(type==='textarea'?'textarea':type==='select'?'select':'input');if(type==='select'){for(const [v,label] of statusEditorOptions(p[key])){const opt=node('option','',label);opt.value=v;x.append(opt)}x.value=p[key]||''}else{if(type==='number'){x.type='number';x.step='any';x.min='0'}if(type==='textarea')x.rows=6;x.value=p[key]??''}x.setAttribute('aria-label',key+' '+p.address);let tid;if(type==='textarea'){const minimum=(key==='comment_sabina'||key==='comment_david')?230:86;const resize=()=>{x.style.height='auto';x.style.height=Math.max(minimum,x.scrollHeight+8)+'px'};x.style.resize='none';x.style.overflowY='hidden';resize();x.addEventListener('input',()=>{resize();clearTimeout(tid);tid=setTimeout(()=>save(p,key,x.value,x),800)});x.addEventListener('blur',()=>{clearTimeout(tid);save(p,key,x.value,x)})}else x.addEventListener('change',()=>save(p,key,x.value,x));return x}
 const cell=value=>{const t=node('td');if(value instanceof Node)t.append(value);else t.textContent=value;return t};
 const val=v=>v==null||v===''?'—':String(v);
@@ -392,7 +435,7 @@ function render(list){
   tr.append(cell(editor(p,'comment_sabina','textarea')));
   tr.append(cell(editor(p,'comment_david','textarea')));
   tr.append(cell(editor(p,'status','select')));
-  const view=node('input');view.type='datetime-local';view.value=p.viewing_at?p.viewing_at.slice(0,16):'';view.setAttribute('aria-label','Viewing date '+(p.address||p.title));view.onchange=async()=>{const v=view.value?new Date(view.value).toISOString():null;const r=await history.save(p,{viewing_at:v,manual_overrides:{...(p.manual_overrides||{}),viewing_at:true}});if(r.error)flash(r.error.message,true);else flash('Saved')};tr.append(cell(view));
+  const view=node('button','hh-viewing-date',formatViewingDate(p.viewing_at));view.type='button';view.setAttribute('aria-label','Viewing date '+(p.address||p.title));view.title='Change viewing date';view.onclick=()=>editViewingDate(p,view);tr.append(cell(view));
   const agency=node('div','hh-stack');
   try{
    const linkUrl=new URL(p.agency_website);

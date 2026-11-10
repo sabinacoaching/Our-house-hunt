@@ -1,3 +1,10 @@
+## v59 compact catalogue controls (2026-11-10)
+
+- At desktop widths, Table / Map / Cards / Undo share the top account row. Menu contains the existing Excel/PDF exports, Change password and Sign out. Export downloads and password-dialog opening must remain functional.
+- Wheel scrolling over the table first scrolls the page until column headings reach the top. Further scrolling moves only table rows, keeping headings visible. Scrolling outside the table can move the page independently. Preserve horizontal scrolling and resizing.
+- Header text is 14px, with wrapping within existing widths. Viewing date is a narrow day/month and HH:mm display. Edit, clear, cancel and Refresh retain correct values, with no display-only database writes. Desktop 1500/1280 and mobile 390 layouts are checked in Chromium with fixture data.
+- Existing station/manual-route checks remain required. No database or extension changes belong to this release.
+
 # House Hunt: mandatory acceptance contract
 
 Routing contract updated: 2026-11-09, frontend v55 / Importer 0.18.0. Current repository: `sabinacoaching/Our-house-hunt`; current URL: `https://sabinacoaching.github.io/Our-house-hunt/`. The shared-repository references in the historical incident notes are obsolete. **A document is not an automated test or branch protection**: do not claim it enforces anything until the CI gate and protected deployment workflow are installed and tested.

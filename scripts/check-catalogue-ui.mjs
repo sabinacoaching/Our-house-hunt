@@ -17,7 +17,7 @@ const fixtures=[
  ['archive','Archive Road','Oakhill','archived']
 ].map(([id,address,agency_name,status],i)=>{
  const latitude=51.3694953+i*.001,longitude=-.0883864,url='https://example.test/'+id;
- return {id,address,agency_name,status,source:'Zoopla',url,price:500000,bedrooms:2,bathrooms:1,latitude,longitude,sort_order:i,created_at:'2026-11-01T12:00:00Z',comment_david:'Keep decision '+id,comment_sabina:'Keep comment '+id,manual_overrides:{},images:[],floorplans:[],journey_estimates:{},station_name:'Alpha Station',station_2_name:'Beta Station',station_3_name:'Gamma Station',station_distance_miles:.5,station_2_distance_miles:.6,station_3_distance_miles:.7,station_commutes:{results:[{name:'Alpha Station',walking_minutes:10,walking_miles:.5},{name:'Beta Station',walking_minutes:15,walking_miles:.6},{name:'Gamma Station',walking_minutes:20,walking_miles:.7}],google_routes:{origin:address,stations:['Alpha Station','Beta Station','Gamma Station'],results:[{walking_minutes:10,walking_miles:.5},{walking_minutes:15,walking_miles:.6},{walking_minutes:20,walking_miles:.7}]}},import_diagnostics:{route_pending:false,source_location:{source:'listing-street-view',listing_url:url,address_input:address,latitude,longitude}}};
+ return {id,address,agency_name,status,source:'Zoopla',url,price:500000,bedrooms:2,bathrooms:1,latitude,longitude,sort_order:i,created_at:'2026-11-01T12:00:00Z',viewing_at:i===0?'2026-11-15T14:05:37Z':null,comment_david:'Keep decision '+id,comment_sabina:'Keep comment '+id,manual_overrides:{},images:[],floorplans:[],journey_estimates:{},station_name:'Alpha Station',station_2_name:'Beta Station',station_3_name:'Gamma Station',station_distance_miles:.5,station_2_distance_miles:.6,station_3_distance_miles:.7,station_commutes:{results:[{name:'Alpha Station',walking_minutes:10,walking_miles:.5},{name:'Beta Station',walking_minutes:15,walking_miles:.6},{name:'Gamma Station',walking_minutes:20,walking_miles:.7}],google_routes:{origin:address,stations:['Alpha Station','Beta Station','Gamma Station'],results:[{walking_minutes:10,walking_miles:.5},{walking_minutes:15,walking_miles:.6},{walking_minutes:20,walking_miles:.7}]}},import_diagnostics:{route_pending:false,source_location:{source:'listing-street-view',listing_url:url,address_input:address,latitude,longitude}}};
 });
 const transport=`export function createClient(){
  const rows=JSON.parse(localStorage.getItem('catalogue-fixture-rows')||'null')||${JSON.stringify(fixtures)};window.__fixtureRows=rows;window.__fixtureWrites=[];
@@ -49,7 +49,7 @@ const server=createServer(async(req,res)=>{
 await new Promise(done=>server.listen(0,'127.0.0.1',done));
 const origin='http://127.0.0.1:'+server.address().port;
 const browser=await chromium.launch({headless:true,...(process.env.HH_CHROMIUM_EXECUTABLE?{executablePath:process.env.HH_CHROMIUM_EXECUTABLE}:{})});
-const page=await browser.newPage({viewport:{width:1500,height:950}}),errors=[];
+const page=await browser.newPage({viewport:{width:1500,height:950},timezoneId:'Europe/London'}),errors=[];
 page.on('pageerror',error=>errors.push(String(error)));
 await page.addInitScript(()=>{
  window.__extensionCalls=[];
@@ -81,8 +81,76 @@ await page.route('**/*',route=>{
  return route.abort();
 });
 const addresses=()=>page.locator('.hh-table tbody .hh-address').allTextContents();
+const snapshot=async name=>{if(process.env.HH_UI_SNAPSHOT_LOG)console.log('CATALOGUE_SNAPSHOT '+name+' '+(await page.screenshot({fullPage:false})).toString('base64'))};
 try{
  await page.goto(origin);await page.locator('.hh-table tbody tr').first().waitFor();
+ const views=page.locator('#viewControls'),appMenu=page.locator('#appMenu'),dateDialog=page.locator('.hh-viewing-dialog');
+ assert.equal(await page.locator('.filters #exportExcel,.filters #exportPdf').count(),0);
+ assert.equal(await page.locator('.hh-views').count(),1);
+ const aligned=await page.evaluate(()=>{
+  const controls=[...document.querySelectorAll('.hh-views button,#refresh,#appMenu>summary')];
+  const centers=controls.map(el=>{const r=el.getBoundingClientRect();return r.top+r.height/2});
+  return {spread:Math.max(...centers)-Math.min(...centers),height:document.querySelector('.top').getBoundingClientRect().height};
+ });
+ assert.ok(aligned.spread<=2&&aligned.height<=56,JSON.stringify(aligned));
+ assert.equal(await page.locator('#exportExcel').isVisible(),false);
+ await appMenu.locator('summary').click();await page.locator('#changePassword').click();
+ await page.locator('#passwordDialog').waitFor({state:'visible'});
+ assert.equal(await appMenu.getAttribute('open'),null);
+ await page.locator('#closePasswordDialog').click();
+ await appMenu.locator('summary').click();
+ const [download]=await Promise.all([page.waitForEvent('download'),page.locator('#exportExcel').click()]);
+ assert.ok(download.suggestedFilename().endsWith('.xlsx'));
+ await appMenu.locator('summary').click();
+ const [pdf]=await Promise.all([page.waitForEvent('popup'),page.locator('#exportPdf').click()]);
+ await pdf.waitForFunction(()=>document.body?.textContent.includes('Alpha Road'));await pdf.close();
+ await appMenu.locator('summary').click();await page.keyboard.press('Escape');assert.equal(await appMenu.getAttribute('open'),null);
+ await views.getByRole('button',{name:'Cards',exact:true}).click();assert.equal(await page.locator('#cards').isVisible(),true);
+ await views.getByRole('button',{name:'Map',exact:true}).click();assert.equal(await page.locator('.hh-map').isVisible(),true);
+ await views.getByRole('button',{name:'Table',exact:true}).click();
+ const dateButton=()=>page.getByRole('button',{name:'Viewing date Alpha Road',exact:true});
+ assert.equal(await dateButton().innerText(),'15 Nov\n14:05');
+ await dateButton().click();assert.equal(await dateDialog.getByLabel('Date and time').inputValue(),'2026-11-15T14:05');
+ await dateDialog.getByRole('button',{name:'Cancel',exact:true}).click();
+ assert.equal(await page.evaluate(()=>window.__fixtureRows[0].viewing_at),'2026-11-15T14:05:37Z','Cancelling retains the exact saved timestamp');
+ await dateButton().click();await dateDialog.getByLabel('Date and time').fill('2026-11-17T09:10');
+ await dateDialog.getByRole('button',{name:'Save date',exact:true}).click();
+ await page.waitForFunction(()=>window.__fixtureRows[0].viewing_at==='2026-11-17T09:10:00.000Z');
+ await page.locator('#refresh').click();assert.equal(await dateButton().innerText(),'17 Nov\n09:10');
+ await dateButton().click();await dateDialog.getByRole('button',{name:'Clear date',exact:true}).click();
+ await page.waitForFunction(()=>window.__fixtureRows[0].viewing_at===null);assert.equal(await dateButton().innerText(),'Set date');
+ await page.evaluate(()=>{window.scrollTo(0,0);const shell=document.querySelector('.hh-table-shell');shell.scrollTop=0;shell.scrollLeft=0});
+ await snapshot('desktop-top');
+ const shell=page.locator('.hh-table-shell'),rect=await shell.boundingBox();
+ await page.mouse.move(650,Math.min(800,rect.y+130));await page.mouse.wheel(0,rect.y+130);
+ await page.waitForFunction(()=>document.querySelector('.hh-table thead th').getBoundingClientRect().top<=2&&document.querySelector('.hh-table-shell').scrollTop>20);
+ const scroll=await page.evaluate(()=>{
+  const table=document.querySelector('.hh-table-shell'),heading=document.querySelector('.hh-table thead th'),date=document.querySelector('.hh-table th:nth-child(13)');
+  return {headingTop:heading.getBoundingClientRect().top,height:table.getBoundingClientRect().height,viewport:innerHeight,inner:table.scrollTop,font:getComputedStyle(heading).fontSize,headingHeight:heading.getBoundingClientRect().height,dateWidth:date.getBoundingClientRect().width};
+ });
+ assert.ok(Math.abs(scroll.headingTop)<=2&&Math.abs(scroll.height-scroll.viewport)<=1,JSON.stringify(scroll));
+ assert.equal(scroll.font,'14px');assert.ok(scroll.headingHeight<=68&&scroll.dateWidth<=125,JSON.stringify(scroll));
+ await page.mouse.wheel(0,180);await page.waitForFunction(inner=>document.querySelector('.hh-table-shell').scrollTop>inner,scroll.inner);
+ assert.ok(Math.abs((await page.locator('.hh-table thead th').first().boundingBox()).y)<=2);
+ await snapshot('column-headings');
+ await page.mouse.move(4,400);await page.mouse.wheel(0,-2000);
+ await page.waitForFunction(()=>window.scrollY===0);
+ assert.ok(await page.evaluate(()=>document.querySelector('.hh-table-shell').scrollTop>0),'Scrolling the page outside the table must preserve its own scroll');
+ await page.evaluate(()=>document.querySelector('.hh-table-shell').scrollTop=0);
+ await page.setViewportSize({width:1280,height:800});
+ assert.ok(await page.evaluate(()=>{
+  const elements=[...document.querySelectorAll('.hh-views button,#refresh,#appMenu>summary')],centers=elements.map(el=>{const r=el.getBoundingClientRect();return r.y+r.height/2});
+  return Math.max(...centers)-Math.min(...centers)<=2;
+ }),'Desktop toolbar stays on one row');
+ await snapshot('desktop-1280');
+ await page.setViewportSize({width:390,height:844});
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Mobile controls must not widen the whole page');
+ await appMenu.locator('summary').click();
+ assert.ok((await page.locator('.hh-app-menu-items').boundingBox()).x>=0);
+ await snapshot('mobile-menu');await page.keyboard.press('Escape');
+ await page.setViewportSize({width:1500,height:950});
+ await page.evaluate(()=>{window.scrollTo(0,0);document.querySelector('.hh-table-shell').scrollLeft=0});
+ console.log('COMPACT_UI_PASS top toolbar, menu exports/password, short editable date, outer/inner wheel scrolling, 14px headings, narrow date, responsive layout');
  assert.equal(await page.locator('.hh-table thead th').nth(10).innerText(),'Current decision');
  assert.equal((await addresses()).length,5);
  assert.equal(await page.getByLabel('comment_david Alpha Road',{exact:true}).inputValue(),'Keep decision alpha');

@@ -24,5 +24,7 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Check catalogue controls in Chromium
         run: node scripts/check-catalogue-ui.mjs
+        env:
+          HH_UI_SNAPSHOT_LOG: '1'
       - run: xvfb-run --auto-servernum node scripts/check-native-extension.mjs
       - run: xvfb-run --auto-servernum node scripts/check-routing-live.mjs
