@@ -24,7 +24,12 @@ const transport=`export function createClient(){
  const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
  const equal=(a,b)=>{if(typeof b==='string'&&/^[{[]/.test(b))try{b=JSON.parse(b)}catch{}return JSON.stringify(canonical(a??null))===JSON.stringify(canonical(b??null))};
  return {auth:{getSession:async()=>({data:{session:{user:{id:'fixture-member'}}}}),onAuthStateChange(){}},
-  rpc:async()=>({data:[],error:null}),
+  rpc:async(name,args)=>{
+   if(name!=='house_hunt_save_google_routes')return {data:[],error:null};
+   const row=rows.find(p=>p.id===args.p_id);
+   if(JSON.stringify(canonical(row))!==JSON.stringify(canonical(args.p_before)))return {data:false,error:null};
+   window.__fixtureWrites.push({id:row.id,patch:structuredClone(args.p_patch)});Object.assign(row,structuredClone(args.p_patch));localStorage.setItem('catalogue-fixture-rows',JSON.stringify(rows));return {data:true,error:null};
+  },
   from(table){let patch=null,filters=[];const result=()=>{const data=table==='members'?[{id:'fixture-member',display_name:'Fixture household'}]:table==='notes'?[]:rows.filter(p=>filters.every(([key,value])=>equal(p[key],value)));
     if(patch){for(const p of data){window.__fixtureWrites.push({id:p.id,patch:structuredClone(patch)});Object.assign(p,structuredClone(patch))}localStorage.setItem('catalogue-fixture-rows',JSON.stringify(rows))}
     return {data:structuredClone(data),error:null}};

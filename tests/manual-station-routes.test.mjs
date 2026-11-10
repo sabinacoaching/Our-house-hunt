@@ -17,6 +17,14 @@ function fixture({onRoute=()=>{},conflict=false,noSource=false,failTransit=false
   if(!filters.every(([key,value])=>match(row[key],value)))return {data:null,error:null};
   if(patch){patches.push(copy(patch));row={...row,...copy(patch)}}return {data:copy(row),error:null};
  };return {select(){return this},eq(key,value){filters.push([key,value]);return this},is(key,value){filters.push([key,value]);return this},update(value){patch=value;return this},single:async()=>result(),maybeSingle:async()=>result(),then:done=>Promise.resolve(result()).then(done)}}};
+ sb.rpc=async(name,{p_before,p_patch})=>{
+  assert.equal(name,'house_hunt_save_google_routes');
+  assert.notEqual(p_patch.latitude,null);assert.notEqual(p_patch.longitude,null);
+  assert.deepEqual(p_patch.station_commutes.google_verified,Object.hasOwn(p_before.station_commutes||{},'google_verified')?p_before.station_commutes.google_verified:{});
+  if(conflicts-->0){row.station_commutes.google_verified.Other={walking_minutes:17,source:'manual'};return {data:false}}
+  if(JSON.stringify(canonical(p_before))!==JSON.stringify(canonical(row)))return {data:false};
+  patches.push(copy(p_patch));row={...row,...copy(p_patch)};return {data:true};
+ };
  const extension=async(action,args)=>{
   if(action==='IMPORT_URL'){calls.push('listing');return {location_hint:{source:'listing-street-view',address:'Adjacent Road',latitude:51.371,longitude:-.091}}}
   const {route}=args;calls.push(route.kind+':'+route.destination.name);await onRoute(route,row);
@@ -80,6 +88,16 @@ test('an answer for the wrong station cannot be saved as the new walking result'
 test('older homes can obtain their listing panorama for this station without replacing their saved coordinates',async()=>{
  const x=fixture({noSource:true});x.rename({station_2_name:'New tram'});await calculateManualStationRoutes('house-a',x.options());
  assert.equal(x.calls[0],'listing');assert.equal(stationChoice(x.row(),1).walking.origin,'51.371,-0.091');assert.equal(x.row().latitude,51.37);
+});
+test('a house without coordinates saves its actual listing point and retains a valid per-station context',async()=>{
+ const x=fixture({noSource:true});x.row().latitude=null;x.row().longitude=null;x.rename({station_2_name:'New tram'});
+ await calculateManualStationRoutes('house-a',x.options());
+ assert.equal(x.row().latitude,51.371);assert.equal(x.row().longitude,-.091);assert.equal(stationChoice(x.row(),1).state,'complete');
+});
+test('large legacy caches and absent google_verified are saved through the existing atomic RPC',async()=>{
+ const x=fixture();delete x.row().station_commutes.google_verified;x.row().station_commutes.legacy_cache='x'.repeat(20000);x.rename({station_name:'New tram'});
+ await calculateManualStationRoutes('house-a',x.options());
+ assert.equal(stationChoice(x.row(),0).state,'complete');assert.equal(x.row().station_commutes.legacy_cache.length,20000);assert.deepEqual(x.row().station_commutes.google_verified,{});
 });
 test('a bare tram name resolves to its real tram identity, and an ambiguous bare station name prefers rail',async()=>{
  const origin={lat:51.37,lon:-.09};

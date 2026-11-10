@@ -51,18 +51,27 @@ export async function calculateManualStationRoutes(id,{sb,extension,progress=()=
  async function read(){const result=await sb.from('properties').select('*').eq('id',id).single();if(result.error||!result.data)throw result.error||Error('House not found');return result.data}
  const attempted=new Set(),failures=[];let savedCount=0;
  for(;;){
-  const p=await read(),context=stationContext(p),job=pendingStationChoices(p).find(entry=>!attempted.has(entry.request_id+json(context)));
+  const p=await read();let context=stationContext(p);
+  const job=pendingStationChoices(p).find(entry=>!attempted.has(entry.request_id+json(context)));
   if(!job)break;attempted.add(job.request_id+json(context));
   async function save(update){
    for(let attempt=0;attempt<3;attempt++){
     const fresh=await read(),current=fresh.station_commutes?.manual_routes?.[job.field];
     if(fresh.status==='deleted'||String(fresh[job.field]||'').trim()!==job.station_name||current?.request_id!==job.request_id||!sameStationContext(stationContext(fresh),context))throw superseded();
     const entry={...structuredClone(current),context},patch=update(entry,fresh);
-    const commutes={...(fresh.station_commutes||{}),manual_routes:{...(fresh.station_commutes?.manual_routes||{}),[job.field]:entry}};
-    let query=sb.from('properties').update({...patch,station_commutes:commutes}).eq('id',id).eq(job.field,fresh[job.field]);
-    for(const field of ['address','url','latitude','longitude','status','station_commutes','manual_overrides'])query=fresh[field]==null?query.is(field,null):query.eq(field,typeof fresh[field]==='object'?json(fresh[field]):fresh[field]);
-    const result=await query.select('*').maybeSingle();if(result.error)throw result.error;
-    if(result.data){try{await onSaved(result.data)}catch(error){console.warn('Saved station display unavailable',error)}return result.data}
+    const verified=Object.hasOwn(fresh.station_commutes||{},'google_verified')?fresh.station_commutes.google_verified:{};
+    const commutes={...(fresh.station_commutes||{}),google_verified:verified,manual_routes:{...(fresh.station_commutes?.manual_routes||{}),[job.field]:entry}};
+    const latitude=fresh.latitude??entry.origin?.lat,longitude=fresh.longitude??entry.origin?.lon;
+    if(latitude==null||longitude==null)throw Object.assign(Error('House map point is not available yet'),{code:'NO_ROUTE_POINT'});
+    const nextContext=stationContext({...fresh,latitude,longitude});entry.context=nextContext;
+    const payload={latitude,longitude,import_diagnostics:fresh.import_diagnostics||{},journey_estimates:fresh.journey_estimates||{},station_commutes:commutes,...patch};
+    // Use the existing POST RPC. Putting full station JSON in query filters can
+    // exceed URL limits once Google alternatives and several choices are saved.
+    const result=await sb.rpc('house_hunt_save_google_routes',{p_id:id,p_before:fresh,p_patch:payload});if(result.error)throw result.error;
+    if(result.data===true){
+     context=nextContext;attempted.add(job.request_id+json(context));const saved={...fresh,...payload};
+     try{await onSaved(saved)}catch(error){console.warn('Saved station display unavailable',error)}return saved;
+    }
    }
    throw Error('House was edited during calculation; Refresh will retry this station');
   }
@@ -102,7 +111,7 @@ export async function calculateManualStationRoutes(id,{sb,extension,progress=()=
   }catch(error){
    if(error?.code==='STATION_CHOICE_CHANGED')continue;
    const message=String(error?.message||error);
-   try{await save(entry=>{entry.state='pending';entry.error=message;return {}})}catch(changed){if(changed?.code==='STATION_CHOICE_CHANGED')continue;throw changed}
+   try{await save(entry=>{entry.state='pending';entry.error=message;return {}})}catch(changed){if(changed?.code==='STATION_CHOICE_CHANGED')continue;if(changed?.code!=='NO_ROUTE_POINT')throw changed}
    failures.push(job.station_name+': '+message);
    if(message.includes('GOOGLE_VERIFICATION_REQUIRED'))break;
   }
