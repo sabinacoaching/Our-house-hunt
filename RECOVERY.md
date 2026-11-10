@@ -1,6 +1,8 @@
 # Our House Hunt: Recovery and Safe-Change Procedure
 
-## Current project and routing architecture (2026-11-09, v55)
+## Current project and routing architecture (2026-11-10, v56)
+
+- v56 retains Importer 0.18.0 and the existing completed route generation. If an unfinished house crosses Monday midnight in Europe/London and Maps starts returning the following Tuesday, the controller automatically retries that house once on the new common date. It keeps station discovery, Google walking and all manual values, recalculating only dated components. An unrelated date mismatch still fails validation; no catalogue-wide migration is triggered. Regression tests cover winter and summer London midnight.
 
 - Repository: **`sabinacoaching/Our-house-hunt`**, branch `main`, project files at its root. Published application: **`https://sabinacoaching.github.io/Our-house-hunt/`**. Do not operate on the other repository or website. References below to the old shared repository describe historical checkpoints only.
 - v55 / Importer 0.18.0 updates the owner's station and itinerary criteria. Rank eligible rail and Tube stations by actual Google walking time, with rail winning a tie; trams fill a slot only when fewer than three rail/Tube stations are available. Read listing station candidates and advertised distances when the source supplies them; if its Local area section is only a static map, use TfL station identities as the explicit fallback. Advertised miles never become walking miles.

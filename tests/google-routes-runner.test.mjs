@@ -103,3 +103,51 @@ test('the previous automatic route generation is resumed once, while completed c
  assert.equal(needsGoogleRouteResume(p),true);
  p.import_diagnostics.google_routes_version='google-maps-ui-v2';assert.equal(needsGoogleRouteResume(p),false);
 });
+
+for(const clock of [
+ {season:'winter',before:'2026-11-09T23:59:50Z',after:'2026-11-10T00:00:01Z',oldDate:'2026-11-10',newDate:'2026-11-17'},
+ {season:'summer',before:'2027-08-09T22:59:50Z',after:'2027-08-09T23:00:01Z',oldDate:'2027-08-10',newDate:'2027-08-17'}
+])test('a '+clock.season+' London midnight rollover resumes one house on a single date and reuses walking',async()=>{
+ const RealDate=Date;let now=clock.before;
+ globalThis.Date=class extends RealDate{constructor(...args){super(...(args.length?args:[now]))}static now(){return RealDate.parse(now)}};
+ try{
+  const x=fixture({onRoute:route=>{if(route.kind==='dancelab')now=clock.after}}),options=x.options(),progress=[];
+  delete options.routingDate;
+  const extension=async(action,args)=>{
+   const result=await x.extension(action,args);
+   if(action!=='GOOGLE_ROUTE'||args.route.kind==='station_walk')return result;
+   const date=now===clock.before?clock.oldDate:clock.newDate;
+   if(result.unavailable)return {...result,unavailable:false,date,minutes:10,departure:date+'T07:20:00',arrival:date+'T07:30:00'};
+   return {...result,date,departure:result.departure.replace('2026-11-10',date),arrival:result.arrival.replace('2026-11-10',date)};
+  };
+  await calculateGoogleRoutes(id,{...options,extension,progress:message=>progress.push(message)});
+  const p=x.row(),work=p.import_diagnostics.google_routes_work;
+  assert.equal(p.import_diagnostics.route_pending,false);assert.equal(work.date,clock.newDate);
+  assert.deepEqual(work.errors,{});
+  for(const route of Object.values(work.google.journeys))assert.equal(route.date,clock.newDate);
+  assert.equal(work.google.stations[0].transit.date,clock.newDate);
+  assert.equal(x.calls.filter(kind=>kind==='station_walk').length,1);
+  assert.equal(x.metadataCalls(),1);
+  for(const kind of ['waterloo','dilly','dancelab','station_transit'])assert.equal(x.calls.filter(value=>value===kind).length,2);
+  assert.equal(p.comment_sabina,'keep');assert.equal(p.sort_order,2000);assert.equal(p.journey_estimates.dilly.minutes,65);
+  assert.equal(progress.filter(message=>message.includes('Timetable date changed')).length,1);
+  const before=x.calls.length;await calculateGoogleRoutes(id,{...options,extension});assert.equal(x.calls.length,before);
+ }finally{globalThis.Date=RealDate}
+});
+
+test('a wrong timetable date without a London calendar rollover stays pending without blind retries',async()=>{
+ const RealDate=Date;
+ globalThis.Date=class extends RealDate{constructor(...args){super(...(args.length?args:['2026-11-09T23:00:00Z']))}static now(){return RealDate.parse('2026-11-09T23:00:00Z')}};
+ try{
+  const x=fixture(),options=x.options();delete options.routingDate;
+  const extension=async(action,args)=>{
+   const result=await x.extension(action,args);
+   return action==='GOOGLE_ROUTE'&&args.route.kind!=='station_walk'&&!result.unavailable?{...result,date:'2026-11-17'}:result;
+  };
+  await assert.rejects(()=>calculateGoogleRoutes(id,{...options,extension}),/Google returned a different timetable date/);
+  assert.equal(x.row().import_diagnostics.route_pending,true);
+  assert.equal(x.row().import_diagnostics.google_routes_work.date,'2026-11-10');
+  assert.equal(x.calls.filter(kind=>kind==='waterloo').length,1);
+  assert.equal(x.row().journey_estimates.waterloo,undefined);
+ }finally{globalThis.Date=RealDate}
+});
