@@ -36,3 +36,11 @@ test('a missing London daylight-saving clock time has a readable validation erro
  const result=parse({day:'28',month:'3',hours:'01',minutes:'30'});
  assert.match(result.error,/does not exist in London/);assert.equal(result.value,undefined);
 });
+
+test('a clicked calendar date keeps its explicit year, including earlier dates',()=>{
+ assert.equal(parse({year:2026,day:'12',month:'10',hours:'12',minutes:'00'}).value,'2026-10-12T11:00:00.000Z');
+});
+test('calendar navigation can select the same month/day in a different year',()=>{
+ const original='2026-12-12T12:02:37Z';
+ assert.equal(parse({...fields,year:2027},{original}).value,'2027-12-12T12:02:00.000Z');
+});

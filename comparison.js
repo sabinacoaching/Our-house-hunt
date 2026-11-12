@@ -1,6 +1,6 @@
 import {setupStationAccess,stationWalkingMiles} from './station-commutes.js?v=26';
 import {stationChoice} from './station-choice-state.js?v=1';
-import {createViewingDateFields,formatViewingDate} from './viewing-date.js?v=1';
+import {createViewingDateFields,formatViewingDate} from './viewing-date.js?v=2';
 export function manualJourney(previous,minutes,updatedAt){
  const old=previous||{};
  const {arrival,departure,arrival_gap_minutes,date,calculated_at,audit_version,calculation_version,...rest}=old;
@@ -133,7 +133,7 @@ viewingCancel.onclick=()=>viewingDialog.close();
 viewingClear.onclick=()=>{viewingPicker.clear();viewingForm.requestSubmit()};
 viewingForm.onsubmit=async event=>{
  event.preventDefault();if(!viewingEdit)return;
- const {p,button}=viewingEdit,parsed=viewingPicker.read();if(parsed.error)return;const value=parsed.value;
+ const {p,button}=viewingEdit,parsed=viewingPicker.read({requireDate:true});if(parsed.error)return;const value=parsed.value;
  viewingSave.disabled=viewingClear.disabled=true;viewingError.textContent='';
  try{
   const result=await history.save(p,{viewing_at:value,manual_overrides:{...(p.manual_overrides||{}),viewing_at:true}});

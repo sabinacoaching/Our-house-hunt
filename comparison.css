@@ -295,3 +295,19 @@ main:has(#mainApp:not([hidden]) .hh-table-shell:not([hidden])){margin-bottom:0}
 .hh-date-fields .hh-date-error{grid-column:1/-1;margin:0;font-size:13px;color:#b73b38}
 .hh-date-fields .hh-date-error:empty{display:none}
 .hh-detail-viewing>span{display:block;margin-bottom:5px;font-size:13px;font-weight:650}
+
+/* v61: clickable month calendar and one HH:MM field. */
+.hh-viewing-picker{display:flex;flex-direction:column;gap:12px}
+.hh-calendar-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.hh-calendar-head strong{font-size:15px}
+.hh-calendar-head button{padding:4px 10px;font-size:19px;line-height:1}
+.hh-calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;text-align:center}
+.hh-calendar-week{font-size:11px;color:#718177;margin-bottom:4px}
+.hh-calendar-day{padding:6px 0!important;min-height:32px;border:1px solid transparent;border-radius:6px;background:#fff;color:#253433;font-size:13px!important;font-weight:500}
+.hh-calendar-day:hover{background:#eff3ef}
+.hh-calendar-day[aria-pressed=true]{background:#315e50;border-color:#315e50;color:#fff}
+.hh-calendar-time{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:650}
+.hh-viewing-picker .hh-calendar-time input{width:100%;min-width:0;font-size:16px;padding:9px 10px;font-variant-numeric:tabular-nums}
+.hh-viewing-picker .hh-date-error{margin:0;font-size:13px;color:#b73b38}
+.hh-viewing-picker .hh-date-error:empty{display:none}
+.hh-calendar-clear{align-self:start;font-size:12px;padding:5px 8px}

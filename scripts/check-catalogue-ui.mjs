@@ -17,7 +17,7 @@ const fixtures=[
  ['archive','Archive Road','Oakhill','archived']
 ].map(([id,address,agency_name,status],i)=>{
  const latitude=51.3694953+i*.001,longitude=-.0883864,url='https://example.test/'+id;
- return {id,address,agency_name,status,source:'Zoopla',url,price:500000,bedrooms:2,bathrooms:1,latitude,longitude,sort_order:i,created_at:'2026-11-01T12:00:00Z',viewing_at:i===0?'2026-11-15T14:05:37Z':null,comment_david:'Keep decision '+id,comment_sabina:'Keep comment '+id,manual_overrides:{},images:[],floorplans:[],journey_estimates:{},station_name:'Alpha Station',station_2_name:'Beta Station',station_3_name:'Gamma Station',station_distance_miles:.5,station_2_distance_miles:.6,station_3_distance_miles:.7,station_commutes:{results:[{name:'Alpha Station',walking_minutes:10,walking_miles:.5},{name:'Beta Station',walking_minutes:15,walking_miles:.6},{name:'Gamma Station',walking_minutes:20,walking_miles:.7}],google_routes:{origin:address,stations:['Alpha Station','Beta Station','Gamma Station'],results:[{walking_minutes:10,walking_miles:.5},{walking_minutes:15,walking_miles:.6},{walking_minutes:20,walking_miles:.7}]}},import_diagnostics:{route_pending:false,source_location:{source:'listing-street-view',listing_url:url,address_input:address,latitude,longitude}}};
+ return {id,address,agency_name,status,source:'Zoopla',url,price:500000,bedrooms:2,bathrooms:1,latitude,longitude,sort_order:i,created_at:'2026-11-01T12:00:00Z',viewing_at:['2026-11-15T14:05:37Z','2026-12-01T12:11:22Z','2027-01-12T09:00:17Z','2026-06-01T13:05:19Z','2026-11-14T10:30:13Z','2026-10-10T16:15:11Z'][i],comment_david:'Keep decision '+id,comment_sabina:'Keep comment '+id,manual_overrides:{},images:[],floorplans:[],journey_estimates:{},station_name:'Alpha Station',station_2_name:'Beta Station',station_3_name:'Gamma Station',station_distance_miles:.5,station_2_distance_miles:.6,station_3_distance_miles:.7,station_commutes:{results:[{name:'Alpha Station',walking_minutes:10,walking_miles:.5},{name:'Beta Station',walking_minutes:15,walking_miles:.6},{name:'Gamma Station',walking_minutes:20,walking_miles:.7}],google_routes:{origin:address,stations:['Alpha Station','Beta Station','Gamma Station'],results:[{walking_minutes:10,walking_miles:.5},{walking_minutes:15,walking_miles:.6},{walking_minutes:20,walking_miles:.7}]}},import_diagnostics:{route_pending:false,source_location:{source:'listing-street-view',listing_url:url,address_input:address,latitude,longitude}}};
 });
 const transport=`export function createClient(){
  const rows=JSON.parse(localStorage.getItem('catalogue-fixture-rows')||'null')||${JSON.stringify(fixtures)};window.__fixtureRows=rows;window.__fixtureWrites=[];
@@ -81,14 +81,20 @@ await page.route('**/*',route=>{
  return route.abort();
 });
 const addresses=()=>page.locator('.hh-table tbody .hh-address').allTextContents();
-const enterViewing=async(scope,{day,month,hours,minutes})=>{
- for(const [title,value] of [['Day',day],['Hours',hours],['Minutes',minutes]]){const input=scope.getByLabel(title,{exact:true});await input.focus();await input.pressSequentially(String(value))}
- await scope.getByLabel('Month',{exact:true}).selectOption(String(month));
+const enterViewing=async(scope,{day,month,time,hours,minutes})=>{
+ const names=['January','February','March','April','May','June','July','August','September','October','November','December'],target=names[Number(month)-1];
+ for(let step=0;step<12&&(await scope.locator('.hh-calendar-head strong').innerText())!==target;step++)await scope.getByRole('button',{name:'Next month',exact:true}).click();
+ assert.equal(await scope.locator('.hh-calendar-head strong').innerText(),target);
+ await scope.getByRole('button',{name:day+' '+target,exact:true}).click();
+ const input=scope.getByLabel('Time',{exact:true});
+ assert.equal(await input.evaluate(el=>el===document.activeElement),true,'Picking a calendar day focuses the single time field');
+ await input.pressSequentially(time??String(hours).padStart(2,'0')+':'+String(minutes).padStart(2,'0'));
 };
 const snapshot=async name=>{if(process.env.HH_UI_SNAPSHOT_LOG)console.log('CATALOGUE_SNAPSHOT '+name+' '+(await page.screenshot({fullPage:false})).toString('base64'))};
 try{
  await page.clock.setFixedTime(new Date('2026-11-10T10:00:00Z'));
  await page.goto(origin);await page.locator('.hh-table tbody tr').first().waitFor();
+ const savedDates=await page.evaluate(()=>Object.fromEntries(window.__fixtureRows.map(p=>[p.id,p.viewing_at])));
  const views=page.locator('#viewControls'),appMenu=page.locator('#appMenu'),dateDialog=page.locator('.hh-viewing-dialog');
  assert.equal(await page.locator('.filters #exportExcel,.filters #exportPdf').count(),0);
  assert.equal(await page.locator('.hh-views').count(),1);
@@ -115,36 +121,61 @@ try{
  await views.getByRole('button',{name:'Table',exact:true}).click();
  const dateButton=()=>page.getByRole('button',{name:'Viewing date Alpha Road',exact:true});
  assert.equal(await dateButton().innerText(),'15 Nov\n14:05');
+ for(const button of await page.locator('.hh-table .hh-viewing-date').all()){
+  await button.click();
+  assert.equal(await dateDialog.locator('.hh-calendar-day[aria-pressed=true]').count(),1);
+  assert.ok(await dateDialog.getByLabel('Time',{exact:true}).inputValue());
+  assert.ok(!/\d/.test(await dateDialog.locator('.hh-calendar-head strong').innerText()),'The calendar does not require a year field');
+  await dateDialog.getByRole('button',{name:'Next month',exact:true}).click();
+  await dateDialog.getByRole('button',{name:'Cancel',exact:true}).click();
+ }
+ await page.locator('#stageFilter').selectOption('archived');
+ await page.getByRole('button',{name:'Viewing date Archive Road',exact:true}).click();
+ assert.equal(await dateDialog.getByLabel('Time',{exact:true}).inputValue(),'17:15');
+ await dateDialog.getByRole('button',{name:'Cancel',exact:true}).click();await page.locator('#stageFilter').selectOption('all');
+ assert.deepEqual(await page.evaluate(()=>Object.fromEntries(window.__fixtureRows.map(p=>[p.id,p.viewing_at]))),savedDates);
+ assert.equal(await page.evaluate(()=>window.__fixtureWrites.some(write=>Object.hasOwn(write.patch,'viewing_at'))),false,'Opening, navigating and cancelling every calendar must not write dates');
+ const betaDetails=page.locator('.hh-table tbody tr').filter({hasText:'Beta Road'});
+ await betaDetails.getByRole('button',{name:'Details',exact:true}).click();await page.locator('#editPrice').fill('501000');
+ await page.getByRole('button',{name:'Save changes',exact:true}).click();await page.waitForFunction(()=>window.__fixtureRows.find(p=>p.id==='beta').price===501000);
+ assert.deepEqual(await page.evaluate(()=>Object.fromEntries(window.__fixtureRows.map(p=>[p.id,p.viewing_at]))),savedDates);
+ assert.equal(await page.evaluate(()=>window.__fixtureWrites.filter(write=>write.patch.price===501000).some(write=>Object.hasOwn(write.patch,'viewing_at'))),false,'Unrelated Details edits omit the viewing date from the update');
+ assert.equal(await page.locator('input[type=datetime-local],input[type=date],input[type=time]').count(),0);
+ console.log('VIEWING_DATE_PRESERVATION_PASS six exact timestamps retained through load, every calendar open/cancel, month navigation, archive and unrelated Details save');
  await dateButton().click();
- assert.equal(await dateDialog.getByLabel('Day',{exact:true}).inputValue(),'15');
- assert.equal(await dateDialog.getByLabel('Month',{exact:true}).inputValue(),'11');
- assert.equal(await dateDialog.getByLabel('Hours',{exact:true}).inputValue(),'14');
- assert.equal(await dateDialog.getByLabel('Minutes',{exact:true}).inputValue(),'05');
- assert.deepEqual(await dateDialog.locator('label').evaluateAll(labels=>labels.map(label=>label.childNodes[0].textContent)),['Day','Month','Hours','Minutes']);
- assert.equal(await page.locator('input[type=datetime-local]').count(),0);
- await dateDialog.getByRole('button',{name:'Cancel',exact:true}).click();
- assert.equal(await page.evaluate(()=>window.__fixtureRows[0].viewing_at),'2026-11-15T14:05:37Z','Cancelling retains the exact saved timestamp');
- await dateButton().click();
- await enterViewing(dateDialog,{day:12,month:12,hours:12,minutes:'02'});
- await snapshot('viewing-editor-december');
+ assert.equal(await dateDialog.getByRole('button',{name:'15 November',exact:true}).getAttribute('aria-pressed'),'true');
+ assert.equal(await dateDialog.getByLabel('Time',{exact:true}).inputValue(),'14:05');
+ await enterViewing(dateDialog,{day:12,month:12,time:'12:11'});await snapshot('viewing-calendar-december');
+ await dateDialog.getByLabel('Time',{exact:true}).press('Enter');
+ await page.waitForFunction(()=>window.__fixtureRows.find(p=>p.id==='alpha').viewing_at==='2026-12-12T12:11:00.000Z');
+ await page.locator('#refresh').click();assert.equal(await dateButton().innerText(),'12 Dec\n12:11');
+ await dateButton().click();const clock=dateDialog.getByLabel('Time',{exact:true});await clock.focus();await clock.pressSequentially('12:00');
  await dateDialog.getByRole('button',{name:'Save date',exact:true}).click();
- await page.waitForFunction(()=>window.__fixtureRows[0].viewing_at==='2026-12-12T12:02:00.000Z');
- await page.locator('#refresh').click();assert.equal(await dateButton().innerText(),'12 Dec\n12:02');
- await page.reload();await page.locator('.hh-table tbody tr').first().waitFor();
- assert.equal(await dateButton().innerText(),'12 Dec\n12:02');
- await dateButton().click();
- assert.equal(await dateDialog.getByLabel('Minutes',{exact:true}).inputValue(),'02');
- await enterViewing(dateDialog,{day:31,month:4,hours:12,minutes:'02'});
- await dateDialog.getByRole('button',{name:'Save date',exact:true}).click();
- assert.match(await dateDialog.locator('.hh-date-error').innerText(),/April has 30 days/);
- assert.equal(await page.evaluate(()=>window.__fixtureRows[0].viewing_at),'2026-12-12T12:02:00.000Z','An impossible date must not overwrite the saved viewing');
- await dateDialog.getByLabel('Day',{exact:true}).fill('');
- await dateDialog.getByRole('button',{name:'Save date',exact:true}).click();
- assert.match(await dateDialog.locator('.hh-date-error').innerText(),/Enter day, month, hours and minutes/);
+ await page.waitForFunction(()=>window.__fixtureRows.find(p=>p.id==='alpha').viewing_at==='2026-12-12T12:00:00.000Z');
+ await views.getByRole('button',{name:'Undo',exact:true}).click();
+ await page.waitForFunction(()=>window.__fixtureRows.find(p=>p.id==='alpha').viewing_at==='2026-12-12T12:11:00.000Z');
+ await dateButton().click();await dateDialog.getByLabel('Time',{exact:true}).pressSequentially('12:00');await dateDialog.getByLabel('Time',{exact:true}).press('Enter');
+ await page.waitForFunction(()=>window.__fixtureRows.find(p=>p.id==='alpha').viewing_at==='2026-12-12T12:00:00.000Z');
+ await page.reload();await page.locator('.hh-table tbody tr').first().waitFor();assert.equal(await dateButton().innerText(),'12 Dec\n12:00');
+ await dateButton().click();assert.equal(await dateDialog.getByRole('button',{name:'12 December',exact:true}).getAttribute('aria-pressed'),'true');
+ await dateDialog.getByLabel('Time',{exact:true}).fill('');await dateDialog.getByRole('button',{name:'Save date',exact:true}).click();
+ assert.match(await dateDialog.locator('.hh-date-error').innerText(),/HH:MM/);
+ assert.equal(await page.evaluate(()=>window.__fixtureRows.find(p=>p.id==='alpha').viewing_at),'2026-12-12T12:00:00.000Z','Blank time cannot erase a saved date');
+ await dateDialog.getByLabel('Time',{exact:true}).fill('25:00');await dateDialog.getByRole('button',{name:'Save date',exact:true}).click();
+ assert.match(await dateDialog.locator('.hh-date-error').innerText(),/Hours must/);
  await dateDialog.getByRole('button',{name:'Cancel',exact:true}).click();
  await dateButton().click();await dateDialog.getByRole('button',{name:'Clear date',exact:true}).click();
- await page.waitForFunction(()=>window.__fixtureRows[0].viewing_at===null);assert.equal(await dateButton().innerText(),'Set date');
- console.log('VIEWING_DATE_UI_PASS typed 12 December 12:02, Save/Refresh/reopen, Russian browser locale, no year/seconds/native datetime, impossible/partial validation, clear/cancel');
+ await page.waitForFunction(()=>window.__fixtureRows.find(p=>p.id==='alpha').viewing_at===null);
+ assert.deepEqual(await page.evaluate(()=>Object.fromEntries(window.__fixtureRows.filter(p=>p.id!=='alpha').map(p=>[p.id,p.viewing_at]))),Object.fromEntries(Object.entries(savedDates).filter(([id])=>id!=='alpha')),'Clear date affects only its own house');
+ await dateButton().click();await dateDialog.getByRole('button',{name:'Save date',exact:true}).click();assert.match(await dateDialog.locator('.hh-date-error').innerText(),/Choose a date/);
+ await enterViewing(dateDialog,{day:12,month:12,time:'12:00'});await dateDialog.getByRole('button',{name:'Save date',exact:true}).click();
+ await page.waitForFunction(()=>window.__fixtureRows.find(p=>p.id==='alpha').viewing_at==='2026-12-12T12:00:00.000Z');
+ await page.getByRole('button',{name:'Viewing date Beta Road',exact:true}).click();
+ await dateDialog.getByRole('button',{name:'Next month',exact:true}).click();
+ assert.equal(await dateDialog.locator('.hh-calendar-head strong').innerText(),'January');
+ await dateDialog.getByRole('button',{name:'12 January',exact:true}).click();await dateDialog.getByLabel('Time',{exact:true}).pressSequentially('12:00');
+ await dateDialog.getByRole('button',{name:'Save date',exact:true}).click();await page.waitForFunction(()=>window.__fixtureRows.find(p=>p.id==='beta').viewing_at==='2027-01-12T12:00:00.000Z');
+ console.log('VIEWING_DATE_UI_PASS clickable calendar, one-field keyboard 12:11/12:00, Enter/save, Refresh/reload/reopen, Undo, explicit-only clearing, blank/invalid time preservation, next-year navigation without year/seconds inputs');
  await page.evaluate(()=>{window.scrollTo(0,0);const shell=document.querySelector('.hh-table-shell');shell.scrollTop=0;shell.scrollLeft=0});
  await snapshot('desktop-top');
  const shell=page.locator('.hh-table-shell'),rect=await shell.boundingBox();

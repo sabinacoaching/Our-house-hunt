@@ -21,7 +21,7 @@ export function createEditHistory({sb,onRestored,prepareChanges=(_p,changes)=>ch
   if(!p?.id)return {error:new Error('Property not selected')};
   const requestedKeys=Object.keys(changes||{}).filter(k=>!eq(p[k],changes[k]));
   const original=changes;changes=prepareChanges(p,changes);let source=p,atomic=false;
-  if(changes!==original){
+  if(changes!==original||requestedKeys.includes('viewing_at')){
    for(let attempt=0;attempt<3;attempt++){
     const found=await sb.from('properties').select('*').eq('id',p.id).single();if(found.error||!found.data)return {error:found.error||new Error('House not found')};
     const fresh=found.data,requested={};
@@ -38,7 +38,7 @@ export function createEditHistory({sb,onRestored,prepareChanges=(_p,changes)=>ch
     if(saved.error)return saved;
     if(saved.data===true){source=fresh;changes=patch;atomic=true;break}
    }
-   if(!atomic)return {error:new Error('The house is being edited. Refresh to retry your station change.')};
+   if(!atomic)return {error:new Error('The house is being edited. Refresh to retry your edit.')};
   }
   const before={},after={};
   for(const [k,v] of Object.entries(changes||{})){
@@ -76,9 +76,10 @@ export function createEditHistory({sb,onRestored,prepareChanges=(_p,changes)=>ch
   for(const [k,v] of Object.entries(last.after))if(!eq(r.data?.[k],v))
    return {error:new Error('This value was changed again. Undo stopped to protect the newer edit.')};
   const patch=prepareChanges(r.data,last.before);
-  const result=patch===last.before?await sb.from('properties').update(patch).eq('id',last.id):await sb.rpc('house_hunt_save_manual_edit',{p_id:last.id,p_before:r.data,p_patch:patch});
+  const atomic=patch!==last.before||Object.hasOwn(patch,'viewing_at');
+  const result=atomic?await sb.rpc('house_hunt_save_manual_edit',{p_id:last.id,p_before:r.data,p_patch:patch}):await sb.from('properties').update(patch).eq('id',last.id);
   if(result.error)return result;
-  if(patch!==last.before&&result.data!==true)return {error:new Error('The house changed during Undo. Newer data was retained.')};
+  if(atomic&&result.data!==true)return {error:new Error('The house changed during Undo. Newer data was retained.')};
   stack.pop();persist();await onRestored?.(last);return {error:null,entry:last};
  }
  return {save,undo,recordOrder,subscribe(fn){watchers.add(fn);fn(stack.length);return()=>watchers.delete(fn)},canUndo:()=>stack.length>0};
