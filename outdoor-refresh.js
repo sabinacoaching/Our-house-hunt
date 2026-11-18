@@ -1,6 +1,5 @@
 import {listingOutdoorDetails,combineOutdoorDescription,mainGardenArea,retainOutdoorMeasurements} from './outdoor-details.js?v=4';
 import {readPlanImage,parsePlanText,floorplanChanges} from './floorplan-ocr.js?v=20';
-import {importChanges} from './import-utils.js';
 
 export const outdoorVersion='measurements-v4';
 export const planFingerprint=p=>(p.floorplans||[]).map(x=>x.sha256||x.path||x.url).join('|');
@@ -33,12 +32,16 @@ export function outdoorChanges(p,{listingText,listingData,measurements=[],errors
  // Reconcile house area in this same save, with the published facts-card area
  // first and labelled plan total as fallback. An absent result never clears data.
  const card=listingData?.floor_area_sqm;
+ const cardRead=!!listingData&&Object.hasOwn(listingData,'floor_area_sqm');
  const advertised=card!=null&&Number.isFinite(Number(card))&&Number(card)>0?Number(card):null;
- const sourceValues={...(prior.source_values||{}),...(advertised!=null?{floor_area_sqm:advertised}:{})};
- if(advertised!=null)Object.assign(changes,importChanges(p,{floor_area_sqm:advertised}));
- const current={...p,...changes,import_diagnostics:{...prior,source_values:sourceValues}};
+ const sourceValues={...(prior.source_values||{}),...(cardRead?{floor_area_sqm:advertised}:{})};
  const total=measurements.find(x=>x.floor_area_sqm!=null)?.floor_area_sqm;
  const floors=measurements.find(x=>x.floors!=null)?.floors;
+ const areaToSave=advertised??total;
+ // This is an explicit full recalculation. Legacy imported values may have no
+ // source snapshot; a fresh verified listing still takes precedence over them.
+ if(cardRead&&areaToSave!=null&&!p.manual_overrides?.floor_area_sqm&&!same(p.floor_area_sqm,areaToSave))changes.floor_area_sqm=areaToSave;
+ const current={...p,...changes,import_diagnostics:{...prior,source_values:sourceValues}};
  const plan=measurements.length?floorplanChanges(current,{outdoor:planItems,...(total!=null?{floor_area_sqm:total}:{}),...(floors!=null?{floors}:{})},{fingerprint:p.floorplans?.[0]?.path||p.floorplans?.[0]?.url||'',listingText:sourceText,now}):null;
  for(const key of ['floor_area_sqm','floors'])if(plan&&Object.hasOwn(plan,key))changes[key]=plan[key];
  changes.import_diagnostics={...prior,...(hasListingText?{listing_text:listingText}:{}),source_values:sourceValues,...(plan?{floorplan_measurements:plan.import_diagnostics.floorplan_measurements}:{}),outdoor_details:{version:outdoorVersion,listing_url:p.url,plan_fingerprint:planFingerprint(p),status:errors.length?'partial':'complete',checked_at:now,values,measurements:planItems,listing_measurements:source.measurements,dimensions_found:area!=null,errors}};

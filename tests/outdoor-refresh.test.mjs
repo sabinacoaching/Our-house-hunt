@@ -92,3 +92,10 @@ test('a weaker read retains front/rear gardens even when their sides were never 
  assert.equal(again.garden_description,undefined);
  assert.deepEqual(again.import_diagnostics.outdoor_details.measurements,first.import_diagnostics.outdoor_details.measurements);
 });
+test('full recalculation corrects legacy imported house areas without provenance but respects a manual lock',()=>{
+ const p={...property(),floor_area_sqm:96.8};
+ assert.equal(outdoorChanges(p,{listingData:{floor_area_sqm:115.48}}).floor_area_sqm,115.48);
+ assert.equal(outdoorChanges(p,{listingData:{floor_area_sqm:null},measurements:[{floor_area_sqm:117.1}]}).floor_area_sqm,117.1);
+ p.manual_overrides.floor_area_sqm=true;
+ assert.equal(outdoorChanges(p,{listingData:{floor_area_sqm:115.48}}).floor_area_sqm,undefined);
+});
