@@ -1,3 +1,11 @@
+## v62 floor-plan and outdoor information (2026-11-18)
+
+- Owner clarification: advertised/card floor area has priority. Central Road's 732 sq ft / 68.01 m² must stay in the main area field. Its plan says 86.0 m² / 925 sq ft; use the plan's Gross Internal Area only when the listing has no area. A newly available advertised area replaces a tracked automatic plan fallback, never a manual area. Preserve viewing dates, decisions, stations and routes.
+- Read Garden / imperial dimensions / metric dimensions across adjacent lines. Stop at any intervening room/section label. Rear/generic garden area is the product of its labelled sides; front gardens and driveways are separate notes and must not replace the rear garden area. Retain the sides and the measurement source in the text block.
+- Importer 0.19.0 returns the complete description/features of the verified original listing. Retain all garden/parking passages, including orientation, front gardens, driveway capacity, off-street parking, other parking and explicit negatives. Never cut the first matching fragment to 230 characters or infer absent parking.
+- Test the actual MV3 importer against the Central Road listing and real browser Tesseract against its original plan image. Deterministic tests cover separate front/rear areas, unrelated room measurements, wrong area sources, manual values and concurrent edits. OCR saves compare the freshly read whole row through the existing SECURITY INVOKER RPC.
+- No bulk reinterpretation on catalogue opening. Update listing data explicitly forces rereading a saved plan. Distribute the exact tested five-file Importer ZIP and verify it after publishing.
+
 ## v61 calendar and preservation (2026-11-10)
 
 - Open an existing date: its day is selected in the calendar and its exact HH:MM is prefilled. Pick another day by click/touch, then type 12:11 or 12:00 in one field without moving between hour/minute cells. No year/seconds controls.

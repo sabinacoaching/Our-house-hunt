@@ -25,7 +25,9 @@ export function importChanges(property,incoming){
  for(const [field,value] of Object.entries(incoming)){
   if(empty(value)||overrides[field])continue;
   const current=property[field],hasPrior=Object.hasOwn(previous,field);
-  if(empty(current)||(hasPrior&&String(current)===String(previous[field])))if(String(current??'')!==String(value))changes[field]=value;
+  const planValue=property.import_diagnostics?.floorplan_measurements?.values?.[field];
+  const replacesPlanArea=field==='floor_area_sqm'&&current!=null&&planValue!=null&&Number(current)===Number(planValue);
+  if(empty(current)||(hasPrior&&String(current)===String(previous[field]))||replacesPlanArea)if(String(current??'')!==String(value))changes[field]=value;
  }
  return changes;
 }

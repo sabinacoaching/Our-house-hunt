@@ -37,7 +37,7 @@ dialog.hh-photo-viewer[open]{display:flex;flex-direction:column}
 <link rel="stylesheet" href="./comparison.css?v=29">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css'">
 </head><body>
-<header class="top"><div class="brand">⌂ &nbsp;<span>Our House Hunt</span></div><div id="viewControls" class="hh-view-controls" hidden></div><div class="topright"><strong id="who"></strong><span id="hhVersion" title="Current House Hunt site version" style="font-size:11px;color:#72817f">v61</span><button id="refresh" class="secondary" hidden>Refresh</button><details id="appMenu" class="hh-app-menu" hidden><summary>Menu</summary><div class="hh-app-menu-items"><button id="exportExcel" class="secondary" type="button">Export Excel</button><button id="exportPdf" class="secondary" type="button">Export PDF</button><hr><button id="changePassword" class="secondary" hidden>Change password</button><button id="logout" class="secondary" hidden>Sign out</button></div></details></div></header>
+<header class="top"><div class="brand">⌂ &nbsp;<span>Our House Hunt</span></div><div id="viewControls" class="hh-view-controls" hidden></div><div class="topright"><strong id="who"></strong><span id="hhVersion" title="Current House Hunt site version" style="font-size:11px;color:#72817f">v62</span><button id="refresh" class="secondary" hidden>Refresh</button><details id="appMenu" class="hh-app-menu" hidden><summary>Menu</summary><div class="hh-app-menu-items"><button id="exportExcel" class="secondary" type="button">Export Excel</button><button id="exportPdf" class="secondary" type="button">Export PDF</button><hr><button id="changePassword" class="secondary" hidden>Change password</button><button id="logout" class="secondary" hidden>Sign out</button></div></details></div></header>
 <main>
 <section id="login" class="panel login" hidden>
 <h1>Welcome home</h1><p>Your shared shortlist, notes and viewings.</p>
@@ -83,17 +83,18 @@ dialog.hh-photo-viewer[open]{display:flex;flex-direction:column}
 <script type="module">
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.49.8';
 import {createViewingDateFields} from './viewing-date.js?v=2';
-import {setupComparison,stationOptions,stationDistance,matchesStation,viewingStatuses,viewingStatusLabels,viewingStatusKey,matchesViewingStatus,statusEditorOptions,compareAgencies} from './comparison.js?v=72';
+import {setupComparison,stationOptions,stationDistance,matchesStation,viewingStatuses,viewingStatusLabels,viewingStatusKey,matchesViewingStatus,statusEditorOptions,compareAgencies} from './comparison.js?v=73';
 import {calculateGoogleRoutes,needsGoogleRouteResume} from './google-routes-runner.js?v=9';
 import {prepareStationChanges,changedStationNames,hasPendingStationChoices} from './station-choice-state.js?v=1';
 import {calculateManualStationRoutes} from './manual-station-routes.js?v=1';
 import {buildLocationUpdate} from './location-update.js?v=3';
 import {setupExports} from './export-tools.js?v=3';
 import {createUniquePhotoStore,photoDigest} from './photo-dedup.js?v=4';
-import {canonicalListing,importChanges,validateGeocode,validStreetViewHint,sameStreet,streetViewListingUrl} from './import-utils.js?v=4';
+import {canonicalListing,importChanges,validateGeocode,validStreetViewHint,sameStreet,streetViewListingUrl} from './import-utils.js?v=5';
 import {reconcileOne,mediaRevision} from './reconcile-media.js?v=1';
 import {createEditHistory} from './edit-history.js?v=4';
-import {analyzeFloorplan,inspectFloorplanImage} from './floorplan-ocr.js?v=16';
+import {analyzeFloorplan,inspectFloorplanImage} from './floorplan-ocr.js?v=17';
+import {normalizeListingOutdoors} from './outdoor-details.js?v=1';
 const sb=createClient('https://ficnuovumurmhzdujjvj.supabase.co','sb_publishable_yrArzwZ2GizO5ATuiAkymg_LdpVZKC9');
 const $=id=>document.getElementById(id);
 const detailViewingDate=createViewingDateFields($('editViewing'),{clearButton:true});
@@ -263,7 +264,7 @@ async function importHouse(raw){
   return;
  }
  report('Reading listing and photographs…');
- const data=await extension('IMPORT_URL',{url:streetViewListingUrl(url)},70000);
+ const data=normalizeListingOutdoors(await extension('IMPORT_URL',{url:streetViewListingUrl(url)},70000));
  if(!data?.images?.length)throw Error('No photographs found. House not added.');
  if(!String(data.address||'').trim())throw Error('The original listing address could not be read. House not added; retry the same listing when it has loaded.');
  data.agency_website=await lookupAgencyWebsite(data);
@@ -276,6 +277,7 @@ async function importHouse(raw){
  const floorplans=await archive(floorplanCandidates,id,'source-plan',Infinity,planChecks,Number(String(data.extension_version||'0').split('.')[1])>=9);
  const p={id,url,source:data.source,title:data.title||'',address:data.address||'',agency_name:data.agency_name||null,agency_email:data.agency_email||null,agency_website:data.agency_website||null,price:data.price??null,bedrooms:data.bedrooms??null,bathrooms:listingBathrooms(data),wc_count:data.wc_count??null,floors:listingFloors(data),floor_area_sqm:data.floor_area_sqm??null,garden_area_sqm:data.garden_area_sqm??null,garden_description:data.garden_description||'',station_name:'',station_distance_miles:null,station_2_name:'',station_2_distance_miles:null,latitude:null,longitude:null,property_type:data.property_type||null,tenure:data.tenure||null,images,floorplans,import_diagnostics:{source:'original-listing',nearby_stations:data.nearby_stations||[],extension_version:data.extension_version||'unknown',status:data.floorplan_status||'unknown',candidates:floorplanCandidates.length,archived:floorplans.length,checks:planChecks,attempted_at:new Date().toISOString(),media_source_revision:mediaRevision,media_source_result:'completed',source_values:{address:data.address,agency_name:data.agency_name||null,agency_email:data.agency_email||null,agency_website:data.agency_website||null,price:data.price??null,bedrooms:data.bedrooms??null,bathrooms:listingBathrooms(data),wc_count:data.wc_count??null,floors:listingFloors(data),floor_area_sqm:data.floor_area_sqm??null,garden_area_sqm:data.garden_area_sqm??null,garden_description:data.garden_description||'',property_type:data.property_type||null,tenure:data.tenure||null}},created_by:user.id,status:''};
  const hint=data.location_hint;
+ if(data.listing_text)p.import_diagnostics.listing_text=data.listing_text;
  if(validStreetViewHint(hint,p.address)){
   if(sameStreet(hint.address,p.address)&&/^\s*\d+[a-z]?\s+/i.test(hint.address||'')&&!/^\s*\d+[a-z]?\s+/i.test(p.address))p.address=hint.address;
   p.latitude=Number(hint.latitude);p.longitude=Number(hint.longitude);
@@ -401,7 +403,7 @@ async function finishNewHouseImport(id){
 }
 async function enrichProperty(p){
  let data;
- try{data=await extension('IMPORT_URL',{url:p.url},70000)}
+ try{data=normalizeListingOutdoors(await extension('IMPORT_URL',{url:p.url},70000))}
  catch(e){
    // Do not replace source snapshots or reconciliation state when a read fails.
    console.warn('Original listing could not be read',e);
@@ -425,7 +427,7 @@ async function enrichProperty(p){
  for(const [key,value] of Object.entries(sourceValues)){
   if(value!=null&&value!==''&&!p.manual_overrides?.[key]&&(Object.hasOwn(details,key)||String(p[key]??'')===String(value)))sourceSnapshot[key]=value;
  }
- details.import_diagnostics={...p.import_diagnostics,source:'original-listing',version:data.extension_version||'unknown',status:p._floorplan_import.status,tab_found:p._floorplan_import.tabFound,tab_clicked:p._floorplan_import.tabClicked,candidates:p._floorplan_import.found,archived:p._floorplan_import.archived,error:p._floorplan_import.error,checks:p._floorplan_import.checks||[],attempted_at:new Date().toISOString(),source_values:sourceSnapshot};
+ details.import_diagnostics={...p.import_diagnostics,...(data.listing_text?{listing_text:data.listing_text}:{}),source:'original-listing',version:data.extension_version||'unknown',status:p._floorplan_import.status,tab_found:p._floorplan_import.tabFound,tab_clicked:p._floorplan_import.tabClicked,candidates:p._floorplan_import.found,archived:p._floorplan_import.archived,error:p._floorplan_import.error,checks:p._floorplan_import.checks||[],attempted_at:new Date().toISOString(),source_values:sourceSnapshot};
  // Compare the fields and manual-override snapshot read above in the same update.
  // A concurrent edit causes zero rows to match rather than being overwritten.
  let request=sb.from('properties').update(details).eq('id',p.id).eq('manual_overrides',JSON.stringify(p.manual_overrides||{}));
@@ -443,7 +445,7 @@ async function updateFromListing(){
  if(!selected)return;
  const p=selected,button=$('enrich');
  button.disabled=true;button.textContent='Reading listing…';
- try{await probeImporter(true);const changed=await enrichProperty(p);const o=await analyzeFloorplan({sb,property:p,photo});if(o.status==='saved')changed.push(...o.fields);const diagnostic=p._floorplan_import;await refresh();if(changed.length){await openHouse(p);alert('Updated listing details: '+changed.join(', '))}else if(!p.floorplans?.length){const explain=diagnostic?.status==='floorplan-tab-not-found'?'Zoopla floor-plan button could not be found.':diagnostic?.status==='tab-opened-but-image-not-found'?'Zoopla floor-plan tab opened, but its image could not be extracted.':diagnostic?.found&&!diagnostic?.archived?'Floor-plan URL found, but the image was not downloaded or failed floor-plan validation.':'The original listing did not provide an accessible floor-plan image.';alert('Floor plan not imported. '+explain+' Extension reported: '+(diagnostic?.status||'unknown')+(diagnostic?.error?' ('+diagnostic.error+')':''))}else alert('No additional verifiable details were found in this listing.')}
+ try{await probeImporter(true);const changed=await enrichProperty(p);const o=await analyzeFloorplan({sb,property:p,photo,force:true});if(o.status==='saved')changed.push(...o.fields);const diagnostic=p._floorplan_import;await refresh();if(changed.length){await openHouse(p);alert('Updated listing details: '+changed.join(', '))}else if(!p.floorplans?.length){const explain=diagnostic?.status==='floorplan-tab-not-found'?'Zoopla floor-plan button could not be found.':diagnostic?.status==='tab-opened-but-image-not-found'?'Zoopla floor-plan tab opened, but its image could not be extracted.':diagnostic?.found&&!diagnostic?.archived?'Floor-plan URL found, but the image was not downloaded or failed floor-plan validation.':'The original listing did not provide an accessible floor-plan image.';alert('Floor plan not imported. '+explain+' Extension reported: '+(diagnostic?.status||'unknown')+(diagnostic?.error?' ('+diagnostic.error+')':''))}else alert('No additional verifiable details were found in this listing.')}
  catch(e){alert('Could not update listing: '+e.message)}
  finally{button.disabled=false;button.textContent='Update listing data'}
 }
