@@ -8,6 +8,7 @@ import {resolve,extname} from 'node:path';
 import assert from 'node:assert/strict';
 
 const root=fileURLToPath(new URL('../',import.meta.url));
+const outdoorNote='Rear garden: lawn, mature borders, patio and pedestrian side access.\nFront garden: planted flower beds and a path to the entrance.\nOff-street parking for two cars on the driveway.\nResidents permit parking on the road.\nGarden (floor plan): 12.70 × 7.54 m; approximately 95.76 m².\nDriveway (floor plan): 7.54 × 6.89 m; approximately 51.95 m².';
 const fixtures=[
  ['alpha','Alpha Road','Oakhill','interested'],
  ['beta','Beta Road','Foxtons','enquire_viewing'],
@@ -17,7 +18,7 @@ const fixtures=[
  ['archive','Archive Road','Oakhill','archived']
 ].map(([id,address,agency_name,status],i)=>{
  const latitude=51.3694953+i*.001,longitude=-.0883864,url='https://example.test/'+id;
- return {id,address,agency_name,status,source:'Zoopla',url,price:500000,bedrooms:2,bathrooms:1,latitude,longitude,sort_order:i,created_at:'2026-11-01T12:00:00Z',viewing_at:['2026-11-15T14:05:37Z','2026-12-01T12:11:22Z','2027-01-12T09:00:17Z','2026-06-01T13:05:19Z','2026-11-14T10:30:13Z','2026-10-10T16:15:11Z'][i],comment_david:'Keep decision '+id,comment_sabina:'Keep comment '+id,manual_overrides:{},images:[],floorplans:[],journey_estimates:{},station_name:'Alpha Station',station_2_name:'Beta Station',station_3_name:'Gamma Station',station_distance_miles:.5,station_2_distance_miles:.6,station_3_distance_miles:.7,station_commutes:{results:[{name:'Alpha Station',walking_minutes:10,walking_miles:.5},{name:'Beta Station',walking_minutes:15,walking_miles:.6},{name:'Gamma Station',walking_minutes:20,walking_miles:.7}],google_routes:{origin:address,stations:['Alpha Station','Beta Station','Gamma Station'],results:[{walking_minutes:10,walking_miles:.5},{walking_minutes:15,walking_miles:.6},{walking_minutes:20,walking_miles:.7}]}},import_diagnostics:{route_pending:false,source_location:{source:'listing-street-view',listing_url:url,address_input:address,latitude,longitude}}};
+ return {id,address,agency_name,status,source:'Zoopla',url,price:500000,bedrooms:2,bathrooms:1,latitude,longitude,sort_order:i,created_at:'2026-11-01T12:00:00Z',viewing_at:['2026-11-15T14:05:37Z','2026-12-01T12:11:22Z','2027-01-12T09:00:17Z','2026-06-01T13:05:19Z','2026-11-14T10:30:13Z','2026-10-10T16:15:11Z'][i],comment_david:'Keep decision '+id,comment_sabina:'Keep comment '+id,manual_overrides:{},images:[],floorplans:[],garden_description:i===0?outdoorNote:'',journey_estimates:{},station_name:'Alpha Station',station_2_name:'Beta Station',station_3_name:'Gamma Station',station_distance_miles:.5,station_2_distance_miles:.6,station_3_distance_miles:.7,station_commutes:{results:[{name:'Alpha Station',walking_minutes:10,walking_miles:.5},{name:'Beta Station',walking_minutes:15,walking_miles:.6},{name:'Gamma Station',walking_minutes:20,walking_miles:.7}],google_routes:{origin:address,stations:['Alpha Station','Beta Station','Gamma Station'],results:[{walking_minutes:10,walking_miles:.5},{walking_minutes:15,walking_miles:.6},{walking_minutes:20,walking_miles:.7}]}},import_diagnostics:{route_pending:false,source_location:{source:'listing-street-view',listing_url:url,address_input:address,latitude,longitude}}};
 });
 const transport=`export function createClient(){
  const rows=JSON.parse(localStorage.getItem('catalogue-fixture-rows')||'null')||${JSON.stringify(fixtures)};window.__fixtureRows=rows;window.__fixtureWrites=[];
@@ -94,6 +95,9 @@ const snapshot=async name=>{if(process.env.HH_UI_SNAPSHOT_LOG)console.log('CATAL
 try{
  await page.clock.setFixedTime(new Date('2026-11-10T10:00:00Z'));
  await page.goto(origin);await page.locator('.hh-table tbody tr').first().waitFor();
+ const outdoor=page.getByLabel('garden_description Alpha Road',{exact:true});assert.equal(await outdoor.inputValue(),outdoorNote);
+ await page.waitForFunction(()=>{const el=document.querySelector('[aria-label=\"garden_description Alpha Road\"]');return el&&el.clientHeight>=el.scrollHeight-2});
+ console.log('OUTDOOR_NOTES_UI_PASS complete multiline garden/parking text is visible in its existing garden block');
  const savedDates=await page.evaluate(()=>Object.fromEntries(window.__fixtureRows.map(p=>[p.id,p.viewing_at])));
  const views=page.locator('#viewControls'),appMenu=page.locator('#appMenu'),dateDialog=page.locator('.hh-viewing-dialog');
  assert.equal(await page.locator('.filters #exportExcel,.filters #exportPdf').count(),0);
