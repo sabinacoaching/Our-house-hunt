@@ -28,3 +28,8 @@ test('printed metric Gross Internal Area wins over converted feet and a total in
  assert.equal(parsePlanText('Approximate Area: 45 sqm\nGross Internal Area 96 sqm').floor_area_sqm,96);
  assert.equal(parsePlanText('APPROX. GROSS INTERNAL FLOOR AREA WITH GARAGE: 1597 SQFT/148 SQM\nAPPROX. GROSS INTERNAL FLOOR AREA WITHOUT GARAGE: 1297 SQFT/120 SQM').floor_area_sqm,120);
 });
+
+test('Hatch Road accepts a damaged square-metre superscript only when the printed feet total agrees',()=>{
+ assert.equal(parsePlanText('Kitchen\nBedroom\nTotal floor area 92.8 m? (998 sq.ft.) approx').floor_area_sqm,92.8);
+ assert.notEqual(parsePlanText('Total floor area 92.8 m? (700 sq.ft.) approx').floor_area_sqm,92.8);
+});

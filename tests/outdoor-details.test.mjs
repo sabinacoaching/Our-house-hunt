@@ -66,3 +66,9 @@ test('plan save compares the fresh whole row and retains a completed concurrent 
  try{const result=await analyzeFloorplan({sb,property:p,photo:async()=>'/plan',recognize:async()=>({text:ocr,...bands})});assert.equal(result.status,'concurrent-edit');assert.equal(p.floor_area_sqm,68.01)}
  finally{globalThis.fetch=oldFetch;globalThis.localStorage=oldStorage}
 });
+test('the single-plan path cannot shrink the saved largest garden on a weaker OCR pass',()=>{
+ const p={garden_area_sqm:100,floorplans:[{path:'plan.jpg'}],manual_overrides:{},import_diagnostics:{outdoor_details:{plan_fingerprint:'plan.jpg',values:{garden_area_sqm:100},measurements:outdoorMeasurements('Garden 20m x 5m\nGarden 6m x 5m')}}};
+ const patch=floorplanChanges(p,parsePlanText('Garden 6m x 5m'),{fingerprint:'plan.jpg'});
+ assert.equal(patch.garden_area_sqm,undefined);assert.match(patch.garden_description,/20 × 5 m/);
+ assert.equal(patch.import_diagnostics.floorplan_measurements.labelled_values.garden_area_sqm,100);
+});

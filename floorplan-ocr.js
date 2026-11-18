@@ -49,6 +49,12 @@ export function parsePlanText(original,{headerText='',footerText=''}={}){
    candidates.push({value,rank:rank+(feet?.5:0),index:m.index});
   }
  }
+ // OCR can read the printed superscript ² as '?'. Accept that damaged unit
+ // only beside a labelled total and an independently agreeing imperial total.
+ for(const m of text.matchAll(/\b(?:total\s+floor\s+area|gross\s+internal\s+area)\s*[:=]?\s*(\d{2,3}(?:\.\d{1,2})?)\s*m\?\s*[(\/=]\s*(\d{3,4}(?:\.\d+)?)\s*sq\.?\s*ft/gi)){
+  const metric=Number(m[1]),imperial=Number(m[2])*.09290304;
+  if(metric>=35&&metric<=500&&Math.abs(metric-imperial)<Math.max(1,metric*.015))candidates.push({value:metric,rank:/gross\s+internal/i.test(m[0])?0:5,index:m.index});
+ }
  candidates.sort((a,b)=>a.rank-b.rank||a.index-b.index);if(candidates.length)result.floor_area_sqm=candidates[0].value;
  // Tiny grey headings may be unreadable. Accept their number only when the
  // same metric/imperial pair independently agrees in BOTH image bands.
@@ -135,6 +141,15 @@ export async function readPlanImage(blob){
 }
 export function floorplanChanges(p,measurements,{fingerprint='',listingText,now=new Date().toISOString()}={}){
  const prior=p.import_diagnostics?.floorplan_measurements,source=p.import_diagnostics?.source_values||{},changes={};
+ const raw=listingText??p.import_diagnostics?.listing_text??source.garden_description??p.garden_description??'';
+ const outdoorRecord=p.import_diagnostics?.outdoor_details;
+ const planFingerprint=(p.floorplans||[]).map(x=>x.sha256||x.path||x.url).join('|');
+ const known=outdoorRecord?.plan_fingerprint===planFingerprint?outdoorRecord.measurements||[]:prior?.fingerprint===fingerprint?prior.outdoor||[]:[];
+ const outdoor=retainOutdoorMeasurements(measurements.outdoor||[],known);
+ // Every entry point uses the same complete set of gardens. A weaker OCR pass
+ // must not replace the largest garden with whichever label it happened to read.
+ const gardens=mainGardenArea([...outdoor,...outdoorMeasurements(raw)]);
+ measurements={...measurements,...(gardens!=null?{garden_area_sqm:gardens}:{})};
  const same=(a,b)=>a==null?b==null:typeof b==='number'?Number(a)===b:String(a)===String(b);
  const allowed=key=>!p.manual_overrides?.[key]&&(p[key]==null||p[key]===''||Object.hasOwn(source,key)&&same(p[key],source[key])||Object.hasOwn(prior?.values||{},key)&&same(p[key],prior.values[key])||Object.hasOwn(p.import_diagnostics?.outdoor_details?.values||{},key)&&same(p[key],p.import_diagnostics.outdoor_details.values[key]));
  for(const key of ['floor_area_sqm','garden_area_sqm','floors']){
@@ -143,11 +158,6 @@ export function floorplanChanges(p,measurements,{fingerprint='',listingText,now=
   if(key==='floor_area_sqm'&&p[key]!=null&&p[key]!==''&&!savedPlanFallback)continue;
   if(measurements[key]!=null&&allowed(key)&&!same(p[key],measurements[key]))changes[key]=measurements[key];
  }
- const raw=listingText??p.import_diagnostics?.listing_text??source.garden_description??p.garden_description??'';
- const outdoorRecord=p.import_diagnostics?.outdoor_details;
- const planFingerprint=(p.floorplans||[]).map(x=>x.sha256||x.path||x.url).join('|');
- const known=outdoorRecord?.plan_fingerprint===planFingerprint?outdoorRecord.measurements||[]:prior?.fingerprint===fingerprint?prior.outdoor||[]:[];
- const outdoor=retainOutdoorMeasurements(measurements.outdoor||[],known);
  const description=combineOutdoorDescription(raw,outdoor);
  if(description&&allowed('garden_description')&&!same(p.garden_description,description))changes.garden_description=description;
  // Keep the exact inputs/provenance separate from the combined human-facing notes.

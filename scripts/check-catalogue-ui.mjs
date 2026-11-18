@@ -97,7 +97,23 @@ try{
  await page.clock.setFixedTime(new Date('2026-11-10T10:00:00Z'));
  await page.goto(origin);await page.locator('.hh-table tbody tr').first().waitFor();
  const outdoor=page.getByLabel('garden_description Alpha Road',{exact:true});assert.equal(await outdoor.inputValue(),outdoorNote);
- await page.waitForFunction(()=>{const el=document.querySelector('[aria-label=\"garden_description Alpha Road\"]');return el&&el.clientHeight>=el.scrollHeight-2});
+ assert.equal(await outdoor.evaluate(el=>getComputedStyle(el).resize),'vertical');
+ await outdoor.scrollIntoViewIfNeeded();
+ const gardenBox=await outdoor.boundingBox();
+ await page.mouse.move(gardenBox.x+gardenBox.width-4,gardenBox.y+gardenBox.height-4);await page.mouse.down();await page.mouse.move(gardenBox.x+gardenBox.width-4,gardenBox.y+gardenBox.height+76,{steps:8});await page.mouse.up();
+ const resizedGarden=await outdoor.evaluate(el=>el.getBoundingClientRect().height);assert.ok(resizedGarden>gardenBox.height+40);
+ await page.locator('#sort').selectOption('price_asc');
+ assert.equal(await page.getByLabel('garden_description Alpha Road',{exact:true}).evaluate(el=>el.getBoundingClientRect().height),resizedGarden);
+ await page.locator('#sort').selectOption('manual');
+ console.log('GARDEN_RESIZE_UI_PASS manual height persists through catalogue redraw');
+ await page.evaluate(()=>window.__delayStationSave=450);
+ const draft=page.getByLabel('garden_description Alpha Road',{exact:true});
+ await draft.fill(outdoorNote+'\nOwner garden draft');
+ await page.locator('#refresh').click();
+ await page.waitForFunction(()=>window.__fixtureRows.find(p=>p.id==='alpha').garden_description.endsWith('Owner garden draft'));
+ assert.match(await page.getByLabel('garden_description Alpha Road',{exact:true}).inputValue(),/Owner garden draft/);
+ await page.evaluate(()=>window.__delayStationSave=0);
+ console.log('MEASUREMENT_DRAFT_UI_PASS refresh retains and saves an in-progress garden edit');
  console.log('OUTDOOR_NOTES_UI_PASS complete multiline garden/parking text is visible in its existing garden block');
  const savedDates=await page.evaluate(()=>Object.fromEntries(window.__fixtureRows.map(p=>[p.id,p.viewing_at])));
  const views=page.locator('#viewControls'),appMenu=page.locator('#appMenu'),dateDialog=page.locator('.hh-viewing-dialog');
@@ -296,7 +312,7 @@ try{
  const beforeOutdoor=await page.evaluate(()=>window.__fixtureRows.map(({garden_area_sqm,garden_description,import_diagnostics,...p})=>p));
  await page.evaluate(()=>window.__outdoorFixture=true);
  await appMenu.locator('summary').click();await page.locator('#refreshOutdoors').click();
- await page.waitForFunction(()=>window.__fixtureRows.every(p=>p.import_diagnostics?.outdoor_details?.version==='outdoors-v3'));
+ await page.waitForFunction(()=>window.__fixtureRows.every(p=>p.import_diagnostics?.outdoor_details?.version==='measurements-v4'));
  for(const p of await page.evaluate(()=>window.__fixtureRows)){assert.equal(p.garden_area_sqm,60);assert.match(p.garden_description,/Off-street parking for two cars/)}
  assert.deepEqual(await page.evaluate(()=>window.__fixtureRows.map(({garden_area_sqm,garden_description,import_diagnostics,...p})=>p)),beforeOutdoor);
  console.log('OUTDOOR_REFRESH_UI_PASS Menu reprocesses existing cards, displays sizes and parking, preserves exact dates, comments, routes and station choices');

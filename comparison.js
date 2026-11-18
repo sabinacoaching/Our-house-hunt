@@ -90,8 +90,18 @@ wrap.addEventListener('wheel',event=>{
  const moved=window.scrollY-before;
  if(moved>0){event.preventDefault();wrap.scrollTop+=Math.max(0,delta-moved)}
 },{passive:false});
-let rows=[],mode='table',L=null,map=null,markers=null,mapFramed=false,lastMapSig='';
+let rows=[],mode='table',L=null,map=null,markers=null,mapFramed=false,lastMapSig='',pendingRenderList=null;
+const editorDrafts=new Map(),draftKey=(p,key)=>p.id+':'+key;
+function finishEditorSave(p,key,value){
+ if(editorDrafts.get(draftKey(p,key))===String(value))editorDrafts.delete(draftKey(p,key));
+ if(pendingRenderList){const target=pendingRenderList.find(row=>row.id===p.id);if(target){target[key]=p[key];target.manual_overrides={...target.manual_overrides,...p.manual_overrides}}}
+ if(pendingRenderList&&!editorDrafts.size){const list=pendingRenderList;pendingRenderList=null;render(list)}
+}
 const columnWidths=new Map();
+try{for(const [key,width] of JSON.parse(localStorage.getItem('hh-column-widths-v1')||'[]'))if(Number.isFinite(width)&&width>=100&&width<=1000)columnWidths.set(key,width)}catch{}
+const gardenHeights=new Map();
+try{for(const [key,height] of JSON.parse(localStorage.getItem('hh-garden-heights-v1')||'[]'))if(Number.isFinite(height)&&height>=82&&height<=1500)gardenHeights.set(key,height)}catch{}
+const remember=(key,map)=>{try{localStorage.setItem(key,JSON.stringify([...map]))}catch{}};
 function applyColumnWidth(index,width){
  for(const row of table.rows){const cell=row.cells[index];if(!cell)continue;cell.style.width=width+'px';cell.style.minWidth=width+'px';cell.style.maxWidth=width+'px'}
 }
@@ -101,7 +111,7 @@ function addColumnResize(th,index){
  let startX=0,startWidth=0;
  handle.onpointerdown=e=>{e.preventDefault();e.stopPropagation();startX=e.clientX;startWidth=th.getBoundingClientRect().width;handle.setPointerCapture(e.pointerId)};
  handle.onpointermove=e=>{if(!handle.hasPointerCapture(e.pointerId))return;const width=nextColumnWidth(startWidth,startX,e.clientX);columnWidths.set(index,width);applyColumnWidth(index,width)};
- handle.onpointerup=e=>{if(handle.hasPointerCapture(e.pointerId))handle.releasePointerCapture(e.pointerId)};
+ handle.onpointerup=e=>{if(handle.hasPointerCapture(e.pointerId))handle.releasePointerCapture(e.pointerId);remember('hh-column-widths-v1',columnWidths)};
  handle.onclick=e=>e.stopPropagation();th.append(handle);
 }
  history.subscribe(n=>{undoBtn.disabled=n===0;undoBtn.title=n?n+' manual changes can be undone':'No manual changes to undo'});
@@ -114,11 +124,12 @@ async function save(p,key,value,input){
  const val=cast(key,value);
  if(key==='status'&&val==='deleted'&&!window.confirm('Move '+p.address+' to Deleted? It can be restored.')){if(input)input.value=p.status||'';return}
  if(nums.has(key)&&val!==null&&!Number.isFinite(val)){flash('Invalid number',true);return}
- if(String(p[key]??'')===String(val??''))return;
+ if(String(p[key]??'')===String(val??'')){finishEditorSave(p,key,value);return}
  const overrides={...(p.manual_overrides||{}),[key]:true};
  const r=await history.save(p,{[key]:val,manual_overrides:overrides});
  if(r.error){flash(r.error.message,true);input?.classList.add('hh-savefail');return}
  input?.classList.remove('hh-savefail');flash('Saved');if(key==='status')await onStatusChange?.(p,val);if(key==='address')await onAddressChange?.(p);if(['station_name','station_2_name','station_3_name'].includes(key))await onStationChange?.(p);
+ finishEditorSave(p,key,value);
 }
 const viewingDialog=node('dialog','hh-viewing-dialog'),viewingTop=node('div','dialogtop'),viewingTitle=node('h2','','Viewing date'),viewingForm=node('form','hh-date-form'),viewingFields=node('div'),viewingError=node('p','error'),viewingActions=node('div','actions');
 viewingTitle.id='hhViewingTitle';viewingDialog.setAttribute('aria-labelledby',viewingTitle.id);viewingTop.append(viewingTitle);
@@ -141,7 +152,34 @@ viewingForm.onsubmit=async event=>{
   button.textContent=formatViewingDate(p.viewing_at);viewingDialog.close();flash('Saved');
  }catch(error){viewingError.textContent=error.message||String(error)}finally{viewingSave.disabled=viewingClear.disabled=false}
 };
-function editor(p,key,type='text'){let x=node(type==='textarea'?'textarea':type==='select'?'select':'input');if(type==='select'){for(const [v,label] of statusEditorOptions(p[key])){const opt=node('option','',label);opt.value=v;x.append(opt)}x.value=p[key]||''}else{if(type==='number'){x.type='number';x.step='any';x.min='0'}if(type==='textarea')x.rows=6;x.value=p[key]??''}x.setAttribute('aria-label',key+' '+p.address);let tid;if(type==='textarea'){const minimum=(key==='comment_sabina'||key==='comment_david')?230:86;const resize=()=>{x.style.height='auto';x.style.height=Math.max(minimum,x.scrollHeight+8)+'px'};x.style.resize='none';x.style.overflowY='hidden';resize();requestAnimationFrame(resize);x.addEventListener('input',()=>{resize();clearTimeout(tid);tid=setTimeout(()=>save(p,key,x.value,x),800)});x.addEventListener('blur',()=>{clearTimeout(tid);save(p,key,x.value,x)})}else x.addEventListener('change',()=>save(p,key,x.value,x));return x}
+function editor(p,key,type='text'){
+ let x=node(type==='textarea'?'textarea':type==='select'?'select':'input');
+ if(type==='select'){for(const [v,label] of statusEditorOptions(p[key])){const opt=node('option','',label);opt.value=v;x.append(opt)}x.value=p[key]||''}
+ else{if(type==='number'){x.type='number';x.step='any';x.min='0'}if(type==='textarea')x.rows=6;x.value=p[key]??''}
+ x.setAttribute('aria-label',key+' '+p.address);
+ x.dataset.property=p.id;x.dataset.field=key;
+ x.addEventListener('input',()=>editorDrafts.set(draftKey(p,key),x.value));
+ let tid;
+ if(type==='textarea'){
+  const garden=key==='garden_description',minimum=(key==='comment_sabina'||key==='comment_david')?230:86;
+  const resize=()=>{
+   if(garden){x.style.height=(gardenHeights.get(p.id)||220)+'px';return}
+   x.style.height='auto';x.style.height=Math.max(minimum,x.scrollHeight+8)+'px';
+  };
+  x.style.resize=garden?'vertical':'none';x.style.overflowY=garden?'auto':'hidden';
+  if(garden){
+   x.classList.add('hh-garden-editor');x.title='Drag the bottom-right corner to resize. Your height is remembered.';
+   x.addEventListener('pointerdown',()=>{
+    const initial=x.getBoundingClientRect().height;
+    window.addEventListener('pointerup',()=>{const height=Math.round(x.getBoundingClientRect().height);if(height!==Math.round(initial)){gardenHeights.set(p.id,Math.max(82,Math.min(1500,height)));remember('hh-garden-heights-v1',gardenHeights)}},{once:true});
+   });
+  }
+  resize();requestAnimationFrame(resize);
+  x.addEventListener('input',()=>{resize();clearTimeout(tid);tid=setTimeout(()=>save(p,key,x.value,x),800)});
+  x.addEventListener('blur',()=>{clearTimeout(tid);if(x.value!==String(p[key]??''))save(p,key,x.value,x)});
+ }else x.addEventListener('change',()=>save(p,key,x.value,x));
+ return x;
+}
 const cell=value=>{const t=node('td');if(value instanceof Node)t.append(value);else t.textContent=value;return t};
 const val=v=>v==null||v===''?'—':String(v);
 
@@ -246,6 +284,12 @@ function travelCell(p){
 }
 
 function render(list){
+ const editing=document.activeElement;
+ // A background source read must not destroy an unsaved owner edit by
+ // replacing its DOM node. Apply the queued redraw after the editor blurs.
+ if(editorDrafts.size||table.contains(editing)&&editing?.dataset?.field&&editing.value!==String(rows.find(p=>p.id===editing.dataset.property)?.[editing.dataset.field]??'')){
+  pendingRenderList=list;return;
+ }
  rows=list;
  const head=node('thead'),hr=node('tr');
  for(const [columnIndex,title] of labels.entries()){
