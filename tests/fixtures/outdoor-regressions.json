@@ -62,5 +62,17 @@
     },
     "image": "helmsdale-plan.jpg",
     "expected_area": null
+  },
+  {
+    "name": "durnsford",
+    "listing_id": "74220383",
+    "address": "Durnsford Road, Wimbledon SW19",
+    "point": {
+      "latitude": 51.428279,
+      "longitude": -0.19111
+    },
+    "listing_text": "Off-Street Parking for 2 Cars\n\n74 ft South Facing Garden",
+    "image": "durnsford-plan.jpg",
+    "expected_area": 113.65
   }
 ]

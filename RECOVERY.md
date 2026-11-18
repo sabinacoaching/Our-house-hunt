@@ -1,3 +1,7 @@
+# Largest garden correction, v64 (18 November 2026)
+
+The owner explicitly requires the largest measured garden in the main numeric garden field. Consider front, rear and unqualified gardens, exclude parking/driveways and communal areas, compare candidates from both the listing and all plans, and retain all distinct sides in notes. Durnsford exposed the defect: garden 22.55 × 5.04 m = 113.65 m² was lost beside a neighbouring Conservatory label and an OCR border glyph; only 6.09 × 5.27 m = 32.09 m² remained. Accept harmless border glyphs on numeric lines and preserve two different gardens sharing the same printed Garden label through a weaker reread. Owner/manual fields still win. Routing inputs are checked against the exact hashes of the successful v63 live run 44327272152. When those 32 inputs match, CI reuses that live routing validation and still runs units, catalogue controls, importer package matching and all real plan OCR checks for the garden-only change. Any routing-input change runs the live Maps checks.
+
 # Our House Hunt: Recovery and Safe-Change Procedure
 
 ## Current project (2026-11-18, v63)

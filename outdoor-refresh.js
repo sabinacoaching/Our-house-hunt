@@ -1,7 +1,7 @@
-import {listingOutdoorDetails,combineOutdoorDescription,mainGardenArea,retainOutdoorMeasurements} from './outdoor-details.js?v=2';
-import {readPlanImage,parsePlanText} from './floorplan-ocr.js?v=18';
+import {listingOutdoorDetails,combineOutdoorDescription,mainGardenArea,retainOutdoorMeasurements} from './outdoor-details.js?v=3';
+import {readPlanImage,parsePlanText} from './floorplan-ocr.js?v=19';
 
-export const outdoorVersion='outdoors-v2';
+export const outdoorVersion='outdoors-v3';
 export const planFingerprint=p=>(p.floorplans||[]).map(x=>x.sha256||x.path||x.url).join('|');
 export function needsOutdoorRefresh(p){
  const previous=p.import_diagnostics?.outdoor_details;
@@ -19,7 +19,8 @@ export function outdoorChanges(p,{listingText,measurements=[],errors=[],now=new 
  const source=listingOutdoorDetails(sourceText??prior.source_values?.garden_description??p.garden_description??'');
  const known=prior.outdoor_details?.plan_fingerprint===planFingerprint(p)?prior.outdoor_details.measurements||[]:[];
  const planItems=retainOutdoorMeasurements(measurements.flatMap(x=>x.outdoor||[]),known);
- const area=source.garden_area_sqm??mainGardenArea(planItems),notes=combineOutdoorDescription(sourceText??prior.source_values?.garden_description??p.garden_description??'',planItems);
+ const candidates=[mainGardenArea([...source.measurements,...planItems]),source.garden_area_sqm].filter(x=>x!=null);
+ const area=candidates.length?Math.max(...candidates):null,notes=combineOutdoorDescription(sourceText??prior.source_values?.garden_description??p.garden_description??'',planItems);
  const changes={},values={...(prior.outdoor_details?.values||{})};
  for(const [key,value] of Object.entries({garden_area_sqm:area,garden_description:notes})){
   if(!canReplace(p,key))continue;

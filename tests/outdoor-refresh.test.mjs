@@ -46,3 +46,23 @@ test('a weaker repeat read of the same plan retains previously verified sides',(
  const current={...p,...first},again=outdoorChanges(current,{listingText:'Rear garden. Parking: On street.',measurements:[{outdoor:[{kind:'garden',label:'Garden'}]}]});
  assert.match(again.import_diagnostics.outdoor_details.values.garden_description,/12.0 × 5.0 m/);assert.equal(again.import_diagnostics.outdoor_details.values.garden_area_sqm,60);
 });
+test('the largest measured garden wins regardless of label/order, while parking is excluded',()=>{
+ const plans=outdoorMeasurements('Front Garden\n6m x 5m\nRear Garden\n20m x 5m\nDriveway\n50m x 10m');
+ for(const outdoor of [plans,[...plans].reverse()])assert.equal(outdoorChanges(property(),{listingText:'Front garden 6m x 5m',measurements:[{outdoor}]}).garden_area_sqm,100);
+ assert.equal(outdoorChanges(property(),{listingText:'Front garden 30m x 5m\nRear garden 20m x 5m'}).garden_area_sqm,150);
+});
+test('Durnsford reads the large garden before a neighbouring room and keeps the small garden separate',()=>{
+ const text='Garden Conservatory\n740x166 6\'9 x 5\'10\n(22.55x5.04m) ; M(2.05 x 1.77m)\nKitchen\n2.10m x 2.08m\nGarden\nGarden Y/\n740 x 166\n(22.55x5.04m) |\nGarden\n20\'0 x 17\'3\n(6.09 x 5.27m)';
+ const outdoor=outdoorMeasurements(text),patch=outdoorChanges(property(),{listingText:'74 ft South Facing Garden',measurements:[{outdoor}]});
+ assert.equal(patch.garden_area_sqm,113.65);assert.match(patch.garden_description,/22.55 × 5.04 m/);assert.match(patch.garden_description,/6.09 × 5.27 m/);assert.doesNotMatch(patch.garden_description,/2.05 × 1.77 m/);
+});
+test('a repeated generic Garden label does not discard the other verified garden',()=>{
+ const first=outdoorChanges(property(),{listingText:'Gardens.',measurements:[{outdoor:outdoorMeasurements('Garden 20m x 5m\nGarden 6m x 5m')}]});
+ const again=outdoorChanges({...property(),...first},{listingText:'Gardens.',measurements:[{outdoor:outdoorMeasurements('Garden 6m x 5m')}]});
+ assert.equal(again.import_diagnostics.outdoor_details.values.garden_area_sqm,100);assert.match(again.import_diagnostics.outdoor_details.values.garden_description,/20 × 5 m/);
+});
+test('two gardens with equal areas and different sides remain separate',()=>{
+ const first=outdoorChanges(property(),{listingText:'Gardens.',measurements:[{outdoor:outdoorMeasurements('Garden 20m x 2m\nGarden 10m x 4m')}]});
+ const again=outdoorChanges({...property(),...first},{listingText:'Gardens.',measurements:[{outdoor:outdoorMeasurements('Garden 10m x 4m')}]});
+ assert.match(again.import_diagnostics.outdoor_details.values.garden_description,/20 × 2 m/);assert.match(again.import_diagnostics.outdoor_details.values.garden_description,/10 × 4 m/);
+});
