@@ -38,8 +38,14 @@ try{
   if(!live.capture?.some(x=>x.before?.some(v=>/security verification|cloudflare|not a bot/i.test(v.result?.body||''))))throw Error(live.error);
   const payload='7d:'+JSON.stringify(['$','div',null,{children:fixture}])+'\n';
   const html='<html><head><title>3 bedroom house for sale Central Road, Morden SM4</title></head><body><h1>3 bedroom house for sale Central Road, Morden SM4</h1><p>£525,000</p><p>3 bedroom house</p><script>self.__next_f={push(){}};self.__next_f.push('+JSON.stringify([1,payload])+')</script></body></html>';
-  await context.route('https://www.zoopla.co.uk/for-sale/details/72832286/',route=>route.fulfill({contentType:'text/html',body:html}));
-  source=await worker.evaluate(()=>extract('https://www.zoopla.co.uk/for-sale/details/72832286/'));
+  await context.route(/^https:\/\/www\.zoopla\.co\.uk\/for-sale\/details\/72832286\/?(?:\?.*)?$/,route=>route.fulfill({contentType:'text/html',body:html}));
+  const captured=await worker.evaluate(async()=>{
+   const original=chrome.scripting.executeScript.bind(chrome.scripting),capture=[];
+   chrome.scripting.executeScript=async options=>{const before=await original({target:options.target,func:()=>({url:location.href,title:document.title,body:document.body?.innerText?.slice(0,1200),scripts:[...document.scripts].map(x=>x.textContent?.slice(0,90))})});const value=await original(options);capture.push({before,results:value});return value};
+   try{return {data:await extract('https://www.zoopla.co.uk/for-sale/details/72832286/')}}catch(error){return {error:String(error),capture}}finally{chrome.scripting.executeScript=original}
+  });
+  if(captured.error){console.log('OUTDOOR_CAPTURED_SOURCE_FAILURE '+JSON.stringify(captured));throw Error(captured.error)}
+  source=captured.data;
   assert.match(source.listing_text,/Off Street Parking for 2 Cars/);assert.match(source.listing_text,/driveway for two cars/);
   console.log('OUTDOOR_MV3_CAPTURED_SOURCE_PASS native extension reads original-listing source captured on 18 November; live runner blocked by Cloudflare');
  }
@@ -71,7 +77,7 @@ try{
   const text=fixture.listing_text,flight=':HL["style"]\n'+'d0:T'+Buffer.byteLength(text).toString(16)+','+text+'d1:'+JSON.stringify(['$','div',null,{children:listing}])+'\n';
   const url='https://www.zoopla.co.uk/for-sale/details/'+fixture.listing_id+'/';
   const html='<html><head><title>3 bedroom house for sale '+fixture.address+'</title></head><body><h1>3 bedroom house for sale '+fixture.address+'</h1><p>£550,000</p><script>self.__next_f={push(){}};self.__next_f.push('+JSON.stringify([1,flight])+')</script></body></html>';
-  await context.route(url,route=>route.fulfill({contentType:'text/html',body:html}));
+  await context.route(new RegExp('^https://www\\.zoopla\\.co\\.uk/for-sale/details/'+fixture.listing_id+'/?(?:\\?.*)?$'),route=>route.fulfill({contentType:'text/html',body:html}));
   const source=await worker.evaluate(url=>extract(url),url);assert.equal(source.address,fixture.address);assert.equal(source.location_hint.source,'listing-map');assert.match(source.listing_text,/garden/i);assert.doesNotMatch(source.listing_text,/\$d0/);
   const checked=await page.evaluate(async({origin,fixture,source})=>{
    const {readPlanImage,parsePlanText}=await import(origin+'/floorplan-ocr.js');
