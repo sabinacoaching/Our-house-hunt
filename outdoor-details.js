@@ -100,10 +100,21 @@ const indoor=/\b(?:bedrooms?|bathrooms?|WC|reception|accommodation|family home|t
 function outdoorExcerpt(sentence,inSection=false){
  let value=sentence.trim();
  if(!relevant.test(value)&&!inSection)return '';
+ if(/^(?:the\s+)?garden\s*,?\s+and\s+chain[ -]?free\b/i.test(value))return '';
+ // A room's view or access alone does not describe the garden. Keep a
+ // separately stated aspect where the same sentence supplies one.
+ if(/\b(?:kitchen|appliances|reception|dining room|living room)\b/i.test(value)&&/\b(?:access to|overlooks?|overlooking|opening onto|leading (?:out )?to)\b/i.test(value)){
+  const aspect=value.match(/\b(?:north|south|east|west)(?:[ -]?(?:east|west|easterly|westerly))?(?:[ -]facing|\s+facing)\s+(?:rear\s+)?garden\b/i);
+  if(aspect)return aspect[0]+'.';
+  if(!/\b(?:patio|lawn|decking|shrubs?|side access)\b/i.test(value))return '';
+ }
  // Keep factual outdoor clauses, without the description of rooms, the house,
  // transport or a generic sales pitch which happens to surround "garden".
- value=value.replace(/,?\s*(?:creating a (?:pleasant|natural|seamless) connection|providing an ideal space|offering an ideal space|perfect for (?:family|entertaining|relaxing)|ideal for (?:family|entertaining|relaxing))\b.*$/i,'');
+ value=value.replace(/,?\s*(?:creating a (?:pleasant|natural|seamless) connection|providing an ideal space|offering an ideal space|perfect for (?:outdoor\s+)?(?:family|entertaining|relaxing)|ideal for (?:outdoor\s+)?(?:family|entertaining|relaxing))\b.*$/i,'');
  value=value.replace(/\s+complete(?:s)? the ground floor\.?$/i,'');
+ value=value.replace(/\s+and\s+(?:is\s+)?within\s+(?:easy\s+)?reach\b.*$/i,'');
+ value=value.replace(/\s+and\s+(?:features?|has)\s+(?:a\s+)?(?:newly\s+)?(?:fitted\s+)?(?:\d+\s*['′]?\s*)?(?:kitchen|bathroom|bedroom|reception)\b.*$/i,'');
+ if(/\b(?:carpets?|flooring)\b/i.test(value)&&/\band has\b/i.test(value))value=value.replace(/^.*\band has\s+/i,'');
  value=value.replace(/\b(?:EPC|energy)\s*rating\s*:?\s*[A-G]\b.*$/i,'');
  const clauses=value.split(/\s*[,;]\s*(?!\d)/),kept=[];let context=inSection;
  for(let clause of clauses){
@@ -111,7 +122,7 @@ function outdoorExcerpt(sentence,inSection=false){
   if(hit){
    const prefix=clause.slice(0,hit.index);
    if(indoor.test(prefix)||/^(?:the property|this property|externally|outside|benefit)/i.test(prefix)){
-    const boundary=[...prefix.matchAll(/\b(?:with|onto|to|from|boasts?|offers?|featuring|including)\s+/gi)].at(-1);
+    const boundary=[...prefix.matchAll(/\b(?:with|onto|to|from|has|boasts?|offers?|featuring|including)\s+/gi)].at(-1);
     if(boundary)clause=clause.slice(boundary.index+boundary[0].length);
     else clause=(prefix.match(/(?:(?:front|rear|back|private|enclosed|communal|large|substantial|south[ -]?facing|north[ -]?facing)\s+)+$/i)?.[0]||'')+clause.slice(hit.index);
    }
@@ -120,6 +131,7 @@ function outdoorExcerpt(sentence,inSection=false){
   }else if(context&&!indoor.test(clause)&&!/\b(?:transport|schools?|amenities|station|well.proportioned|well.presented|attractive|charming|popular residential)\b/i.test(clause))kept.push(clause);
  }
  const result=kept.join(', ').replace(/^[,;\s]+|[,;\s]+$/g,'').trim();
+ if(/^(?:the\s+)?garden\s*,?\s+and\s+chain[ -]?free\b/i.test(result))return '';
  return /^(?:the|a|an)\s+garden[.!]?$/i.test(result)?'':result;
 }
 export function listingOutdoorDetails(raw){
@@ -131,12 +143,13 @@ export function listingOutdoorDetails(raw){
   for(let i=keys.length-1;i>=0;i--)if(keys[i].length>=35&&key.includes(keys[i]))notes.splice(i,1);
   notes.push(value);
  };
- for(const row of text.split('\n')){
+ for(const row of text.replace(/([.!?])(?=[A-Z])/g,'$1 ').split('\n')){
   if(!row.trim()){outdoorSection=false;continue}
   if(sectionEnd.test(row))outdoorSection=false;
   if(/^(?:(?:front|rear|back|private|enclosed|communal)\s+)?(?:gardens?|driveway|parking|garage|outside|exterior)\s*[:.]?$/i.test(row))outdoorSection=true;
-  for(const sentence of row.split(/\s*\|\s*|(?<=[.!?])\s+(?=[A-Z“"'])/)){
+  for(const sentence of row.split(/\s*(?:\||\*{2,})\s*|(?<=[.!?])\s+(?=[A-Z“"'])/)){
    const excerpt=outdoorExcerpt(sentence,outdoorSection);if(excerpt)add(excerpt);
+   if(excerpt&&/\bside access\b/i.test(sentence)&&!/\bside access\b/i.test(excerpt)&&!/\b(?:no|without|no longer)\s+side access\b/i.test(sentence))add('Side access.');
   }
  }
  const measurements=outdoorMeasurements(text),area=mainGardenArea(measurements);

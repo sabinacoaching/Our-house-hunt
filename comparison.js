@@ -11,7 +11,9 @@ export function additionalPlanArea(p){
  if(listed==null||planned==null||current==null)return null;
  const a=Number(listed),b=Number(planned),c=Number(current);
  if(!Number.isFinite(a)||!Number.isFinite(b)||a<=0||b<=0||Math.abs(a-c)>.02)return null;
- return Math.round(a/.09290304)===Math.round(b/.09290304)?null:b;
+ const listedFeet=Number(p.import_diagnostics?.source_values?.floor_area_sqft??Math.round(a/.09290304));
+ const planFeet=Number(p.import_diagnostics?.floorplan_measurements?.labelled_values?.floor_area_sqft??Math.round(b/.09290304));
+ return Math.round(listedFeet)===Math.round(planFeet)?null:b;
 }
 export function manualJourney(previous,minutes,updatedAt){
  const old=previous||{};

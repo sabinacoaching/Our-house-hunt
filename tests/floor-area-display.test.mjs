@@ -9,3 +9,7 @@ test('shows plan total beside advertised total when the difference is meaningful
  assert.equal(additionalPlanArea(house(null,96)),null);
  assert.equal(additionalPlanArea({...house(91.04,96),manual_overrides:{floor_area_sqm:true}}),null);
 });
+test('compares printed square feet rather than rounding the metric value from the plan',()=>{
+ const p=house(120.49,120);p.import_diagnostics.floorplan_measurements.labelled_values.floor_area_sqft=1297;
+ assert.equal(additionalPlanArea(p),null);
+});

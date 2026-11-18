@@ -88,3 +88,7 @@ test('extracts parking from a feature list without station or council tax and re
  assert.equal((d.garden_description.match(/Private driveway for a minimum of two cars/g)||[]).length,1);
  assert.match(d.garden_description,/rear garden has a patio/);
 });
+test('outdoor description removes indoor fragments and unrelated feature-list material',()=>{
+ const notes=listingOutdoorDetails('Garage | 0.2 Miles to Mitcham Tram Stop | Council Tax Band: D |\nall necessary appliances and overlooks the South Westerly facing garden.\nKitchen with access to the rear garden.\na good-sized private rear garden, perfect for outdoor entertaining. Further benefits include side access.').garden_description;
+ assert.match(notes,/Garage/);assert.match(notes,/South Westerly facing garden/);assert.match(notes,/good-sized private rear garden/);assert.match(notes,/side access/i);assert.doesNotMatch(notes,/appliances|kitchen|Council|Tram/);
+});

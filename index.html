@@ -37,7 +37,7 @@ dialog.hh-photo-viewer[open]{display:flex;flex-direction:column}
 <link rel="stylesheet" href="./comparison.css?v=30">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css'">
 </head><body>
-<header class="top"><div class="brand">⌂ &nbsp;<span>Our House Hunt</span></div><div id="viewControls" class="hh-view-controls" hidden></div><div class="topright"><strong id="who"></strong><span id="hhVersion" title="Current House Hunt site version" style="font-size:11px;color:#72817f">v66</span><button id="refresh" class="secondary" hidden>Refresh</button><details id="appMenu" class="hh-app-menu" hidden><summary>Menu</summary><div class="hh-app-menu-items"><button id="refreshOutdoors" class="secondary" type="button">Recalculate house and garden data</button><a href="downloads/our-house-hunt-importer-v0.20.0.zip" download>Download importer 0.20.0</a><hr><button id="exportExcel" class="secondary" type="button">Export Excel</button><button id="exportPdf" class="secondary" type="button">Export PDF</button><hr><button id="changePassword" class="secondary" hidden>Change password</button><button id="logout" class="secondary" hidden>Sign out</button></div></details></div></header>
+<header class="top"><div class="brand">⌂ &nbsp;<span>Our House Hunt</span></div><div id="viewControls" class="hh-view-controls" hidden></div><div class="topright"><strong id="who"></strong><span id="hhVersion" title="Current House Hunt site version" style="font-size:11px;color:#72817f">v67</span><button id="refresh" class="secondary" hidden>Refresh</button><details id="appMenu" class="hh-app-menu" hidden><summary>Menu</summary><div class="hh-app-menu-items"><button id="refreshOutdoors" class="secondary" type="button">Recalculate house and garden data</button><a href="downloads/our-house-hunt-importer-v0.20.0.zip" download>Download importer 0.20.0</a><hr><button id="exportExcel" class="secondary" type="button">Export Excel</button><button id="exportPdf" class="secondary" type="button">Export PDF</button><hr><button id="changePassword" class="secondary" hidden>Change password</button><button id="logout" class="secondary" hidden>Sign out</button></div></details></div></header>
 <main>
 <section id="login" class="panel login" hidden>
 <h1>Welcome home</h1><p>Your shared shortlist, notes and viewings.</p>
@@ -84,7 +84,7 @@ dialog.hh-photo-viewer[open]{display:flex;flex-direction:column}
 <script type="module">
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.49.8';
 import {createViewingDateFields} from './viewing-date.js?v=2';
-import {setupComparison,stationOptions,stationDistance,matchesStation,viewingStatuses,viewingStatusLabels,viewingStatusKey,matchesViewingStatus,statusEditorOptions,compareAgencies} from './comparison.js?v=76';
+import {setupComparison,stationOptions,stationDistance,matchesStation,viewingStatuses,viewingStatusLabels,viewingStatusKey,matchesViewingStatus,statusEditorOptions,compareAgencies} from './comparison.js?v=77';
 import {calculateGoogleRoutes,needsGoogleRouteResume} from './google-routes-runner.js?v=10';
 import {prepareStationChanges,changedStationNames,hasPendingStationChoices} from './station-choice-state.js?v=1';
 import {calculateManualStationRoutes} from './manual-station-routes.js?v=2';
@@ -94,9 +94,9 @@ import {createUniquePhotoStore,photoDigest} from './photo-dedup.js?v=4';
 import {canonicalListing,importChanges,validateGeocode,validListingLocationHint,sameStreet,streetViewListingUrl} from './import-utils.js?v=6';
 import {reconcileOne,mediaRevision} from './reconcile-media.js?v=1';
 import {createEditHistory} from './edit-history.js?v=4';
-import {analyzeFloorplan,inspectFloorplanImage} from './floorplan-ocr.js?v=21';
-import {normalizeListingOutdoors} from './outdoor-details.js?v=5';
-import {needsOutdoorRefresh,refreshOutdoorProperty} from './outdoor-refresh.js?v=4';
+import {analyzeFloorplan,inspectFloorplanImage} from './floorplan-ocr.js?v=22';
+import {normalizeListingOutdoors} from './outdoor-details.js?v=6';
+import {needsOutdoorRefresh,refreshOutdoorProperty} from './outdoor-refresh.js?v=5';
 const sb=createClient('https://ficnuovumurmhzdujjvj.supabase.co','sb_publishable_yrArzwZ2GizO5ATuiAkymg_LdpVZKC9');
 const $=id=>document.getElementById(id);
 const detailViewingDate=createViewingDateFields($('editViewing'),{clearButton:true});
@@ -176,6 +176,17 @@ if(version<18){const msg='Chrome importer 0.18.0 or later is required for schedu
 if(!required)report('Importer connected. Use Menu to recalculate house and garden data.');
 return true}catch(e){const msg=/0\.17|requires|must be updated/i.test(e.message||'')?e.message:'Chrome importer is not responding. Install/update the extension, press Reload at chrome://extensions, then reload this webpage.';report(msg,true);if(required)throw Error(msg);return false}}
 function blob64(base64,mime){const binary=atob(base64),arr=new Uint8Array(binary.length);for(let i=0;i<binary.length;i++)arr[i]=binary.charCodeAt(i);return new Blob([arr],{type:mime})}
+async function storageCompatibleImage(blob){
+ if(!/^image\/(?:gif|avif)$/i.test(blob.type))return blob;
+ const image=await createImageBitmap(blob);
+ try{
+  const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;
+  const context=canvas.getContext('2d');if(!context)throw Error('Cannot convert image');
+  context.drawImage(image,0,0);
+  const png=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+  if(!png)throw Error('Cannot convert image to PNG');return png;
+ }finally{image.close?.()}
+}
 async function archive(urls,id,prefix='photo',limit=Infinity,checks=[],sourcePlan=false){
  const saved=[],hashes=[],seenUrls=new Set();
  let index=0;
@@ -187,20 +198,20 @@ async function archive(urls,id,prefix='photo',limit=Infinity,checks=[],sourcePla
   const trace=prefix==='source-plan'?{url:sourceUrl.slice(0,480)}:null;
   try{
    const data=await extension('FETCH_IMAGE',{url:sourceUrl},25000);
-   const blob=blob64(data.base64,data.mime);
+   const blob=await storageCompatibleImage(blob64(data.base64,data.mime));
    if(trace){trace.bytes=blob.size;trace.mime=blob.type}
    if(blob.size<1300||blob.size>5000000){
     if(trace){trace.status='invalid-size';checks.push(trace);continue}
     throw Error('Photo has an unsupported file size');
    }
-   const ext=data.mime==='application/pdf'?'pdf':data.mime==='image/png'?'png':data.mime==='image/webp'?'webp':data.mime==='image/avif'?'avif':data.mime==='image/gif'?'gif':'jpg';
+   const ext=blob.type==='application/pdf'?'pdf':blob.type==='image/png'?'png':blob.type==='image/webp'?'webp':'jpg';
    if(trace){
     const verdict=sourcePlan?{accepted:blob.type.startsWith('image/'),reason:'identified-in-original-plan-gallery'}:await inspectFloorplanImage(blob);
     trace.validation=verdict;
     if(!verdict.accepted){
      // Retain a failed candidate privately for diagnosis, never display it as a verified plan.
      const qpath=id+'/plan-candidate-'+crypto.randomUUID().slice(0,12)+'.'+ext;
-     const q=await sb.storage.from('property-photos').upload(qpath,blob,{contentType:data.mime,upsert:false});
+     const q=await sb.storage.from('property-photos').upload(qpath,blob,{contentType:blob.type,upsert:false});
      if(!q.error)trace.quarantine_path=qpath;
      trace.status='validation-rejected';checks.push(trace);
      console.warn('Source listing image was not a verified plan',verdict,sourceUrl);
@@ -215,7 +226,7 @@ async function archive(urls,id,prefix='photo',limit=Infinity,checks=[],sourcePla
    // Unique path on every retry. A previous partial upload cannot block this save.
    const path=id+'/'+prefix+'-'+crypto.randomUUID().slice(0,12)+'-'+index+'.'+ext;
    report('Saving '+prefix+' '+(saved.length+1)+'…');
-   const up=await sb.storage.from('property-photos').upload(path,blob,{contentType:data.mime,upsert:false});
+   const up=await sb.storage.from('property-photos').upload(path,blob,{contentType:blob.type,upsert:false});
    if(up.error)throw up.error;
    const stored=await sb.storage.from('property-photos').download(path);
    if(stored.error||!stored.data)throw stored.error||Error('Stored image could not be read');
@@ -621,13 +632,27 @@ async function fillPlanMeasurements(){
  }
  if(filled)report('Floor plans: added '+filled+' measurements.');
 }
+async function repairSavedPlanFallbacks(){
+ for(const p of homes){
+  if(p.status==='deleted'||p.manual_overrides?.floorplans)continue;
+  const fallback=(p.floorplans||[]).filter(x=>x.external_fallback&&x.url).map(x=>x.url);
+  const missing=!(p.floorplans||[]).length?(p.import_diagnostics?.checks||[]).filter(x=>x.status==='download-or-storage-error'&&x.validation?.accepted&&x.validation?.reason==='identified-in-original-plan-gallery').map(x=>x.url):[];
+  const candidates=[...fallback,...missing];if(!candidates.length)continue;
+  try{
+   let plans=await archive(candidates,p.id,'source-plan',Infinity,[],true);if(!plans.length)continue;
+   if(candidates.length===1)plans=plans.map(x=>({...x,original_url:candidates[0]}));
+   const updated=await sb.from('properties').update({floorplans:plans}).eq('id',p.id).eq('manual_overrides',JSON.stringify(p.manual_overrides||{})).eq('floorplans',JSON.stringify(p.floorplans||[])).select('id');
+   if(updated.error)throw updated.error;if(updated.data?.length)await refresh();
+  }catch(error){console.warn('Saved floor plan repair unavailable',p.address,error)}
+ }
+}
 async function startAutoFill(){
  if(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)){
   report('Catalogue works on mobile. Chrome is required only for importing new listings.');
  }
  try{await fillGeoMissing()}catch(e){console.warn('Location enrichment unavailable',e)}
  if(!/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)){
-  try{if(await probeImporter())await autoFillMissing()}catch(e){console.warn('Listing source enrichment unavailable',e)}
+  try{if(await probeImporter()){await repairSavedPlanFallbacks();await autoFillMissing()}}catch(e){console.warn('Listing source enrichment unavailable',e)}
   try{await fillPlanMeasurements()}catch(e){console.warn('Floor plan OCR unavailable',e)}
  }
 }
@@ -877,7 +902,7 @@ async function refreshOutdoorCatalogue(force=false){
 }
 $('refreshOutdoors').onclick=()=>refreshOutdoorCatalogue(true);
 $('stopMeasurements').onclick=()=>{stopMeasurements=true;txt('measurementProgressText','Finishing this house, then stopping. Saved values will remain.')} ;
-async function show(){const r=await sb.from('members').select('id,display_name');if(r.error){txt('loginError','Unable to check membership: '+r.error.message);return}people=Object.fromEntries(r.data.map(x=>[x.id,x.display_name]));if(!people[user.id]){txt('loginError','This account is not registered as a household member');return}$('login').hidden=true;$('mainApp').hidden=false;$('viewControls').hidden=false;$('appMenu').hidden=false;$('logout').hidden=false;$('refresh').hidden=false;$('changePassword').hidden=false;txt('who',people[user.id]);await refresh();void resumeSavedRouteJobs()}
+async function show(){const r=await sb.from('members').select('id,display_name');if(r.error){txt('loginError','Unable to check membership: '+r.error.message);return}people=Object.fromEntries(r.data.map(x=>[x.id,x.display_name]));if(!people[user.id]){txt('loginError','This account is not registered as a household member');return}$('login').hidden=true;$('mainApp').hidden=false;$('viewControls').hidden=false;$('appMenu').hidden=false;$('logout').hidden=false;$('refresh').hidden=false;$('changePassword').hidden=false;txt('who',people[user.id]);await refresh();void resumeSavedRouteJobs();if(!/Android|iPhone|iPad|iPod/i.test(navigator.userAgent))void(async()=>{try{const ping=await extension('PING',{},3500);if(ping?.extension)await repairSavedPlanFallbacks()}catch(e){console.warn('Floor plan repair awaiting importer',e)}})()}
 $('loginForm').onsubmit=async e=>{e.preventDefault();txt('loginError','');const r=await sb.auth.signInWithPassword({email:$('email').value,password:$('password').value});if(r.error){txt('loginError',r.error.message);return}user=r.data.user;await show()};
 $('logout').onclick=async()=>{await sb.auth.signOut();location.reload()};
 $('refresh').onclick=async()=>{await refresh();report('Saved data refreshed. Checking unfinished imports…');try{const manualCount=await resumeManualStationRoutes();const stale=homes.filter(p=>p.status!=='deleted'&&p.import_diagnostics?.source_location?.address_input&&p.import_diagnostics.source_location.address_input!==p.address).map(p=>p.id);for(const id of stale)await updateLocationForAddress(id);const count=await resumePendingRoutes();if(!count&&!manualCount&&!stale.length)report('Saved data refreshed. No unfinished imports with an address.')}catch(e){report('Could not complete import: '+e.message,true)}};

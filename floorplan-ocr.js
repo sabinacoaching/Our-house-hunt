@@ -1,4 +1,4 @@
-import {outdoorMeasurements,mainGardenArea,combineOutdoorDescription,retainOutdoorMeasurements} from './outdoor-details.js?v=5';
+import {outdoorMeasurements,mainGardenArea,combineOutdoorDescription,retainOutdoorMeasurements} from './outdoor-details.js?v=6';
 // Optional, client-side extraction of labelled measurements from a floor-plan image.
 // Never guesses dimensions where no labelled measurements are visible.
 let scriptTask=null,workerTask=null,ocrTail=Promise.resolve();
@@ -22,6 +22,25 @@ async function getWorker(){
  return workerTask;
 }
 const numeric=s=>Number(String(s).replace(',','.'));
+// A combined total is classified only when the printed breakdown adds up.
+export function planAreaBreakdown(raw){
+ const rows=String(raw||'').split(/[\r\n]+/).map(x=>x.trim()).filter(Boolean);
+ const read=line=>{
+  const ft=line.match(/(\d[\d,]*(?:\.\d+)?)\s*(?:sq\.?\s*(?:ft|feet)|square\s+feet)\b/i);
+  const m=line.match(/(\d[\d,]*(?:\.\d+)?)\s*(?:sq\.?\s*m(?:etres?)?|sqm|m²|m2)(?=\s|$|[.)/])/i);
+  const f=ft?Number(ft[1].replace(/,/g,'')):null,metric=m?Number(m[1].replace(/,/g,'')):null;
+  if(f!=null&&metric!=null&&Math.abs(f*.09290304-metric)>1)return null;
+  return f!=null?{sqft:f,sqm:metric??Math.round(f*.09290304*100)/100}:metric!=null?{sqft:null,sqm:metric}:null;
+ };
+ const group=rx=>rows.filter(x=>rx.test(x)).map(read).filter(Boolean);
+ const main=group(/\b(?:approx(?:imate)?\s+area|gross\s+internal\s+area|internal\s+area)\b/i)[0];
+ const outside=group(/\b(?:outbuildings?|garages?|log\s+cabins?|garden\s+(?:rooms?|offices?)|workshops?|external\s+(?:building|area))\b/i)[0];
+ const limited=group(/\blimited\s+use\s+area/i)[0];
+ const total=group(/^\s*(?:approx(?:imate)?\s+)?total\b/i)[0];
+ if(!main||!outside||!total)return null;
+ if(Math.abs(main.sqm+outside.sqm+(limited?.sqm||0)-total.sqm)>Math.max(.6,total.sqm*.006))return null;
+ return {house_sqm:main.sqm,combined_sqm:total.sqm,combined_sqft:total.sqft,outbuilding_sqm:outside.sqm,limited_use_sqm:limited?.sqm??null};
+}
 function pairedArea(text,tolerant=false){
  if(tolerant)text=String(text||'').replace(/(?<![a-z])(?:[so59]?q|sq)\s*m\b/gi,'sq m').replace(/(?<![a-z])(?:[so59]?q|sa|69)\s*(?:ft|tt)\b/gi,'sq ft');
  const pairs=[];
@@ -48,6 +67,7 @@ export function parsePlanText(original,{headerText='',footerText=''}={}){
    return !/(?:ground|first|second|third)\s+floor\s*(?:[-:,.]\s*)?$/i.test(before)||/^(?:total|gross\s+internal|gia)\b/i.test(m[0]);
   });
   for(const m of matches){
+   if(/\b(?:including|incl\.?|with)\s+(?:a\s+|the\s+)?(?:garage|outbuildings?)\b/i.test(m[0]))continue;
    // Reverse-form headings must share a line with their number. Otherwise a
    // preceding storey's subtotal can be mistaken for the overall GIA footer.
    if(i===2&&!String(original||'').split(/[\r\n]+/).some(line=>new RegExp(rx.source,rx.flags).test(line.replace(/[×✕]/g,'x').replace(/(\d),(\d)/g,'$1.$2'))))continue;
@@ -67,6 +87,20 @@ export function parsePlanText(original,{headerText='',footerText=''}={}){
  // Tiny grey headings may be unreadable. Accept their number only when the
  // same metric/imperial pair independently agrees in BOTH image bands.
  if(result.floor_area_sqm==null){const top=pairedArea(headerText),bottom=pairedArea(footerText,true);const agreed=[...new Set(top.filter(n=>bottom.some(v=>Math.abs(n-v)<.05)))];if(agreed.length===1)result.floor_area_sqm=agreed[0]}
+ const breakdown=planAreaBreakdown(original);
+ if(breakdown){result.area_breakdown=breakdown;result.floor_area_sqm=breakdown.house_sqm}
+ // Keep the printed square-foot value when it accompanies the selected
+ // internal area. Conversion from rounded metric print can differ by feet.
+ if(result.floor_area_sqm!=null){
+  const pairs=String(original||'').split(/[\r\n]+/).flatMap(line=>{
+   const ft=line.match(/(\d[\d,]*(?:\.\d+)?)\s*(?:sq\.?\s*(?:ft|feet)|square\s+feet)\b/i);
+   const metric=line.match(/(\d[\d,]*(?:\.\d+)?)\s*(?:sq\.?\s*m(?:etres?)?|sqm|m²|m2)(?=\s|$|[.)/\-])/i);
+   if(!ft||!metric)return [];
+   const f=Number(ft[1].replace(/,/g,'')),m=Number(metric[1].replace(/,/g,''));
+   return Math.abs(m-result.floor_area_sqm)<.05&&Math.abs(f*.09290304-m)<1?[f]:[];
+  });
+  if(new Set(pairs).size===1)result.floor_area_sqft=pairs[0];
+ }
  result.outdoor=outdoorMeasurements(original);
  const garden=mainGardenArea(result.outdoor);if(garden!=null)result.garden_area_sqm=garden;
  // Count storeys only when the plan explicitly labels a ground floor and subsequent levels.
@@ -152,7 +186,8 @@ export function floorplanChanges(p,measurements,{fingerprint='',listingText,now=
  const raw=listingText??p.import_diagnostics?.listing_text??source.garden_description??p.garden_description??'';
  const outdoorRecord=p.import_diagnostics?.outdoor_details;
  const planFingerprint=(p.floorplans||[]).map(x=>x.sha256||x.path||x.url).join('|');
- const known=outdoorRecord?.plan_fingerprint===planFingerprint?outdoorRecord.measurements||[]:prior?.fingerprint===fingerprint?prior.outdoor||[]:[];
+ const sourceMatches=(p.floorplans||[]).some(x=>(x.original_url||x.external_fallback&&x.url)&&(outdoorRecord?.measurement_sources||[]).some(y=>y.url===(x.original_url||x.url)));
+ const known=outdoorRecord?.plan_fingerprint===planFingerprint||sourceMatches?outdoorRecord.measurements||[]:prior?.fingerprint===fingerprint?prior.outdoor||[]:[];
  const outdoor=retainOutdoorMeasurements(measurements.outdoor||[],known);
  // Every entry point uses the same complete set of gardens. A weaker OCR pass
  // must not replace the largest garden with whichever label it happened to read.
@@ -160,6 +195,11 @@ export function floorplanChanges(p,measurements,{fingerprint='',listingText,now=
  measurements={...measurements,...(gardens!=null?{garden_area_sqm:gardens}:{})};
  const same=(a,b)=>a==null?b==null:typeof b==='number'?Number(a)===b:String(a)===String(b);
  const allowed=key=>!p.manual_overrides?.[key]&&(p[key]==null||p[key]===''||Object.hasOwn(source,key)&&same(p[key],source[key])||Object.hasOwn(prior?.values||{},key)&&same(p[key],prior.values[key])||Object.hasOwn(p.import_diagnostics?.outdoor_details?.values||{},key)&&same(p[key],p.import_diagnostics.outdoor_details.values[key]));
+ const breakdown=measurements.area_breakdown;
+ const sourceFeet=source.floor_area_sqm==null?null:Math.round(Number(source.floor_area_sqm)/.09290304);
+ const combinedFeet=breakdown==null?null:(breakdown.combined_sqft??Math.round(breakdown.combined_sqm/.09290304));
+ const includesOutbuilding=breakdown&&sourceFeet!=null&&Math.abs(sourceFeet-combinedFeet)<=1;
+ if(includesOutbuilding&&allowed('floor_area_sqm')&&measurements.floor_area_sqm!=null&&!same(p.floor_area_sqm,measurements.floor_area_sqm))changes.floor_area_sqm=measurements.floor_area_sqm;
  for(const key of ['floor_area_sqm','garden_area_sqm','floors']){
   // The owner's priority is the advertised area; the plan only fills a missing floor area.
   const savedPlanFallback=key==='floor_area_sqm'&&source.floor_area_sqm==null&&prior?.values?.floor_area_sqm!=null&&Number(p[key])===Number(prior.values.floor_area_sqm);
@@ -171,8 +211,8 @@ export function floorplanChanges(p,measurements,{fingerprint='',listingText,now=
  // Keep the exact inputs/provenance separate from the combined human-facing notes.
  const values={...(prior?.values||{}),...Object.fromEntries(Object.entries(changes))};
  for(const key of ['floor_area_sqm','garden_area_sqm','floors'])if(measurements[key]!=null&&!p.manual_overrides?.[key]&&same(p[key],measurements[key]))values[key]=measurements[key];
- const labelled_values=Object.fromEntries(['floor_area_sqm','garden_area_sqm','floors'].filter(k=>measurements[k]!=null).map(k=>[k,measurements[k]]));
- const diagnostic={version:'labelled-plan-v13',fingerprint,values,labelled_values,outdoor,checked_at:now};
+ const labelled_values=Object.fromEntries(['floor_area_sqm','floor_area_sqft','garden_area_sqm','floors'].filter(k=>measurements[k]!=null).map(k=>[k,measurements[k]]));
+ const diagnostic={version:'labelled-plan-v14',fingerprint,values,labelled_values,outdoor,...(breakdown?{area_breakdown:breakdown,advertised_includes_outbuilding:!!includesOutbuilding}:{}),checked_at:now};
  changes.import_diagnostics={...(p.import_diagnostics||{}),...(listingText!=null?{listing_text:listingText}:{}),floorplan_measurements:diagnostic};
  return changes;
 }

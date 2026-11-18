@@ -1,5 +1,5 @@
-import {listingOutdoorDetails,combineOutdoorDescription,mainGardenArea,retainOutdoorMeasurements} from './outdoor-details.js?v=5';
-import {readPlanImage,parsePlanText,floorplanChanges} from './floorplan-ocr.js?v=21';
+import {listingOutdoorDetails,combineOutdoorDescription,mainGardenArea,retainOutdoorMeasurements} from './outdoor-details.js?v=6';
+import {readPlanImage,parsePlanText,floorplanChanges} from './floorplan-ocr.js?v=22';
 
 export const outdoorVersion='measurements-v4';
 export const planFingerprint=p=>(p.floorplans||[]).map(x=>x.sha256||x.path||x.url).join('|');
@@ -17,7 +17,8 @@ function canReplace(p,key){
 export function outdoorChanges(p,{listingText,listingData,measurements=[],errors=[],now=new Date().toISOString()}={}){
  const prior=p.import_diagnostics||{},hasListingText=!!String(listingText||'').trim(),sourceText=hasListingText?listingText:prior.listing_text;
  const source=listingOutdoorDetails(sourceText??prior.source_values?.garden_description??p.garden_description??'');
- const known=prior.outdoor_details?.plan_fingerprint===planFingerprint(p)?prior.outdoor_details.measurements||[]:[];
+ const sourceMatches=(p.floorplans||[]).some(x=>(x.original_url||x.external_fallback&&x.url)&&(prior.outdoor_details?.measurement_sources||[]).some(y=>y.url===(x.original_url||x.url)));
+ const known=prior.outdoor_details?.plan_fingerprint===planFingerprint(p)||sourceMatches?prior.outdoor_details.measurements||[]:[];
  const planItems=retainOutdoorMeasurements(measurements.flatMap(x=>x.outdoor||[]),known);
  const candidates=[mainGardenArea([...source.measurements,...planItems]),source.garden_area_sqm].filter(x=>x!=null);
  const area=candidates.length?Math.max(...candidates):null,notes=combineOutdoorDescription(sourceText??prior.source_values?.garden_description??p.garden_description??'',planItems);
@@ -35,14 +36,16 @@ export function outdoorChanges(p,{listingText,listingData,measurements=[],errors
  const cardRead=!!listingData&&Object.hasOwn(listingData,'floor_area_sqm');
  const advertised=card!=null&&Number.isFinite(Number(card))&&Number(card)>0?Number(card):null;
  const sourceValues={...(prior.source_values||{}),...(cardRead?{floor_area_sqm:advertised}:{})};
- const total=measurements.find(x=>x.floor_area_sqm!=null)?.floor_area_sqm;
+ const primary=measurements.find(x=>x.area_breakdown)||measurements.find(x=>x.floor_area_sqm!=null);
+ const total=primary?.floor_area_sqm;
  const floors=measurements.find(x=>x.floors!=null)?.floors;
  const areaToSave=advertised??total;
  // This is an explicit full recalculation. Legacy imported values may have no
  // source snapshot; a fresh verified listing still takes precedence over them.
  if(cardRead&&areaToSave!=null&&!p.manual_overrides?.floor_area_sqm&&!same(p.floor_area_sqm,areaToSave))changes.floor_area_sqm=areaToSave;
  const current={...p,...changes,import_diagnostics:{...prior,source_values:sourceValues}};
- const plan=measurements.length?floorplanChanges(current,{outdoor:planItems,...(total!=null?{floor_area_sqm:total}:{}),...(floors!=null?{floors}:{})},{fingerprint:p.floorplans?.[0]?.path||p.floorplans?.[0]?.url||'',listingText:sourceText,now}):null;
+ const breakdown=primary?.area_breakdown;
+ const plan=measurements.length?floorplanChanges(current,{outdoor:planItems,...(total!=null?{floor_area_sqm:total}:{}),...(primary?.floor_area_sqft!=null?{floor_area_sqft:primary.floor_area_sqft}:{}),...(floors!=null?{floors}:{}),...(breakdown?{area_breakdown:breakdown}:{})},{fingerprint:p.floorplans?.[0]?.path||p.floorplans?.[0]?.url||'',listingText:sourceText,now}):null;
  for(const key of ['floor_area_sqm','floors'])if(plan&&Object.hasOwn(plan,key))changes[key]=plan[key];
  changes.import_diagnostics={...prior,...(hasListingText?{listing_text:listingText}:{}),source_values:sourceValues,...(plan?{floorplan_measurements:plan.import_diagnostics.floorplan_measurements}:{}),outdoor_details:{version:outdoorVersion,listing_url:p.url,plan_fingerprint:planFingerprint(p),status:errors.length?'partial':'complete',checked_at:now,values,measurements:planItems,listing_measurements:source.measurements,dimensions_found:area!=null,errors}};
  return changes;

@@ -99,3 +99,17 @@ test('full recalculation corrects legacy imported house areas without provenance
  p.manual_overrides.floor_area_sqm=true;
  assert.equal(outdoorChanges(p,{listingData:{floor_area_sqm:115.48}}).floor_area_sqm,undefined);
 });
+
+test('recalculation keeps outbuildings out when the advertised area matches the combined printed total',async()=>{
+ const {parsePlanText}=await import('../floorplan-ocr.js');
+ const plan=parsePlanText('Approximate Area = 1042 sq ft / 96.8 sq m\nLimited Use Area(s) = 77 sq ft / 7.1 sq m\nOutbuildings = 124 sq ft / 11.5 sq m\nTotal = 1243 sq ft / 115.4 sq m\nGarden\n10m x 5m');
+ const p={...property(),floor_area_sqm:115.48,import_diagnostics:{source_values:{floor_area_sqm:115.48}},floorplans:[{path:'plan.jpg'}]};
+ const patch=outdoorChanges(p,{listingText:'Rear garden.',listingData:{floor_area_sqm:115.48},measurements:[plan]});
+ assert.equal(patch.floor_area_sqm,96.8);assert.equal(patch.garden_area_sqm,50);assert.equal(patch.import_diagnostics.floorplan_measurements.advertised_includes_outbuilding,true);
+});
+test('converting an external GIF plan to PNG preserves measurements from that same source',()=>{
+ const old=outdoorMeasurements('Rear garden 12m x 5m');
+ const p={...property(),garden_area_sqm:60,floorplans:[{path:'plan.png',sha256:'newhash',original_url:'https://source/plan.gif'}],import_diagnostics:{source_values:{},outdoor_details:{plan_fingerprint:'',measurement_sources:[{url:'https://source/plan.gif'}],measurements:old,values:{garden_area_sqm:60}}}};
+ const patch=outdoorChanges(p,{listingText:'Rear garden.',measurements:[{outdoor:[]}]});
+ assert.equal(patch.garden_area_sqm,undefined);assert.equal(patch.import_diagnostics.outdoor_details.measurements[0].area_sqm,60);
+});

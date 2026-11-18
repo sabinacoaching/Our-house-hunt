@@ -42,3 +42,28 @@ test('Acacia Road uses the overall GIA rather than the preceding storey subtotal
  assert.equal(parsePlanText(floors+'\n1046 SQ FT/97.2SQM').floor_area_sqm,97.2);
  assert.equal(parsePlanText(floors).floor_area_sqm,undefined);
 });
+
+test('a balanced plan breakdown prevents an advertised total with outbuildings being shown as house area',async()=>{
+ const {floorplanChanges}=await import('../floorplan-ocr.js');
+ const text='Approximate Area = 1042 sq ft / 96.8 sq m\nLimited Use Area(s) = 77 sq ft / 7.1 sq m\nOutbuildings = 124 sq ft / 11.5 sq m\nTotal = 1243 sq ft / 115.4 sq m';
+ const parsed=parsePlanText(text);assert.equal(parsed.floor_area_sqm,96.8);assert.equal(parsed.area_breakdown.combined_sqft,1243);assert.equal(parsed.area_breakdown.outbuilding_sqm,11.5);
+ const property={floor_area_sqm:115.48,manual_overrides:{},import_diagnostics:{source_values:{floor_area_sqm:115.48}}};
+ const result=floorplanChanges(property,parsed);assert.equal(result.floor_area_sqm,96.8);assert.equal(result.import_diagnostics.floorplan_measurements.advertised_includes_outbuilding,true);
+ assert.equal(floorplanChanges({...property,manual_overrides:{floor_area_sqm:true}},parsed).floor_area_sqm,undefined);
+ const noMatch=parsePlanText(text.replace('1243 sq ft / 115.4','1400 sq ft / 130.1'));assert.equal(noMatch.area_breakdown,undefined);
+ const unrelated=floorplanChanges({...property,floor_area_sqm:105,import_diagnostics:{source_values:{floor_area_sqm:105}}},parsed);assert.equal(unrelated.floor_area_sqm,undefined);
+});
+test('a total explicitly including a garage is not treated as house area',()=>{
+ assert.equal(parsePlanText('Total floor area including garage 110 sq m').floor_area_sqm,undefined);
+});
+test('a separately labelled garden cabin does not enter house area or replace a house-only listing figure',async()=>{
+ const {floorplanChanges}=await import('../floorplan-ocr.js');
+ const text='Approximate Area = 1113 sq ft / 103.3 sq m\nLog Cabin = 87 sq ft / 8.1 sq m\nTotal = 1200 sq ft / 111.4 sq m';
+ const plan=parsePlanText(text);assert.equal(plan.area_breakdown.outbuilding_sqm,8.1);assert.equal(plan.floor_area_sqm,103.3);
+ const p={floor_area_sqm:103.4,manual_overrides:{},import_diagnostics:{source_values:{floor_area_sqm:103.4}}};
+ assert.equal(floorplanChanges(p,plan).floor_area_sqm,undefined);
+});
+test('retains the printed square-foot amount for the selected plan total',()=>{
+ const text='APPROX. GROSS INTERNAL FLOOR AREA WITH GARAGE: 1597 SQFT/148 SQM\nAPPROX. GROSS INTERNAL FLOOR AREA WITHOUT GARAGE: 1297 SQFT/120 SQM';
+ const parsed=parsePlanText(text);assert.equal(parsed.floor_area_sqm,120);assert.equal(parsed.floor_area_sqft,1297);
+});
