@@ -66,3 +66,36 @@ test('two gardens with equal areas and different sides remain separate',()=>{
  const again=outdoorChanges({...property(),...first},{listingText:'Gardens.',measurements:[{outdoor:outdoorMeasurements('Garden 10m x 4m')}]});
  assert.match(again.import_diagnostics.outdoor_details.values.garden_description,/20 × 2 m/);assert.match(again.import_diagnostics.outdoor_details.values.garden_description,/10 × 4 m/);
 });
+test('one recalculation saves the advertised house size and largest garden together',()=>{
+ const p={...property(),floor_area_sqm:85,import_diagnostics:{source_values:{floor_area_sqm:85}}};
+ const patch=outdoorChanges(p,{listingText:'Rear garden and off-street parking.',listingData:{floor_area_sqm:92},measurements:[{floor_area_sqm:100,outdoor:outdoorMeasurements('Front garden 3m x 4m\nRear garden 20m x 5m')}]});
+ assert.equal(patch.floor_area_sqm,92);assert.equal(patch.garden_area_sqm,100);
+ assert.equal(patch.import_diagnostics.floorplan_measurements.labelled_values.floor_area_sqm,100);
+ assert.equal(patch.import_diagnostics.source_values.floor_area_sqm,92);
+});
+test('a missing advertised size falls back to the plan and a failed reread cannot clear it',()=>{
+ const p={...property(),floor_area_sqm:null};
+ const first=outdoorChanges(p,{listingText:'Rear garden.',listingData:{floor_area_sqm:null},measurements:[{floor_area_sqm:102.4,outdoor:outdoorMeasurements('Garden 15m x 5m')}]});
+ assert.equal(first.floor_area_sqm,102.4);
+ const again=outdoorChanges({...p,...first},{listingText:'',listingData:{floor_area_sqm:null},measurements:[],errors:['OCR unavailable']});
+ assert.equal(again.floor_area_sqm,undefined);assert.equal(again.garden_area_sqm,undefined);assert.equal(again.garden_description,undefined);
+});
+test('house and garden manual values survive a complete recalculation',()=>{
+ const p={...property(),floor_area_sqm:90,garden_area_sqm:150,manual_overrides:{floor_area_sqm:true,garden_area_sqm:true,garden_description:true}};
+ const patch=outdoorChanges(p,{listingText:'Garden 20m x 5m',listingData:{floor_area_sqm:100},measurements:[{floor_area_sqm:105}]});
+ assert.equal(patch.floor_area_sqm,undefined);assert.equal(patch.garden_area_sqm,undefined);assert.equal(patch.garden_description,undefined);
+});
+test('a weaker read retains front/rear gardens even when their sides were never labelled',()=>{
+ const p=property();p.floorplans=[{path:'same-plan.jpg'}];
+ const first=outdoorChanges(p,{listingText:'Private garden.',measurements:[{outdoor:outdoorMeasurements('Front garden\nRear garden')}]});
+ const again=outdoorChanges({...p,...first},{listingText:'Private garden.',measurements:[{outdoor:[]}]});
+ assert.equal(again.garden_description,undefined);
+ assert.deepEqual(again.import_diagnostics.outdoor_details.measurements,first.import_diagnostics.outdoor_details.measurements);
+});
+test('full recalculation corrects legacy imported house areas without provenance but respects a manual lock',()=>{
+ const p={...property(),floor_area_sqm:96.8};
+ assert.equal(outdoorChanges(p,{listingData:{floor_area_sqm:115.48}}).floor_area_sqm,115.48);
+ assert.equal(outdoorChanges(p,{listingData:{floor_area_sqm:null},measurements:[{floor_area_sqm:117.1}]}).floor_area_sqm,117.1);
+ p.manual_overrides.floor_area_sqm=true;
+ assert.equal(outdoorChanges(p,{listingData:{floor_area_sqm:115.48}}).floor_area_sqm,undefined);
+});

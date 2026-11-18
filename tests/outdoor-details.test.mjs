@@ -66,3 +66,18 @@ test('plan save compares the fresh whole row and retains a completed concurrent 
  try{const result=await analyzeFloorplan({sb,property:p,photo:async()=>'/plan',recognize:async()=>({text:ocr,...bands})});assert.equal(result.status,'concurrent-edit');assert.equal(p.floor_area_sqm,68.01)}
  finally{globalThis.fetch=oldFetch;globalThis.localStorage=oldStorage}
 });
+test('the single-plan path cannot shrink the saved largest garden on a weaker OCR pass',()=>{
+ const p={garden_area_sqm:100,floorplans:[{path:'plan.jpg'}],manual_overrides:{},import_diagnostics:{outdoor_details:{plan_fingerprint:'plan.jpg',values:{garden_area_sqm:100},measurements:outdoorMeasurements('Garden 20m x 5m\nGarden 6m x 5m')}}};
+ const patch=floorplanChanges(p,parsePlanText('Garden 6m x 5m'),{fingerprint:'plan.jpg'});
+ assert.equal(patch.garden_area_sqm,undefined);assert.match(patch.garden_description,/20 × 5 m/);
+ assert.equal(patch.import_diagnostics.floorplan_measurements.labelled_values.garden_area_sqm,100);
+});
+test('a published garden length is retained in notes without inventing its width or area',()=>{
+ const items=outdoorMeasurements("Rear garden extends to\n35'0\" (10.67m)\nKitchen\n4m x 3m");
+ assert.equal(items[0].length_m,10.67);assert.equal(items[0].area_sqm,undefined);
+ assert.match(combineOutdoorDescription('',items),/length 10.67 m; width not stated/);
+ assert.equal(parsePlanText("Garden\n74 feet").garden_area_sqm,undefined);
+ assert.equal(outdoorMeasurements('To Garden\nConservatory\n10m').length,0);
+ const abingdon=outdoorMeasurements("Rear Garden\nApproximate\n41'4 (12.60)\nKitchen\n4m x 3m\nFront Garden\nApproximate\n15'6 (4.72)");
+ assert.equal(abingdon[0].length_m,12.60);assert.equal(abingdon[1].length_m,4.72);assert.equal(abingdon[0].area_sqm,undefined);
+});

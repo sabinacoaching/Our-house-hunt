@@ -28,3 +28,17 @@ test('printed metric Gross Internal Area wins over converted feet and a total in
  assert.equal(parsePlanText('Approximate Area: 45 sqm\nGross Internal Area 96 sqm').floor_area_sqm,96);
  assert.equal(parsePlanText('APPROX. GROSS INTERNAL FLOOR AREA WITH GARAGE: 1597 SQFT/148 SQM\nAPPROX. GROSS INTERNAL FLOOR AREA WITHOUT GARAGE: 1297 SQFT/120 SQM').floor_area_sqm,120);
 });
+
+test('Hatch Road accepts a damaged square-metre superscript only when the printed feet total agrees',()=>{
+ assert.equal(parsePlanText('Kitchen\nBedroom\nTotal floor area 92.8 m? (998 sq.ft.) approx').floor_area_sqm,92.8);
+ assert.notEqual(parsePlanText('Total floor area 92.8 m? (700 sq.ft.) approx').floor_area_sqm,92.8);
+});
+test('Station Road footer total is not rejected because it follows the storey labels',()=>{
+ const text='Ground Floor First Floor Second Floor\nTotal area (approx.): 117.1 sq. m (1260.4 sq. ft)\nOutbuilding area (approx.): 6.3 sq. m (67.8 sq. ft)';
+ assert.equal(parsePlanText(text).floor_area_sqm,117.1);
+});
+test('Acacia Road uses the overall GIA rather than the preceding storey subtotal',()=>{
+ const floors='GROUND FLOOR\n560SQFT/52.0SQM\nFIRST FLOOR\n486SQFT/452SQM\nAPPROXIMATE GROSS INTERNAL AREA';
+ assert.equal(parsePlanText(floors+'\n1046 SQ FT/97.2SQM').floor_area_sqm,97.2);
+ assert.equal(parsePlanText(floors).floor_area_sqm,undefined);
+});
