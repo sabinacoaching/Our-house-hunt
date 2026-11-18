@@ -1,3 +1,10 @@
+## Garden refresh and listing map fallback, v63
+
+- Reprocess existing automatic garden/parking fields and record completion; an installed extension alone must not leave old descriptions indefinitely. Retain manual garden fields, dates, comments, media and routes with a fresh whole-row comparison. Failed reads remain visible and retryable.
+- Read long Zoopla descriptions through streamed UTF-8 text references and Rightmove's structured parking data. Keep objective garden, front/rear, access, driveway and parking clauses; remove unrelated accommodation/EPC and generic indoor/outdoor sales prose.
+- Native browser OCR must read Southbrook 121.56 m², Elmfield 99.06 m² and Woodvale 52 m² from their printed sides. Beecholme and Helmsdale remain unknown when no sides are published. Do not borrow conservatory or kitchen dimensions from "To Garden" arrows.
+- Street View is preferred; the owner explicitly accepts the original listing map when it is absent. Keep the original address and `Listing map` provenance consistently across all journeys and walking links. Run real Google routes for Beecholme and Woodvale at their verified map points. Completed other homes remain cached.
+
 ## v62 floor-plan and outdoor information (2026-11-18)
 
 - Owner clarification: advertised/card floor area has priority. Central Road's 732 sq ft / 68.01 m² must stay in the main area field. Its plan says 86.0 m² / 925 sq ft; use the plan's Gross Internal Area only when the listing has no area. A newly available advertised area replaces a tracked automatic plan fallback, never a manual area. Preserve viewing dates, decisions, stations and routes.

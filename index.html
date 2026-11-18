@@ -37,7 +37,7 @@ dialog.hh-photo-viewer[open]{display:flex;flex-direction:column}
 <link rel="stylesheet" href="./comparison.css?v=29">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css'">
 </head><body>
-<header class="top"><div class="brand">⌂ &nbsp;<span>Our House Hunt</span></div><div id="viewControls" class="hh-view-controls" hidden></div><div class="topright"><strong id="who"></strong><span id="hhVersion" title="Current House Hunt site version" style="font-size:11px;color:#72817f">v62</span><button id="refresh" class="secondary" hidden>Refresh</button><details id="appMenu" class="hh-app-menu" hidden><summary>Menu</summary><div class="hh-app-menu-items"><button id="exportExcel" class="secondary" type="button">Export Excel</button><button id="exportPdf" class="secondary" type="button">Export PDF</button><hr><button id="changePassword" class="secondary" hidden>Change password</button><button id="logout" class="secondary" hidden>Sign out</button></div></details></div></header>
+<header class="top"><div class="brand">⌂ &nbsp;<span>Our House Hunt</span></div><div id="viewControls" class="hh-view-controls" hidden></div><div class="topright"><strong id="who"></strong><span id="hhVersion" title="Current House Hunt site version" style="font-size:11px;color:#72817f">v63</span><button id="refresh" class="secondary" hidden>Refresh</button><details id="appMenu" class="hh-app-menu" hidden><summary>Menu</summary><div class="hh-app-menu-items"><button id="refreshOutdoors" class="secondary" type="button">Update gardens and parking</button><a href="downloads/our-house-hunt-importer-v0.20.0.zip" download>Download importer 0.20.0</a><hr><button id="exportExcel" class="secondary" type="button">Export Excel</button><button id="exportPdf" class="secondary" type="button">Export PDF</button><hr><button id="changePassword" class="secondary" hidden>Change password</button><button id="logout" class="secondary" hidden>Sign out</button></div></details></div></header>
 <main>
 <section id="login" class="panel login" hidden>
 <h1>Welcome home</h1><p>Your shared shortlist, notes and viewings.</p>
@@ -83,18 +83,19 @@ dialog.hh-photo-viewer[open]{display:flex;flex-direction:column}
 <script type="module">
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.49.8';
 import {createViewingDateFields} from './viewing-date.js?v=2';
-import {setupComparison,stationOptions,stationDistance,matchesStation,viewingStatuses,viewingStatusLabels,viewingStatusKey,matchesViewingStatus,statusEditorOptions,compareAgencies} from './comparison.js?v=73';
-import {calculateGoogleRoutes,needsGoogleRouteResume} from './google-routes-runner.js?v=9';
+import {setupComparison,stationOptions,stationDistance,matchesStation,viewingStatuses,viewingStatusLabels,viewingStatusKey,matchesViewingStatus,statusEditorOptions,compareAgencies} from './comparison.js?v=74';
+import {calculateGoogleRoutes,needsGoogleRouteResume} from './google-routes-runner.js?v=10';
 import {prepareStationChanges,changedStationNames,hasPendingStationChoices} from './station-choice-state.js?v=1';
-import {calculateManualStationRoutes} from './manual-station-routes.js?v=1';
-import {buildLocationUpdate} from './location-update.js?v=3';
+import {calculateManualStationRoutes} from './manual-station-routes.js?v=2';
+import {buildLocationUpdate} from './location-update.js?v=4';
 import {setupExports} from './export-tools.js?v=3';
 import {createUniquePhotoStore,photoDigest} from './photo-dedup.js?v=4';
-import {canonicalListing,importChanges,validateGeocode,validStreetViewHint,sameStreet,streetViewListingUrl} from './import-utils.js?v=5';
+import {canonicalListing,importChanges,validateGeocode,validListingLocationHint,sameStreet,streetViewListingUrl} from './import-utils.js?v=6';
 import {reconcileOne,mediaRevision} from './reconcile-media.js?v=1';
 import {createEditHistory} from './edit-history.js?v=4';
-import {analyzeFloorplan,inspectFloorplanImage} from './floorplan-ocr.js?v=17';
-import {normalizeListingOutdoors} from './outdoor-details.js?v=1';
+import {analyzeFloorplan,inspectFloorplanImage} from './floorplan-ocr.js?v=18';
+import {normalizeListingOutdoors} from './outdoor-details.js?v=2';
+import {needsOutdoorRefresh,refreshOutdoorProperty} from './outdoor-refresh.js?v=1';
 const sb=createClient('https://ficnuovumurmhzdujjvj.supabase.co','sb_publishable_yrArzwZ2GizO5ATuiAkymg_LdpVZKC9');
 const $=id=>document.getElementById(id);
 const detailViewingDate=createViewingDateFields($('editViewing'),{clearButton:true});
@@ -278,12 +279,12 @@ async function importHouse(raw){
  const p={id,url,source:data.source,title:data.title||'',address:data.address||'',agency_name:data.agency_name||null,agency_email:data.agency_email||null,agency_website:data.agency_website||null,price:data.price??null,bedrooms:data.bedrooms??null,bathrooms:listingBathrooms(data),wc_count:data.wc_count??null,floors:listingFloors(data),floor_area_sqm:data.floor_area_sqm??null,garden_area_sqm:data.garden_area_sqm??null,garden_description:data.garden_description||'',station_name:'',station_distance_miles:null,station_2_name:'',station_2_distance_miles:null,latitude:null,longitude:null,property_type:data.property_type||null,tenure:data.tenure||null,images,floorplans,import_diagnostics:{source:'original-listing',nearby_stations:data.nearby_stations||[],extension_version:data.extension_version||'unknown',status:data.floorplan_status||'unknown',candidates:floorplanCandidates.length,archived:floorplans.length,checks:planChecks,attempted_at:new Date().toISOString(),media_source_revision:mediaRevision,media_source_result:'completed',source_values:{address:data.address,agency_name:data.agency_name||null,agency_email:data.agency_email||null,agency_website:data.agency_website||null,price:data.price??null,bedrooms:data.bedrooms??null,bathrooms:listingBathrooms(data),wc_count:data.wc_count??null,floors:listingFloors(data),floor_area_sqm:data.floor_area_sqm??null,garden_area_sqm:data.garden_area_sqm??null,garden_description:data.garden_description||'',property_type:data.property_type||null,tenure:data.tenure||null}},created_by:user.id,status:''};
  const hint=data.location_hint;
  if(data.listing_text)p.import_diagnostics.listing_text=data.listing_text;
- if(validStreetViewHint(hint,p.address)){
-  if(sameStreet(hint.address,p.address)&&/^\s*\d+[a-z]?\s+/i.test(hint.address||'')&&!/^\s*\d+[a-z]?\s+/i.test(p.address))p.address=hint.address;
+ if(validListingLocationHint(hint,p.address)){
+  if(hint.source==='listing-street-view'&&sameStreet(hint.address,p.address)&&/^\s*\d+[a-z]?\s+/i.test(hint.address||'')&&!/^\s*\d+[a-z]?\s+/i.test(p.address))p.address=hint.address;
   p.latitude=Number(hint.latitude);p.longitude=Number(hint.longitude);
   p.import_diagnostics.source_location={source:hint.source,listing_url:url,address_input:p.address,latitude:p.latitude,longitude:p.longitude,display_address:hint.address||null};
  }
- p.import_diagnostics.route_pending=true;p.import_diagnostics.require_street_view=true;
+ p.import_diagnostics.route_pending=true;p.import_diagnostics.require_listing_location=true;
  const r=await sb.from('properties').insert(p);
  if(r.error)throw r.error;
  pendingJourneyImportIds.add(id);
@@ -790,14 +791,14 @@ async function updateLocationForAddress(id,continueImport=true){
   const first=await sb.from('properties').select('*').eq('id',id).single();
   if(first.error||!first.data)throw first.error||Error('House not found');
   const original=first.data;
-  report('Checking Street View and updating routes for '+original.address+'…');
+  report('Checking the listing location and updating routes for '+original.address+'…');
   // With the Google importer, calculate first and replace routes atomically;
   // an unavailable listing or route must not erase the previous values.
   let version=0;try{const ping=await extension('PING',{},3500);version=Number(String(ping?.version||'0').split('.')[1]||0)}catch{}
   if(version>=16){await queueGoogleHouse(id);pendingJourneyImportIds.delete(id);await refresh();return true}
   const read=await extension('IMPORT_URL',{url:streetViewListingUrl(original.url)},70000);
   const update=buildLocationUpdate(original,read?.location_hint);
-  if(!update)throw Error('Street View could not confirm a point on this road');
+  if(!update)throw Error('The original listing did not provide a usable map or Street View point');
   let request=sb.from('properties').update(update).eq('id',id).eq('address',original.address);
   for(const key of ['import_diagnostics','station_commutes','journey_estimates','manual_overrides']){
    const value=original[key];request=value==null?request.is(key,null):request.eq(key,JSON.stringify(value));
@@ -816,7 +817,7 @@ async function updateLocationForAddress(id,continueImport=true){
  finally{updatingLocations.delete(id)}
 }
 async function resumePendingRoutes(id=null){
- const pending=homes.filter(p=>(!id||p.id===id)&&p.status!=='deleted'&&p.import_diagnostics?.route_pending===true&&(p.import_diagnostics?.require_street_view||/^\s*\d+[a-z]?\s+/i.test(p.address||'')||(['listing-street-view','listing-map'].includes(p.import_diagnostics?.source_location?.source)&&p.latitude!=null&&p.longitude!=null)));
+ const pending=homes.filter(p=>(!id||p.id===id)&&p.status!=='deleted'&&p.import_diagnostics?.route_pending===true&&((p.import_diagnostics?.require_listing_location||p.import_diagnostics?.require_street_view)||/^\s*\d+[a-z]?\s+/i.test(p.address||'')||(['listing-street-view','listing-map'].includes(p.import_diagnostics?.source_location?.source)&&p.latitude!=null&&p.longitude!=null)));
  for(const p of pending){if(!user)break;pendingJourneyImportIds.add(p.id);await finishNewHouseImport(p.id)}
  return pending.length;
 }
@@ -846,7 +847,30 @@ async function migrateGoogleRoutes(){
   if(ids.length)report(failed.length?'Google route update incomplete for '+failed.length+' house(s): '+failed[0]:'Google routes saved for '+ids.length+' house(s).',!!failed.length);
  }catch(e){console.warn('Google route update unavailable',e)}
 }
-async function show(){const r=await sb.from('members').select('id,display_name');if(r.error){txt('loginError','Unable to check membership: '+r.error.message);return}people=Object.fromEntries(r.data.map(x=>[x.id,x.display_name]));if(!people[user.id]){txt('loginError','This account is not registered as a household member');return}$('login').hidden=true;$('mainApp').hidden=false;$('viewControls').hidden=false;$('appMenu').hidden=false;$('logout').hidden=false;$('refresh').hidden=false;$('changePassword').hidden=false;txt('who',people[user.id]);await refresh();void resumeSavedRouteJobs()}
+let outdoorsRunning=false;const outdoorsAttempted=new Set();
+async function refreshOutdoorCatalogue(force=false){
+ if(outdoorsRunning||!user)return;
+ const pending=homes.filter(p=>p.status!=='deleted'&&(force||needsOutdoorRefresh(p))&&(force||!outdoorsAttempted.has(p.id)));
+ if(!pending.length)return;
+ outdoorsRunning=true;let checked=0,updated=0,partial=0;
+ try{
+  const ping=await extension('PING',{},3500);
+  if(Number(String(ping?.version||'0').split('.')[1]||0)<20){report('Saved cards are available. Importer 0.20.0 is needed for a full garden and parking refresh; download it from Menu.',true);return}
+  for(const p of pending){
+   if(!user)break;outdoorsAttempted.add(p.id);
+   report('Gardens and parking: checking '+(++checked)+'/'+pending.length+' · '+p.address);
+   try{
+    const outcome=await refreshOutdoorProperty({sb,property:p,readListing:async url=>extension('IMPORT_URL',{url},70000),photo});
+    if(outcome.fields.length)updated++;if(outcome.status==='partial')partial++;
+    const home=homes.find(x=>x.id===p.id);if(home)Object.assign(home,p);if(selected?.id===p.id)Object.assign(selected,p);render();
+   }catch(error){partial++;console.warn('Garden and parking refresh',p.address,error)}
+  }
+  report('Gardens and parking: '+checked+' checked, '+updated+' updated'+(partial?', '+partial+' incomplete. Menu → Update gardens and parking retries them.':'. Sizes appear where published dimensions can be read.'),!!partial);
+ }catch(error){report('Garden and parking refresh unavailable: '+error.message,true)}
+ finally{outdoorsRunning=false}
+}
+$('refreshOutdoors').onclick=()=>refreshOutdoorCatalogue(true);
+async function show(){const r=await sb.from('members').select('id,display_name');if(r.error){txt('loginError','Unable to check membership: '+r.error.message);return}people=Object.fromEntries(r.data.map(x=>[x.id,x.display_name]));if(!people[user.id]){txt('loginError','This account is not registered as a household member');return}$('login').hidden=true;$('mainApp').hidden=false;$('viewControls').hidden=false;$('appMenu').hidden=false;$('logout').hidden=false;$('refresh').hidden=false;$('changePassword').hidden=false;txt('who',people[user.id]);await refresh();void resumeSavedRouteJobs();void refreshOutdoorCatalogue()}
 $('loginForm').onsubmit=async e=>{e.preventDefault();txt('loginError','');const r=await sb.auth.signInWithPassword({email:$('email').value,password:$('password').value});if(r.error){txt('loginError',r.error.message);return}user=r.data.user;await show()};
 $('logout').onclick=async()=>{await sb.auth.signOut();location.reload()};
 $('refresh').onclick=async()=>{await refresh();report('Saved data refreshed. Checking unfinished imports…');try{const manualCount=await resumeManualStationRoutes();const stale=homes.filter(p=>p.status!=='deleted'&&p.import_diagnostics?.source_location?.address_input&&p.import_diagnostics.source_location.address_input!==p.address).map(p=>p.id);for(const id of stale)await updateLocationForAddress(id);const count=await resumePendingRoutes();if(!count&&!manualCount&&!stale.length)report('Saved data refreshed. No unfinished imports with an address.')}catch(e){report('Could not complete import: '+e.message,true)}};

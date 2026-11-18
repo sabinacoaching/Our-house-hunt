@@ -1,0 +1,66 @@
+[
+  {
+    "name": "southbrook",
+    "listing_id": "93469620",
+    "address": "Southbrook Road, London, SW16",
+    "listing_text": "Side Access to Garden\n\nExternally, the property benefits from a rear garden with patio area.\n\nParking: On street",
+    "point": {
+      "latitude": 51.411629,
+      "longitude": -0.127256,
+      "circleRadiusOnMap": 0,
+      "zoomLevel": 15,
+      "pinType": "ACCURATE_POINT",
+      "showMap": true
+    },
+    "image": "southbrook-plan.jpg",
+    "expected_area": 121.56
+  },
+  {
+    "name": "elmfield",
+    "listing_id": "74572072",
+    "address": "Elmfield Avenue, Mitcham CR4",
+    "listing_text": "87 ft Private rear garden\n\nThe landscaped garden has been thoughtfully arranged, with a paved section closest to the house, ideal for outdoor dining and seating, followed by an area of artificial lawn.\n\nA garden shed provides valuable additional storage.",
+    "point": {
+      "latitude": 51.411081,
+      "longitude": -0.157066
+    },
+    "image": "elmfield-plan.jpg",
+    "expected_area": 99.06
+  },
+  {
+    "name": "woodvale",
+    "listing_id": "74096214",
+    "address": "Woodvale Walk, West Norwood SE27",
+    "listing_text": "Front & rear garden\n\nThe impressive approximately 26 foot private rear garden benefits from rear access.",
+    "point": {
+      "latitude": 51.425469,
+      "longitude": -0.099918
+    },
+    "image": "woodvale-plan.jpg",
+    "expected_area": 52
+  },
+  {
+    "name": "beecholme",
+    "listing_id": "74744520",
+    "address": "Beecholme Avenue, Mitcham CR4",
+    "listing_text": "Off street parking and garage\n\nPrivate garden",
+    "point": {
+      "latitude": 51.413662,
+      "longitude": -0.1511
+    },
+    "image": "beecholme-plan.jpg",
+    "expected_area": null
+  },
+  {
+    "name": "helmsdale",
+    "listing_id": "73822923",
+    "address": "Helmsdale Road, Streatham SW16",
+    "listing_text": "Off street parking\n\nLarge garden\n\nA three bedroom family home, with a large open reception room, conservatory, a large private garden, and off-street parking.",
+    "point": {
+      "latitude": 51.415046,
+      "longitude": -0.136951
+    },
+    "image": "helmsdale-plan.jpg",
+    "expected_area": null
+  }
+]

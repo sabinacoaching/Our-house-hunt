@@ -151,3 +151,11 @@ test('a wrong timetable date without a London calendar rollover stays pending wi
   assert.equal(x.row().journey_estimates.waterloo,undefined);
  }finally{globalThis.Date=RealDate}
 });
+test('the source listing map starts journeys without Street View and stays the recorded origin',async()=>{
+ const x=fixture({noPoint:true}),original=x.extension;
+ const extension=async(action,args)=>action==='IMPORT_URL'?{location_hint:{source:'listing-map',latitude:51.41,longitude:-.31,address:'Alpine Close, Park Hill CR0'}}:original(action,args);
+ await calculateGoogleRoutes(id,{...x.options(),extension});
+ assert.equal(x.row().address,'Alpine Close, Park Hill CR0');assert.equal(x.row().import_diagnostics.source_location.source,'listing-map');
+ assert.equal(x.row().journey_estimates.waterloo.origin_source,'Listing map');assert.equal(x.row().import_diagnostics.route_pending,false);
+ const requests=x.calls.length;assert.deepEqual(await calculateGoogleRoutes(id,{...x.options(),extension}),{alreadyDone:true});assert.equal(x.calls.length,requests);
+});

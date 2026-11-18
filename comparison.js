@@ -1,4 +1,4 @@
-import {setupStationAccess,stationWalkingMiles} from './station-commutes.js?v=26';
+import {setupStationAccess,stationWalkingMiles} from './station-commutes.js?v=27';
 import {stationChoice} from './station-choice-state.js?v=1';
 import {createViewingDateFields,formatViewingDate} from './viewing-date.js?v=2';
 export function manualJourney(previous,minutes,updatedAt){

@@ -1,4 +1,4 @@
-import {outdoorMeasurements,mainGardenArea,combineOutdoorDescription} from './outdoor-details.js?v=1';
+import {outdoorMeasurements,mainGardenArea,combineOutdoorDescription} from './outdoor-details.js?v=2';
 // Optional, client-side extraction of labelled measurements from a floor-plan image.
 // Never guesses dimensions where no labelled measurements are visible.
 let scriptTask=null,workerTask=null,ocrTail=Promise.resolve();
@@ -83,19 +83,23 @@ export async function readPlanImage(blob){
    await worker.setParameters({tessedit_pageseg_mode:'3'});
    const full=(await worker.recognize(draw(0,bitmap.height))).data;
    let text=full.text||'';
+   // A sparse-text pass also finds labels inside bordered garden boxes, which
+   // the whole-page layout pass can classify as part of the drawing.
+   await worker.setParameters({tessedit_pageseg_mode:'11'});
+   const sparse=(await worker.recognize(draw(0,bitmap.height))).data;
    await worker.setParameters({tessedit_pageseg_mode:'6'});
    const head=(await worker.recognize(draw(0,Math.ceil(bitmap.height*.12)))).data;
    let headerText=head.text||'';
    const footerStart=Math.floor(bitmap.height*.78),footerText=(await worker.recognize(draw(footerStart,bitmap.height-footerStart))).data.text||'';
    // Re-read small outdoor labels and their nearby dimensions as one local
    // text block. A whole-page layout pass often separates these three lines.
-   const boxes=(full.lines||[]).filter(line=>/^\s*(?:(?:front|rear|back)\s+)?(?:gardens?|driveway|parking)\s*$/i.test(line.text||'')).slice(0,8);
+   const boxes=[...(full.lines||[]),...(sparse.lines||[])].filter(line=>/^\s*(?:(?:front|rear|back)\s+)?(?:gardens?|driveway|parking)\s*$/i.test(line.text||'')).filter((line,i,all)=>!all.slice(0,i).some(x=>Math.abs(x.bbox.x0-line.bbox.x0)<12&&Math.abs(x.bbox.y0-line.bbox.y0)<12)).slice(0,8);
    const outdoorText=[];
    for(const line of boxes){
-    const box=line.bbox,cx=(box.x0+box.x1)/(2*scale),y=Math.max(0,box.y0/scale-12),width=Math.min(bitmap.width,Math.max(320,(box.x1-box.x0)/scale+220)),x=Math.max(0,Math.min(bitmap.width-width,cx-width/2)),height=Math.min(bitmap.height-y,100);
-    const zoom=Math.min(4,1400/width);canvas.width=Math.round(width*zoom);canvas.height=Math.round(height*zoom);
+    const box=line.bbox,cx=(box.x0+box.x1)/(2*scale),y=Math.max(0,box.y0/scale-8),labelHeight=(box.y1-box.y0)/scale,width=Math.min(bitmap.width,Math.max(140,(box.x1-box.x0)/scale+labelHeight*7)),x=Math.max(0,Math.min(bitmap.width-width,cx-width/2)),height=Math.min(bitmap.height-y,Math.max(70,labelHeight*5));
+    const zoom=Math.min(6,1400/width);canvas.width=Math.round(width*zoom);canvas.height=Math.round(height*zoom);
     const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(bitmap,x,y,width,height,0,0,canvas.width,canvas.height);
-    const local=(await worker.recognize(canvas)).data.text||'';outdoorText.push(local);
+    const local=(await worker.recognize(canvas)).data.text||'';outdoorText.push(line.text+'\n'+local);
    }
    if(outdoorText.length)text+='\n'+outdoorText.join('\n');
    const areaHeadings=[];
@@ -117,8 +121,8 @@ export async function readPlanImage(blob){
 }
 export function floorplanChanges(p,measurements,{fingerprint='',listingText,now=new Date().toISOString()}={}){
  const prior=p.import_diagnostics?.floorplan_measurements,source=p.import_diagnostics?.source_values||{},changes={};
- const same=(a,b)=>a==null?b==null:String(a)===String(b);
- const allowed=key=>!p.manual_overrides?.[key]&&(p[key]==null||p[key]===''||Object.hasOwn(source,key)&&same(p[key],source[key])||Object.hasOwn(prior?.values||{},key)&&same(p[key],prior.values[key]));
+ const same=(a,b)=>a==null?b==null:typeof b==='number'?Number(a)===b:String(a)===String(b);
+ const allowed=key=>!p.manual_overrides?.[key]&&(p[key]==null||p[key]===''||Object.hasOwn(source,key)&&same(p[key],source[key])||Object.hasOwn(prior?.values||{},key)&&same(p[key],prior.values[key])||Object.hasOwn(p.import_diagnostics?.outdoor_details?.values||{},key)&&same(p[key],p.import_diagnostics.outdoor_details.values[key]));
  for(const key of ['floor_area_sqm','garden_area_sqm','floors']){
   // The owner's priority is the advertised area; the plan only fills a missing floor area.
   const savedPlanFallback=key==='floor_area_sqm'&&source.floor_area_sqm==null&&prior?.values?.floor_area_sqm!=null&&Number(p[key])===Number(prior.values.floor_area_sqm);
@@ -132,7 +136,7 @@ export function floorplanChanges(p,measurements,{fingerprint='',listingText,now=
  const values={...(prior?.values||{}),...Object.fromEntries(Object.entries(changes))};
  for(const key of ['floor_area_sqm','garden_area_sqm','floors'])if(measurements[key]!=null&&!p.manual_overrides?.[key]&&same(p[key],measurements[key]))values[key]=measurements[key];
  const labelled_values=Object.fromEntries(['floor_area_sqm','garden_area_sqm','floors'].filter(k=>measurements[k]!=null).map(k=>[k,measurements[k]]));
- const diagnostic={version:'labelled-plan-v10',fingerprint,values,labelled_values,outdoor:measurements.outdoor||[],checked_at:now};
+ const diagnostic={version:'labelled-plan-v11',fingerprint,values,labelled_values,outdoor:measurements.outdoor||[],checked_at:now};
  changes.import_diagnostics={...(p.import_diagnostics||{}),...(listingText!=null?{listing_text:listingText}:{}),floorplan_measurements:diagnostic};
  return changes;
 }
@@ -194,7 +198,7 @@ export async function analyzeFloorplan({sb,property,photo,recognize=readPlanImag
  const fingerprint=(p.floorplans||[])[0].path||(p.floorplans||[])[0].url;
  // Existing catalogue plans can be read directly from private Storage, avoiding unnecessary external listing requests.
  // Newly imported plans are archived from the original listing by the Chrome importer.
- const key='hh-plan-ocr-v10:'+p.id+':'+fingerprint;
+ const key='hh-plan-ocr-v11:'+p.id+':'+fingerprint;
  let last=0;try{last=Number(localStorage.getItem(key)||0)}catch{}
  if(!force&&last&&Date.now()-last<30*86400000)return {status:'already-checked'};
  const imageUrl=await photo(p.floorplans[0]);

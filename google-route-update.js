@@ -4,7 +4,7 @@ export function buildGoogleRouteUpdate(p,location,stationPreview,google,{partial
  const source=location?.source_location,lat=Number(location?.latitude),lon=Number(location?.longitude),names=(stationPreview?.tfl_final?.names||[]).map(x=>String(x||'').trim());
  if(!Number.isFinite(lat)||!Number.isFinite(lon)||lat<=49||lat>=61||lon<=-9||lon>=3)throw Error('Missing confirmed origin');
  if((p.manual_overrides?.latitude&&Number(p.latitude)!==lat)||(p.manual_overrides?.longitude&&Number(p.longitude)!==lon))throw Error('Manual coordinates cannot be overwritten');
- if(!source||source.source!=='listing-street-view'||source.listing_url!==p.url||source.address_input!==p.address||Number(source.latitude)!==lat||Number(source.longitude)!==lon)throw Error('Street View source does not match the house');
+ if(!source||!['listing-street-view','listing-map'].includes(source.source)||source.listing_url!==p.url||source.address_input!==p.address||Number(source.latitude)!==lat||Number(source.longitude)!==lon)throw Error('Listing location source does not match the house');
  const preview=stationPreview?.tfl_final,stops=preview?.results||[],origin=lat+','+lon;
  if(preview&&(!preview.complete||preview.origin!==origin||names.length!==3||!names[0])||!preview&&!partial)throw Error('Station entrances are incomplete');
  const fields=['station_name','station_2_name','station_3_name'];for(let i=0;i<3;i++)if(preview&&p.manual_overrides?.[fields[i]]&&names[i]!==String(p[fields[i]]||'').trim())throw Error('Manual station cannot be overwritten');
@@ -21,7 +21,7 @@ export function buildGoogleRouteUpdate(p,location,stationPreview,google,{partial
  for(const id of ['dancelab','dilly','waterloo']){const v=google?.journeys?.[id];if(!v&&partial)continue;if(!v||v.source!=='Google Maps'||v.origin!==origin||!Number.isFinite(Number(v.minutes))||!v.departure||!v.arrival||!/^\d{4}-\d{2}-\d{2}$/.test(v.date||''))throw Error('Missing Google journey '+id);
   const dep=Date.parse(v.departure+'Z'),arr=Date.parse(v.arrival+'Z'),deadline=Date.parse(v.date+'T'+deadlines[id]+':00Z');
   if(!Number.isFinite(dep)||!Number.isFinite(arr)||arr<=dep||!(Number(v.minutes)>0)||arr>deadline||Math.abs((arr-dep)/60000-Number(v.minutes))>1)throw Error('Invalid Google journey timing '+id);
-  const item={...v,id,minutes:Number(v.minutes),origin_input:p.address,origin_source:'Listing Street View',destination_address:v.destination,calculated_at:v.calculated_at||google.calculated_at,calculation_version:'google-visible-v2'};automatic[id]=item;if(next[id]?.manual_override!==true&&next[id]?.source!=='manual')next[id]=item;
+  const item={...v,id,minutes:Number(v.minutes),origin_input:p.address,origin_source:source.source==='listing-map'?'Listing map':'Listing Street View',destination_address:v.destination,calculated_at:v.calculated_at||google.calculated_at,calculation_version:'google-visible-v2'};automatic[id]=item;if(next[id]?.manual_override!==true&&next[id]?.source!=='manual')next[id]=item;
  }
  const prev=p.import_diagnostics||{},history=Array.isArray(prev.routing_history)?prev.routing_history.slice(-4):[];
  if(!google.work||prev.google_routes_work?.job_id!==google.work.job_id)history.push({address:p.address,latitude:p.latitude,longitude:p.longitude,stations:p.station_commutes,journeys:p.journey_estimates});

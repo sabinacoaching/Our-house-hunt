@@ -6,7 +6,7 @@ const source=readFileSync(new URL('../extension/background.js',import.meta.url),
 function runPage({host,path,body,script='',buttons=[],query=()=>null,headings=null}){
  const h1={textContent:'2 bedroom house for sale Test Road, London',closest:()=>null};
  const document={body:{innerText:body},title:'2 bedroom house for sale Test Road, London',querySelector:s=>s==='h1'?(headings?.[0]||h1):query(s),querySelectorAll:s=>s==='h1'?(headings||[h1]):s==='script'?[{textContent:script}]:s==='button'?buttons:s==='button,[role="tab"],a'?buttons:s.startsWith('button,')?buttons.filter(b=>b.floor):[]};
- const c=vm.createContext({document,location:{hostname:host,pathname:path},URL,console,performance:{getEntriesByType:()=>[]},setTimeout:fn=>{fn();return 1},clearTimeout(){},chrome:{runtime:{onMessage:{addListener(){}}}}});
+ const c=vm.createContext({document,location:{hostname:host,pathname:path},URL,TextEncoder,TextDecoder,console,performance:{getEntriesByType:()=>[]},setTimeout:fn=>{fn();return 1},clearTimeout(){},chrome:{runtime:{onMessage:{addListener(){}}}}});
  return vm.runInContext(source+';readPropertyFromPage()',c);
 }
 const image=(url,alt='')=>({alt,currentSrc:url,src:url,closest:()=>({querySelector:()=>({getAttribute:()=>url+' 1200w'})})});
@@ -17,12 +17,12 @@ test('Rightmove media come from the matching listing model in source order',asyn
  const result=await runPage({host:'www.rightmove.co.uk',path:'/properties/12345',body:'£550,000\n2 bedroom house',script});
  assert.deepEqual(Array.from(result.images),[a,b]);assert.deepEqual(Array.from(result.floorplans),[plan]);
 });
-test('Rightmove does not substitute the listing map point for Street View',async()=>{
+test('Rightmove falls back to the matching listing map point when Street View is unavailable',async()=>{
  // Model shape and coordinates from a real Rightmove property page; no house is imported.
  const nodes=[{propertyData:1},{id:2,images:3,floorplans:4,location:5},'93918057',[6],[8],{latitude:10,longitude:11,pinType:12},{url:7},'https://media.rightmove.co.uk/property-photo/a.jpeg',{url:9},'https://media.rightmove.co.uk/floorplan/p.jpeg',51.479742,-0.338502,'ACCURATE_POINT'];
  const script='window.__PAGE_MODEL = '+JSON.stringify({data:JSON.stringify(nodes)})+';';
  const result=await runPage({host:'www.rightmove.co.uk',path:'/properties/93918057',body:'£550,000\n4 bedroom house',script});
- assert.equal(result.location_hint,null);
+ assert.equal(result.location_hint.source,'listing-map');
 });
 test('Zoopla captures the gallery panel and its specifically labelled plan',async()=>{
  const a='https://lid.zoocdn.com/u/1200/900/a.jpg',b='https://lid.zoocdn.com/u/1200/900/b.jpg',plan='https://lid.zoocdn.com/u/1200/900/p.jpg';
@@ -39,7 +39,7 @@ test('Zoopla reads the original listing media model without opening a gallery',a
  const result=await runPage({host:'www.zoopla.co.uk',path:'/for-sale/details/123',body:'£500,000\n2 bedroom house',script});
  assert.deepEqual(Array.from(result.images),['https://lid.zoocdn.com/u/1200/900/first.jpg','https://lid.zoocdn.com/u/1200/900/second.jpg']);
  assert.deepEqual(Array.from(result.floorplans),['https://lid.zoocdn.com/u/1200/900/plan.jpg']);
- assert.equal(result.location_hint,null);
+ assert.equal(result.location_hint.source,'listing-map');
 });
 test('the published facts-card area takes priority over a different total in the description',async()=>{
  const listing={listingId:123,propertyImage:[{filename:'first.jpg'}],floorPlan:{image:[]},floorArea:{value:732,unitsLabel:'sq. ft'},detailedDescription:'Total internal floor area 86 sqm. Private rear garden.'};
@@ -54,7 +54,7 @@ test('Zoopla location is available even when the listing provides no floor plan'
  const listing={listingId:123,location:{coordinates:{latitude:51.48116,longitude:-0.356191}},propertyImage:[{filename:'first.jpg'}]};
  const script='self.__next_f.push('+JSON.stringify([1,'7d:'+JSON.stringify(['$', 'div',null,{children:listing}])+'\n'])+')';
  const result=await runPage({host:'www.zoopla.co.uk',path:'/for-sale/details/123',body:'£500,000\n2 bedroom house',script});
- assert.equal(result.location_hint,null);assert.deepEqual(Array.from(result.floorplans),[]);
+ assert.equal(result.location_hint.source,'listing-map');assert.deepEqual(Array.from(result.floorplans),[]);
 });
 test('Zoopla reads location and address from the listing Street View panel',async()=>{
  const listing={listingId:123,propertyImage:[{filename:'first.jpg'}],floorPlan:{image:[{filename:'plan.jpg'}]}};
@@ -80,5 +80,14 @@ test('an open Zoopla gallery cannot replace the complete address with the proper
  const headings=[{textContent:'2 bed terraced house for sale',closest:()=>null},{textContent:'2 bed terraced house for saleAlpine Close, Park Hill CR0',closest:()=>null}];
  const result=await runPage({host:'www.zoopla.co.uk',path:'/for-sale/details/123',body:'£439,999\n2 bedroom house',script,headings});
  assert.equal(result.address,'Alpine Close, Park Hill CR0');
- assert.equal(result.extension_version,'0.19.0');
+ assert.equal(result.extension_version,'0.20.0');
+});
+test('streamed Zoopla descriptions resolve UTF-8 text records and supply the matching map fallback',async()=>{
+ const detail='Private rear garden with side access. Off-street parking for two cars. Café nearby.';
+ const listing={listingId:123,displayAddress:'Beecholme Avenue, Mitcham CR4',location:{coordinates:{latitude:51.413662,longitude:-.1511}},propertyImage:[{filename:'first.jpg'}],features:{bullets:['Private garden']},detailedDescription:'$d0'};
+ const flight=':HL["style"]\n'+'d0:T'+new TextEncoder().encode(detail).length.toString(16)+','+detail+'d1:'+JSON.stringify(['$','div',null,{children:listing}])+'\n';
+ const script='self.__next_f.push('+JSON.stringify([1,flight])+')';
+ const result=await runPage({host:'www.zoopla.co.uk',path:'/for-sale/details/123',body:'£550,000\n3 bedroom house',script});
+ assert.equal(result.address,listing.displayAddress);assert.match(result.listing_text,/Off-street parking for two cars/);assert.match(result.listing_text,/Café/);assert.doesNotMatch(result.listing_text,/\$d0/);
+ assert.equal(result.location_hint.source,'listing-map');assert.equal(result.location_hint.latitude,51.413662);
 });
