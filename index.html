@@ -37,7 +37,7 @@ dialog.hh-photo-viewer[open]{display:flex;flex-direction:column}
 <link rel="stylesheet" href="./comparison.css?v=29">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css'">
 </head><body>
-<header class="top"><div class="brand">⌂ &nbsp;<span>Our House Hunt</span></div><div id="viewControls" class="hh-view-controls" hidden></div><div class="topright"><strong id="who"></strong><span id="hhVersion" title="Current House Hunt site version" style="font-size:11px;color:#72817f">v63</span><button id="refresh" class="secondary" hidden>Refresh</button><details id="appMenu" class="hh-app-menu" hidden><summary>Menu</summary><div class="hh-app-menu-items"><button id="refreshOutdoors" class="secondary" type="button">Update gardens and parking</button><a href="downloads/our-house-hunt-importer-v0.20.0.zip" download>Download importer 0.20.0</a><hr><button id="exportExcel" class="secondary" type="button">Export Excel</button><button id="exportPdf" class="secondary" type="button">Export PDF</button><hr><button id="changePassword" class="secondary" hidden>Change password</button><button id="logout" class="secondary" hidden>Sign out</button></div></details></div></header>
+<header class="top"><div class="brand">⌂ &nbsp;<span>Our House Hunt</span></div><div id="viewControls" class="hh-view-controls" hidden></div><div class="topright"><strong id="who"></strong><span id="hhVersion" title="Current House Hunt site version" style="font-size:11px;color:#72817f">v64</span><button id="refresh" class="secondary" hidden>Refresh</button><details id="appMenu" class="hh-app-menu" hidden><summary>Menu</summary><div class="hh-app-menu-items"><button id="refreshOutdoors" class="secondary" type="button">Update gardens and parking</button><a href="downloads/our-house-hunt-importer-v0.20.0.zip" download>Download importer 0.20.0</a><hr><button id="exportExcel" class="secondary" type="button">Export Excel</button><button id="exportPdf" class="secondary" type="button">Export PDF</button><hr><button id="changePassword" class="secondary" hidden>Change password</button><button id="logout" class="secondary" hidden>Sign out</button></div></details></div></header>
 <main>
 <section id="login" class="panel login" hidden>
 <h1>Welcome home</h1><p>Your shared shortlist, notes and viewings.</p>
@@ -93,9 +93,9 @@ import {createUniquePhotoStore,photoDigest} from './photo-dedup.js?v=4';
 import {canonicalListing,importChanges,validateGeocode,validListingLocationHint,sameStreet,streetViewListingUrl} from './import-utils.js?v=6';
 import {reconcileOne,mediaRevision} from './reconcile-media.js?v=1';
 import {createEditHistory} from './edit-history.js?v=4';
-import {analyzeFloorplan,inspectFloorplanImage} from './floorplan-ocr.js?v=18';
-import {normalizeListingOutdoors} from './outdoor-details.js?v=2';
-import {needsOutdoorRefresh,refreshOutdoorProperty} from './outdoor-refresh.js?v=1';
+import {analyzeFloorplan,inspectFloorplanImage} from './floorplan-ocr.js?v=19';
+import {normalizeListingOutdoors} from './outdoor-details.js?v=3';
+import {needsOutdoorRefresh,refreshOutdoorProperty} from './outdoor-refresh.js?v=2';
 const sb=createClient('https://ficnuovumurmhzdujjvj.supabase.co','sb_publishable_yrArzwZ2GizO5ATuiAkymg_LdpVZKC9');
 const $=id=>document.getElementById(id);
 const detailViewingDate=createViewingDateFields($('editViewing'),{clearButton:true});

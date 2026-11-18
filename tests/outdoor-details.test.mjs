@@ -45,7 +45,7 @@ test('front and rear dimensions stay separate and a room cannot supply the garde
  assert.equal(details.garden_area_sqm,60);assert.equal(details.measurements.find(x=>x.kind==='front_garden').area_sqm,12);
  assert.match(details.garden_description,/Permit parking only/);assert.match(details.garden_description,/No driveway/);
  assert.equal(parsePlanText('Garden\nBathroom\n4.6 x 5.0m').garden_area_sqm,undefined);
- assert.equal(parsePlanText('Front garden\n4.6 x 5.0m').garden_area_sqm,undefined);
+ assert.equal(parsePlanText('Front garden\n4.6 x 5.0m').garden_area_sqm,23);
  assert.equal(parsePlanText('Kitchen opening to garden 4.6 x 5.0m').garden_area_sqm,undefined);
 });
 test('source garden paragraphs and all parking statements are retained without a 230-character cut',()=>{

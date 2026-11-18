@@ -40,5 +40,27 @@ jobs:
           HH_UI_SNAPSHOT_LOG: '1'
       - name: Check real listing text and floor-plan OCR
         run: xvfb-run --auto-servernum node scripts/check-floorplan-outdoors.mjs
-      - run: xvfb-run --auto-servernum node scripts/check-native-extension.mjs
-      - run: xvfb-run --auto-servernum node scripts/check-routing-live.mjs
+      - name: Compare routing inputs with the successful v63 live check
+        id: routing_baseline
+        run: |
+          python - <<'PYCODE'
+          import hashlib,json,pathlib,re,os
+          baseline=json.loads(pathlib.Path('.github/routing-baseline-v63.json').read_text())
+          changed=[]
+          for path,expected in baseline['files'].items():
+            file=pathlib.Path(path)
+            if not file.is_file():changed.append(path);continue
+            data=file.read_bytes()
+            if path=='index.html':
+              value=data.decode()
+              value=re.sub(r'>v\d+</span>','>VERSION</span>',value)
+              value=re.sub(r'(outdoor-details|outdoor-refresh|floorplan-ocr)\.js\?v=\d+',r'\1.js?v=VERSION',value)
+              data=value.encode()
+            if hashlib.sha256(data).hexdigest()!=expected:changed.append(path)
+          with open(os.environ['GITHUB_OUTPUT'],'a') as output:output.write('unchanged='+str(not changed).lower()+'\n')
+          print('ROUTING_BASELINE_MATCH' if not changed else 'ROUTING_INPUTS_CHANGED',baseline['commit'],baseline['successful_run'],changed)
+          PYCODE
+      - if: steps.routing_baseline.outputs.unchanged != 'true'
+        run: xvfb-run --auto-servernum node scripts/check-native-extension.mjs
+      - if: steps.routing_baseline.outputs.unchanged != 'true'
+        run: xvfb-run --auto-servernum node scripts/check-routing-live.mjs

@@ -54,7 +54,7 @@ export function outdoorMeasurements(original){
   // Stop at the next room/section; never borrow its measurements.
   if(!measurement||!metric)for(let next=i+1;next<Math.min(rows.length,i+5);next++){
    if(label.test(rows[next])||room.test(rows[next]))break;
-   const numericLine=/^(?:[\d\s.,=x×'’′"”″():/\-]|o?m\b|ft\b|feet\b|in\b|approx(?:imate(?:ly)?)?\.?\b|by\b|metres?\b|meters?\b)+$/i.test(rows[next]);
+   const numericLine=/^(?:[\d\s.,;|<>\[\]=x×'’′"”″():/\-]|o?m\b|ft\b|feet\b|in\b|approx(?:imate(?:ly)?)?\.?\b|by\b|metres?\b|meters?\b)+$/i.test(rows[next]);
    const damagedImperial=/^\d[\d\s.,x'’′"”″sSoOlI|()\-]{1,75}$/i.test(rows[next])&&/['’′]/.test(rows[next])&&/x/i.test(rows[next]);
    if(!numericLine&&!damagedImperial)break;
    section+=' '+rows[next];const d=dimensions(rows[next])||dimensions(section);
@@ -66,13 +66,14 @@ export function outdoorMeasurements(original){
  return found;
 }
 export function mainGardenArea(items){
- const rear=items.filter(x=>x.kind==='rear_garden'&&x.area_sqm!=null),generic=items.filter(x=>x.kind==='garden'&&x.area_sqm!=null);
- const choices=rear.length?rear:generic;
- return choices.length===1?choices[0].area_sqm:null;
+ const sizes=items.filter(x=>['garden','rear_garden','front_garden'].includes(x.kind)&&x.area_sqm!=null&&Number.isFinite(Number(x.area_sqm))).map(x=>Number(x.area_sqm));
+ return sizes.length?Math.max(...sizes):null;
 }
 export function retainOutdoorMeasurements(fresh,known=[]){
  const key=x=>x.kind+':'+String(x.label||'').toLowerCase();
- return [...fresh.filter(x=>x.dimensions||!known.some(p=>key(p)===key(x)&&p.dimensions)),...known.filter(p=>p.dimensions&&!fresh.some(x=>key(x)===key(p)&&x.dimensions))];
+ const near=(a,b)=>Math.abs(Number(a)-Number(b))<.03;
+ const sameSize=(a,b)=>key(a)===key(b)&&(near(a.width_m,b.width_m)&&near(a.length_m,b.length_m)||near(a.width_m,b.length_m)&&near(a.length_m,b.width_m));
+ return [...fresh.filter(x=>x.dimensions||!known.some(p=>key(p)===key(x)&&p.dimensions)),...known.filter(p=>p.dimensions&&!fresh.some(x=>x.dimensions&&sameSize(x,p)))];
 }
 export function plainListingText(raw){
  return String(raw||'').replace(/<\s*(?:br\b[^>]*|\/(?:p|div|li|h[1-6]))\s*>/gi,'\n').replace(/<[^>]*>/g,' ')

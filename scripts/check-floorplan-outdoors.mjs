@@ -110,6 +110,7 @@ try{
   if(fixture.name==='southbrook'){assert.match(checked.patch.garden_description,/17.39 × 6.99 m/);assert.match(checked.patch.garden_description,/Parking: On street/)}
   if(fixture.name==='elmfield')assert.match(checked.patch.garden_description,/26.70 × 3.71 m/);
   if(fixture.name==='woodvale'){assert.match(checked.patch.garden_description,/8.00 × 6.50 m/);assert.match(checked.patch.garden_description,/front/i)}
+  if(fixture.name==='durnsford'){assert.match(checked.patch.garden_description,/22.55 × 5.04 m/);assert.match(checked.patch.garden_description,/6.09 × 5.27 m/)}
   if(fixture.name==='beecholme')assert.match(checked.patch.garden_description,/Off street parking and garage/);
   for(const key of ['viewing_at','comment_sabina','journey_estimates','address','manual_overrides'])assert.equal(Object.hasOwn(checked.patch,key),false);
   console.log('OUTDOOR_REGRESSION_PASS '+fixture.name+' '+JSON.stringify({area:checked.patch.garden_area_sqm??null,notes:checked.patch.garden_description,map:source.location_hint}));

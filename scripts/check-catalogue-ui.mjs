@@ -296,7 +296,7 @@ try{
  const beforeOutdoor=await page.evaluate(()=>window.__fixtureRows.map(({garden_area_sqm,garden_description,import_diagnostics,...p})=>p));
  await page.evaluate(()=>window.__outdoorFixture=true);
  await appMenu.locator('summary').click();await page.locator('#refreshOutdoors').click();
- await page.waitForFunction(()=>window.__fixtureRows.every(p=>p.import_diagnostics?.outdoor_details?.version==='outdoors-v2'));
+ await page.waitForFunction(()=>window.__fixtureRows.every(p=>p.import_diagnostics?.outdoor_details?.version==='outdoors-v3'));
  for(const p of await page.evaluate(()=>window.__fixtureRows)){assert.equal(p.garden_area_sqm,60);assert.match(p.garden_description,/Off-street parking for two cars/)}
  assert.deepEqual(await page.evaluate(()=>window.__fixtureRows.map(({garden_area_sqm,garden_description,import_diagnostics,...p})=>p)),beforeOutdoor);
  console.log('OUTDOOR_REFRESH_UI_PASS Menu reprocesses existing cards, displays sizes and parking, preserves exact dates, comments, routes and station choices');

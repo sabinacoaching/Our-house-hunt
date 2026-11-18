@@ -1,4 +1,4 @@
-import {outdoorMeasurements,mainGardenArea,combineOutdoorDescription,retainOutdoorMeasurements} from './outdoor-details.js?v=2';
+import {outdoorMeasurements,mainGardenArea,combineOutdoorDescription,retainOutdoorMeasurements} from './outdoor-details.js?v=3';
 // Optional, client-side extraction of labelled measurements from a floor-plan image.
 // Never guesses dimensions where no labelled measurements are visible.
 let scriptTask=null,workerTask=null,ocrTail=Promise.resolve();
@@ -104,7 +104,7 @@ export async function readPlanImage(blob){
    for(const word of sparse.words||[]){
     if(!/^(?:gardens?|driveway|parking)$/i.test((word.text||'').trim()))continue;
     const parent=(sparse.lines||[]).find(line=>line.bbox.x0<=word.bbox.x0&&line.bbox.x1>=word.bbox.x1&&line.bbox.y0<=word.bbox.y0&&line.bbox.y1>=word.bbox.y1);
-    if(/\b(?:to|onto|access to)\s+garden\b|\b(?:kitchen|bedroom|bathroom|conservatory)\b/i.test(parent?.text||''))continue;
+    if(/\b(?:to|onto|access to)\s+garden\b/i.test(parent?.text||''))continue;
     const qualified=parent?.text?.match(/\b(?:front|rear|back)\s+gardens?\b/i)?.[0];labels.push({...word,text:qualified||word.text});
    }
    const boxes=labels.filter((line,i,all)=>!all.slice(0,i).some(x=>Math.abs(x.bbox.x0-line.bbox.x0)<12&&Math.abs(x.bbox.y0-line.bbox.y0)<12)).slice(0,8);
@@ -154,7 +154,7 @@ export function floorplanChanges(p,measurements,{fingerprint='',listingText,now=
  const values={...(prior?.values||{}),...Object.fromEntries(Object.entries(changes))};
  for(const key of ['floor_area_sqm','garden_area_sqm','floors'])if(measurements[key]!=null&&!p.manual_overrides?.[key]&&same(p[key],measurements[key]))values[key]=measurements[key];
  const labelled_values=Object.fromEntries(['floor_area_sqm','garden_area_sqm','floors'].filter(k=>measurements[k]!=null).map(k=>[k,measurements[k]]));
- const diagnostic={version:'labelled-plan-v11',fingerprint,values,labelled_values,outdoor,checked_at:now};
+ const diagnostic={version:'labelled-plan-v12',fingerprint,values,labelled_values,outdoor,checked_at:now};
  changes.import_diagnostics={...(p.import_diagnostics||{}),...(listingText!=null?{listing_text:listingText}:{}),floorplan_measurements:diagnostic};
  return changes;
 }
@@ -216,7 +216,7 @@ export async function analyzeFloorplan({sb,property,photo,recognize=readPlanImag
  const fingerprint=(p.floorplans||[])[0].path||(p.floorplans||[])[0].url;
  // Existing catalogue plans can be read directly from private Storage, avoiding unnecessary external listing requests.
  // Newly imported plans are archived from the original listing by the Chrome importer.
- const key='hh-plan-ocr-v11:'+p.id+':'+fingerprint;
+ const key='hh-plan-ocr-v12:'+p.id+':'+fingerprint;
  let last=0;try{last=Number(localStorage.getItem(key)||0)}catch{}
  if(!force&&last&&Date.now()-last<30*86400000)return {status:'already-checked'};
  const imageUrl=await photo(p.floorplans[0]);
