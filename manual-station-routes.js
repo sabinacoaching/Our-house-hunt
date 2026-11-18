@@ -1,6 +1,6 @@
 import {stationFields,stationDistanceFields,stationContext,sameStationContext,pendingStationChoices,stationIdentity} from './station-choice-state.js?v=1';
 import {stationTransportType,namedStationQuery} from './google-station-selection.js?v=4';
-import {validStreetViewHint,streetViewListingUrl} from './import-utils.js?v=4';
+import {validListingLocationHint,streetViewListingUrl} from './import-utils.js?v=6';
 
 const stationBase=name=>stationIdentity(name).replace(/\b(?:underground|tube|tram|overground)\b/g,'').replace(/\s+/g,' ').trim();
 const point=value=>value?.lat!=null&&value?.lon!=null&&Number.isFinite(Number(value.lat))&&Number.isFinite(Number(value.lon));
@@ -33,14 +33,14 @@ export async function resolveManualStation(p,name,origin,{fetcher=fetch}={}){
 
 async function originFor(p,extension){
  const source=p.import_diagnostics?.source_location;
- if(source?.source==='listing-street-view'&&source.listing_url===p.url&&source.address_input===p.address&&p.latitude!=null&&p.longitude!=null&&Number(source.latitude)===Number(p.latitude)&&Number(source.longitude)===Number(p.longitude))return {lat:Number(p.latitude),lon:Number(p.longitude),source:'listing-street-view'};
+ if(validListingLocationHint(source,p.address)&&source.listing_url===p.url&&source.address_input===p.address&&p.latitude!=null&&p.longitude!=null&&Number(source.latitude)===Number(p.latitude)&&Number(source.longitude)===Number(p.longitude))return {lat:Number(p.latitude),lon:Number(p.longitude),source:source.source};
  if((p.manual_overrides?.latitude||p.manual_overrides?.longitude)&&p.latitude!=null&&p.longitude!=null){
   const lat=Number(p.latitude),lon=Number(p.longitude);if(!(lat>49&&lat<61&&lon> -9&&lon<3))throw Error('The manually entered house location is invalid');
   return {lat,lon,source:'manual-location'};
  }
  const listing=await extension('IMPORT_URL',{url:streetViewListingUrl(p.url)},70000),hint=listing?.location_hint;
- if(!validStreetViewHint(hint,p.address))throw Error('Original listing did not provide a Street View point');
- return {lat:Number(hint.latitude),lon:Number(hint.longitude),source:'listing-street-view'};
+ if(!validListingLocationHint(hint,p.address))throw Error('Original listing did not provide a usable map or Street View point');
+ return {lat:Number(hint.latitude),lon:Number(hint.longitude),source:hint.source};
 }
 const json=value=>JSON.stringify(value);
 const superseded=()=>Object.assign(Error('Station choice or house location changed during calculation'),{code:'STATION_CHOICE_CHANGED'});

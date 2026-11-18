@@ -16,8 +16,8 @@ test('a corrected address changes the location and preserves manual routes and s
  assert.ok(!Object.hasOwn(u,'station_2_name'));assert.ok(!Object.hasOwn(u,'station_2_distance_miles'));
  assert.deepEqual(u.import_diagnostics.routing_history[0].journeys,p.journey_estimates);
 });
-test('a map pin or manually fixed coordinates cannot replace the origin',()=>{
- assert.equal(buildLocationUpdate(p,{...hint,source:'listing-map'}),null);
+test('the listing map is accepted and manually fixed coordinates retain priority',()=>{
+ assert.equal(buildLocationUpdate(p,{...hint,source:'listing-map'}).import_diagnostics.source_location.source,'listing-map');
  assert.equal(buildLocationUpdate(p,{...hint,address:'51 Chisholm Road, Croydon'}).latitude,hint.latitude);
  assert.equal(buildLocationUpdate({...p,manual_overrides:{latitude:true}},hint),null);
 });

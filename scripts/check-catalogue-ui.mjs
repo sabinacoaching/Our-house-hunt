@@ -57,7 +57,8 @@ await page.addInitScript(()=>{
  window.addEventListener('message',event=>{
   const request=event.data;if(request?.source!=='our-house-hunt-site')return;
   let data,ok=true,error;
-  if(request.action==='PING')data={version:'0.18.0'};
+  if(request.action==='PING')data={version:window.__outdoorFixture?'0.20.0':'0.18.0'};
+  else if(request.action==='IMPORT_URL'&&window.__outdoorFixture)data={listing_text:'Rear garden 12.0m x 5.0m\n\nOff-street parking for two cars.'};
   else if(request.action==='GOOGLE_ROUTE'){
    const {route}=request;window.__extensionCalls.push(route);
    const fail=route.kind==='station_walk'?'__failNextWalk':'__failNextTransit';
@@ -292,6 +293,13 @@ try{
  await page.waitForFunction(()=>window.__fixtureRows.find(p=>p.id==='beta').station_commutes.manual_routes?.station_3_name?.state==='complete');
  assert.equal(await page.evaluate(()=>window.__fixtureRows.find(p=>p.id==='gamma').station_3_name),'Gamma Station');
  assert.equal(await page.locator('.hh-render-fallback').count(),0);assert.deepEqual(errors,[]);
+ const beforeOutdoor=await page.evaluate(()=>window.__fixtureRows.map(({garden_area_sqm,garden_description,import_diagnostics,...p})=>p));
+ await page.evaluate(()=>window.__outdoorFixture=true);
+ await appMenu.locator('summary').click();await page.locator('#refreshOutdoors').click();
+ await page.waitForFunction(()=>window.__fixtureRows.every(p=>p.import_diagnostics?.outdoor_details?.version==='outdoors-v2'));
+ for(const p of await page.evaluate(()=>window.__fixtureRows)){assert.equal(p.garden_area_sqm,60);assert.match(p.garden_description,/Off-street parking for two cars/)}
+ assert.deepEqual(await page.evaluate(()=>window.__fixtureRows.map(({garden_area_sqm,garden_description,import_diagnostics,...p})=>p)),beforeOutdoor);
+ console.log('OUTDOOR_REFRESH_UI_PASS Menu reprocesses existing cards, displays sizes and parking, preserves exact dates, comments, routes and station choices');
  if(process.env.HH_UI_SCREENSHOT)await page.screenshot({path:process.env.HH_UI_SCREENSHOT,fullPage:false});
  console.log('CATALOGUE_UI_PASS agency sorting, workflow filters, independent enquiry/request, current decision, legacy preservation, archive restore');
  console.log('MANUAL_STATION_UI_PASS inline rename, detail rename, automatic walking/PT, Refresh retry, reopen resumes only missing component');

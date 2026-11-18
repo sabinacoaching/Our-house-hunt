@@ -24,7 +24,7 @@ export function stationWalkingMapUrl(p,i){
  const replacement=stationChoice(p,i);
  if(replacement?.origin&&replacement?.destination)return replacement.walking?.url||'https://www.google.com/maps/dir/?'+new URLSearchParams({api:'1',origin:replacement.origin.lat+','+replacement.origin.lon,destination:replacement.destination.query,travelmode:'walking',hl:'en'});
  const name=stationNames(p)[i],c=p.station_commutes||{},location=p.import_diagnostics?.source_location;
- const sourceMatches=location?.source==='listing-street-view'&&location.listing_url===p.url&&location.address_input===p.address&&p.latitude!=null&&p.longitude!=null&&Number(location.latitude)===Number(p.latitude)&&Number(location.longitude)===Number(p.longitude);
+ const sourceMatches=['listing-street-view','listing-map'].includes(location?.source)&&location.listing_url===p.url&&location.address_input===p.address&&p.latitude!=null&&p.longitude!=null&&Number(location.latitude)===Number(p.latitude)&&Number(location.longitude)===Number(p.longitude);
  const checked=c.google_routes;
  if(sourceMatches&&checked?.origin===p.address&&checked?.stations?.[i]===name&&checked.results?.[i]?.destination_mode==='named-station'&&checked.results[i].walking_url)return checked.results[i].walking_url;
  const origin=sourceMatches?p.latitude+','+p.longitude:p.address+', United Kingdom';

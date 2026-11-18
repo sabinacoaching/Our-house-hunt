@@ -36,7 +36,7 @@ async function readPropertyFromPage(){
  const photos=[],plans=[],photoSet=new Set(),planSet=new Set();
  // Prefer the listing's own ordered media structures. Zoopla's preview carousel
  // is cyclic and may start at photo 7, so it cannot define gallery order.
- let authoritativePhotos=null,authoritativePlans=null,listingMapPoint=null,listingText='',listingArea=null;
+ let authoritativePhotos=null,authoritativePlans=null,listingMapPoint=null,listingText='',listingArea=null,structuredAddress='';
  if(source==='Rightmove'){
   for(const script of scripts){
    if(!script.includes('window.__PAGE_MODEL'))continue;
@@ -58,18 +58,33 @@ async function readPropertyFromPage(){
     };
     authoritativePhotos=media('images');authoritativePlans=media('floorplans');
     const text=nodes[model.text],detail=nodes[text?.description],features=nodes[model.keyFeatures];
-    listingText=[...(Array.isArray(features)?features.map(i=>nodes[i]).filter(x=>typeof x==='string'):[]),typeof detail==='string'?detail:''].filter(Boolean).join('\n\n');
+    const material=nodes[model.features],parking=nodes[material?.parking];
+    const parkingText=(Array.isArray(parking)?parking.map(i=>nodes[nodes[i]?.displayText]).filter(x=>typeof x==='string'):[]).join('; ');
+    listingText=[...(Array.isArray(features)?features.map(i=>nodes[i]).filter(x=>typeof x==='string'):[]),typeof detail==='string'?detail:'',parkingText?'Parking: '+parkingText:''].filter(Boolean).join('\n\n');
+    structuredAddress=nodes[nodes[model.address]?.displayAddress]||'';
     break;
    }catch(e){console.warn('Rightmove media model unavailable',String(e))}
   }
  }
  if(source==='Zoopla'){
   const expected=location.pathname.match(/\/details\/(\d+)/)?.[1];
+  const chunks=[];
   for(const script of scripts){
-   if(!script.includes('self.__next_f.push')||!script.includes('propertyImage'))continue;
+   const start=script.indexOf('self.__next_f.push(');if(start<0)continue;
+   try{const args=JSON.parse(script.slice(start+'self.__next_f.push('.length,script.lastIndexOf(')')));if(args[0]===1&&typeof args[1]==='string')chunks.push(args[1])}catch{}
+  }
+  // React streams long descriptions as byte-counted text records. A listing
+  // can reference one of these records instead of embedding its text in JSON.
+  const flight=chunks.join(''),records=[],texts=new Map();let offset=0;
+  while(offset<flight.length){
+   if(flight[offset]==='\n'){offset++;continue}
+   const header=flight.slice(offset).match(/^([0-9a-f]+):(T([0-9a-f]+),)?/);if(!header){const next=flight.indexOf('\n',offset);if(next<0)break;offset=next+1;continue}
+   offset+=header[0].length;
+   if(header[2]){const value=new TextDecoder().decode(new TextEncoder().encode(flight.slice(offset)).slice(0,parseInt(header[3],16)));texts.set(header[1],value);offset+=value.length}
+   else{const end=flight.indexOf('\n',offset),stop=end<0?flight.length:end;try{records.push(JSON.parse(flight.slice(offset,stop)))}catch{}offset=stop+1}
+  }
+  for(const root of records){
    try{
-    const payload=JSON.parse(script.slice(script.indexOf('['),script.lastIndexOf(']')+1))[1];
-    const root=JSON.parse(payload.slice(payload.indexOf(':')+1));
     let listing=null;
     const visit=x=>{
      if(!x||typeof x!=='object'||listing)return;
@@ -80,11 +95,13 @@ async function readPropertyFromPage(){
     if(!listing)continue;
     const point=listing.location?.coordinates,lat=Number(point?.latitude),lon=Number(point?.longitude);
     if(point?.latitude!=null&&point?.longitude!=null&&Number.isFinite(lat)&&Number.isFinite(lon)&&lat>49&&lat<61&&lon> -9&&lon<3)listingMapPoint={source:'listing-map',latitude:lat,longitude:lon,address:null};
-    const media=items=>(items||[]).map(x=>x.filename).filter(x=>typeof x==='string'&&/^[a-z0-9_-]+\.(?:jpg|jpeg|png|webp|gif|avif)$/i.test(x)).map(x=>'https://lid.zoocdn.com/u/1200/900/'+x);
+    const media=(items,size='1200/900')=>(items||[]).map(x=>x.filename).filter(x=>typeof x==='string'&&/^[a-z0-9_-]+\.(?:jpg|jpeg|png|webp|gif|avif)$/i.test(x)).map(x=>'https://lid.zoocdn.com/u/'+size+'/'+x);
     const photosFromSource=media(listing.propertyImage);
     if(photosFromSource.length!==listing.propertyImage.length)continue;
-    authoritativePhotos=photosFromSource;authoritativePlans=Array.isArray(listing.floorPlan?.image)?media(listing.floorPlan.image):null;
-    listingText=[...(listing.features?.bullets||[]),listing.detailedDescription||''].filter(x=>typeof x==='string'&&x.trim()).join('\n\n');
+    authoritativePhotos=photosFromSource;authoritativePlans=Array.isArray(listing.floorPlan?.image)?media(listing.floorPlan.image,'1600/1200'):null;
+    const rawDescription=listing.detailedDescription||'',detail=/^\$[0-9a-f]+$/.test(rawDescription)?texts.get(rawDescription.slice(1))||'':rawDescription;
+    listingText=[...(listing.features?.bullets||[]),detail||mainText.split(/\n\s*(?:Zoopla tools|Stamp duty calculator|About the agent)\s*\n/i)[0]].filter(x=>typeof x==='string'&&x.trim()).join('\n\n');
+    structuredAddress=listing.displayAddress||'';
     const fact=listing.floorArea;if(fact?.value!=null&&fact.unitsLabel)listingArea={value:Number(fact.value),units:fact.unitsLabel};
     break;
    }catch(e){console.warn('Zoopla media model unavailable',String(e))}
@@ -393,7 +410,7 @@ async function readPropertyFromPage(){
   const street=streetControls.find(el=>el.getAttribute?.('role')==='tab')||streetControls[0];
   if(street){
    street.click();
-   for(let attempt=0;attempt<40;attempt++){
+   for(let attempt=0;attempt<(listingMapPoint?12:40);attempt++){
     await new Promise(r=>setTimeout(r,500));
     const panel=source==='Zoopla'?document.querySelector('[role="tabpanel"][id$="-content-street_view"]'):document;
     if(attempt===6&&!panel)street.click();
@@ -405,6 +422,7 @@ async function readPropertyFromPage(){
    }
   }
  }catch(e){console.warn('Listing Street View unavailable',String(e))}
+ if(!location_hint&&listingMapPoint)location_hint={...listingMapPoint,address:structuredAddress||originalAddress};
  let latitude=null,longitude=null;
  const joined=scripts.filter(x=>/latitude|longitude|"lat"|"lng"|"coordinates"/i.test(x)).slice(0,20).join('\n').slice(0,400000);
  const latHit=joined.match(/["'](?:latitude|lat)["']\s*:\s*["']?(-?5[01-9]\.\d+)/i);
@@ -412,7 +430,7 @@ async function readPropertyFromPage(){
  if(latHit&&lngHit){const la=Number(latHit[1]),lo=Number(lngHit[1]);if(la>49&&la<61&&lo>-9&&lo<3){latitude=la;longitude=lo}}
  const propertyType=mainText.match(/PROPERTY TYPE\s*\n+\s*([^\n]+)/i)?.[1]||'';
  const tenure=mainText.match(/TENURE\s*\n+\s*([^\n]+)/i)?.[1]||'';
- let address=originalAddress;
+ let address=structuredAddress||originalAddress;
  if(!address)throw Error('Original listing address could not be read; no house was imported');
  if(!gallery.length)throw new Error('Listing loaded but house photographs were not found');
  // Identify only the agent named by this listing; the portals often provide an
@@ -442,7 +460,7 @@ async function readPropertyFromPage(){
  }
  const agency_website=null;
  if(!listingText)listingText=mainText.split(/\n\s*(?:Zoopla tools|Stamp duty calculator|Similar properties|Mortgage calculator|About the agent)\s*\n/i)[0];
- return {listing_id:location.pathname.match(/\/(?:details|properties)\/(\d+)/)?.[1]||null,source,title,address,agency_name,agency_email,agency_website,agency_address,agency_profile_url,price,bedrooms,bathrooms,wc_count:wcs,floors,floor_area_sqm:area,garden_area_sqm:gardenArea,garden_description:gardenDescription,listing_text:listingText.slice(0,80000),nearby_stations,station_name:stationName,station_distance_miles:stationMiles,station_2_name:station2Name,station_2_distance_miles:station2Miles,latitude,longitude,location_hint,property_type:propertyType,tenure,images:gallery,floorplans:plans,floorplan_status:plans.length?'found-in-original-listing':clickedPlanTab?'tab-opened-but-image-not-found':floorTab?'floorplan-tab-click-failed':'floorplan-tab-not-found',floorplan_diagnostic:{tabFound:!!floorTab,tabClicked:clickedPlanTab,candidateCount:plans.length,error:planTabError},extension_version:'0.19.0'};
+ return {listing_id:location.pathname.match(/\/(?:details|properties)\/(\d+)/)?.[1]||null,source,title,address,agency_name,agency_email,agency_website,agency_address,agency_profile_url,price,bedrooms,bathrooms,wc_count:wcs,floors,floor_area_sqm:area,garden_area_sqm:gardenArea,garden_description:gardenDescription,listing_text:listingText.slice(0,80000),nearby_stations,station_name:stationName,station_distance_miles:stationMiles,station_2_name:station2Name,station_2_distance_miles:station2Miles,latitude,longitude,location_hint,property_type:propertyType,tenure,images:gallery,floorplans:plans,floorplan_status:plans.length?'found-in-original-listing':clickedPlanTab?'tab-opened-but-image-not-found':floorTab?'floorplan-tab-click-failed':'floorplan-tab-not-found',floorplan_diagnostic:{tabFound:!!floorTab,tabClicked:clickedPlanTab,candidateCount:plans.length,error:planTabError},extension_version:'0.20.0'};
  }catch(error){return {listing_id:location.pathname.match(/\/(?:details|properties)\/(\d+)/)?.[1]||null,read_error:String(error?.message||error)}}
 }
 async function readAgencyProfile(expectedName){
@@ -488,8 +506,14 @@ async function extract(url){
   if(!expectedId||finalId!==expectedId)throw Error('The original listing is unavailable or redirected to another page');
   // Give the app's client-rendered listing content time to appear in the DOM.
   await new Promise(r=>setTimeout(r,1600));
-  const result=await chrome.scripting.executeScript({target:{tabId:tab.id},func:readPropertyFromPage});
-  const data=result?.[0]?.result,expected=new URL(url).pathname.match(/\/(?:details|properties)\/(\d+)/)?.[1];
+  let data;
+  // Chrome can discard an async injection when a listing replaces its document.
+  // Retry the same verified tab before returning a missing address or point.
+  for(let attempt=0;attempt<3;attempt++){
+   if(attempt){await waitForLoad(tab.id);await new Promise(r=>setTimeout(r,1000));const current=(await chrome.tabs.get(tab.id)).url||'';if(new URL(current).pathname.match(/\/(?:details|properties)\/(\d+)/)?.[1]!==expectedId)throw Error('The original listing redirected to another property')}
+   const result=await chrome.scripting.executeScript({target:{tabId:tab.id},func:readPropertyFromPage});data=result?.[0]?.result;if(data!=null)break;
+  }
+  const expected=new URL(url).pathname.match(/\/(?:details|properties)\/(\d+)/)?.[1];
   if(data?.read_error)throw Error(data.read_error);
   if(!data||!expected||data.listing_id!==expected)throw Error('The original listing is unavailable or redirected to another page');
   if(data.agency_name&&!data.agency_address&&data.agency_profile_url)data.agency_address=await readBranchAddress(data.agency_profile_url,data.agency_name);
@@ -579,7 +603,7 @@ async function googleRoute(input){
 }
 chrome.runtime.onMessage.addListener((req,sender,sendResponse)=>{
  if(!/^https:\/\/sabinacoaching\.github\.io\/(?:our-house-hunt|Our-house-hunt)\//.test(sender.url||''))return false;
- if(req.action==='PING'){sendResponse({ok:true,data:{extension:'Our House Hunt',version:'0.19.0'}});return false;}
+ if(req.action==='PING'){sendResponse({ok:true,data:{extension:'Our House Hunt',version:'0.20.0'}});return false;}
  if(!['IMPORT_URL','FETCH_IMAGE','GOOGLE_ROUTE'].includes(req.action))return false;
  (async()=>{try{const data=req.action==='IMPORT_URL'?await extract(req.url):req.action==='GOOGLE_ROUTE'?await googleRoute(req.route):await fetchImage(req.url);sendResponse({ok:true,data})}catch(e){sendResponse({ok:false,error:e.message})}})();
  return true;

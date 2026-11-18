@@ -1,5 +1,5 @@
-import {validStreetViewHint,streetViewListingUrl} from './import-utils.js?v=4';
-import {buildGoogleRouteUpdate} from './google-route-update.js?v=3';
+import {validListingLocationHint,streetViewListingUrl} from './import-utils.js?v=6';
+import {buildGoogleRouteUpdate} from './google-route-update.js?v=4';
 import {selectGoogleStations,stationTransportType} from './google-station-selection.js?v=4';
 
 export function needsGoogleRouteResume(p){
@@ -25,7 +25,7 @@ export async function calculateGoogleRoutes(id,{sb,extension,progress=()=>{},onP
  if(saved.route_pending!==true&&saved.google_routes_version==='google-maps-ui-v2'&&savedSource?.listing_url===p.url&&savedSource.address_input===p.address&&Number(savedSource.latitude)===Number(p.latitude)&&Number(savedSource.longitude)===Number(p.longitude))return {alreadyDone:true};
  let listing=null,listingWarning=null;
  let d=p.import_diagnostics||{};
- const hasSource=()=>d.source_location?.source==='listing-street-view'&&d.source_location.listing_url===p.url&&d.source_location.address_input===p.address&&Number(d.source_location.latitude)===Number(p.latitude)&&Number(d.source_location.longitude)===Number(p.longitude);
+ const hasSource=()=>validListingLocationHint(d.source_location,p.address)&&d.source_location.listing_url===p.url&&d.source_location.address_input===p.address&&p.latitude!=null&&p.longitude!=null&&Number(d.source_location.latitude)===Number(p.latitude)&&Number(d.source_location.longitude)===Number(p.longitude);
  const needsPoint=!hasSource(),needsAddress=!String(p.address||'').trim();
  if(needsPoint||needsAddress||!Object.hasOwn(d,'nearby_stations')){
   try{listing=await extension('IMPORT_URL',{url:streetViewListingUrl(p.url)},70000)}
@@ -46,12 +46,12 @@ export async function calculateGoogleRoutes(id,{sb,extension,progress=()=>{},onP
  const completed=d.source_location;
  if(d.route_pending!==true&&d.google_routes_version==='google-maps-ui-v2'&&completed?.listing_url===p.url&&completed.address_input===p.address&&Number(completed.latitude)===Number(p.latitude)&&Number(completed.longitude)===Number(p.longitude))return {alreadyDone:true};
  let source=d.source_location;
- if(!(source?.source==='listing-street-view'&&source.listing_url===p.url&&source.address_input===p.address&&Number(source.latitude)===Number(p.latitude)&&Number(source.longitude)===Number(p.longitude))){
+ if(!hasSource()){
   progress('Reading the original listing map: '+p.address);
   if(!listing)listing=await extension('IMPORT_URL',{url:streetViewListingUrl(p.url)},70000);
   const hint=listing?.location_hint;
-  if(!validStreetViewHint(hint,p.address))throw Error('Original listing did not provide a Street View point');
-  source={source:'listing-street-view',listing_url:p.url,address_input:p.address,latitude:Number(hint.latitude),longitude:Number(hint.longitude),display_address:hint.address||null};
+  if(!validListingLocationHint(hint,p.address))throw Error('Original listing did not provide a usable map or Street View point');
+  source={source:hint.source,listing_url:p.url,address_input:p.address,latitude:Number(hint.latitude),longitude:Number(hint.longitude),display_address:hint.address||null};
  }
  const latitude=Number(source.latitude),longitude=Number(source.longitude),origin={lat:latitude,lon:longitude},originKey=latitude+','+longitude;
  if((p.manual_overrides?.latitude&&Number(p.latitude)!==latitude)||(p.manual_overrides?.longitude&&Number(p.longitude)!==longitude))throw Error('A manually corrected location needs to be retained');

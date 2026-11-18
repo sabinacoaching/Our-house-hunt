@@ -20,6 +20,22 @@ const context=await chromium.launchPersistentContext('',{channel:'chromium',head
 try{
  let [worker]=context.serviceWorkers();if(!worker)worker=await context.waitForEvent('serviceworker');
  await context.pages()[0].bringToFront();
+ // Own the fixture tab before navigation, so Playwright intercepts its first
+ // request. The listing reader still runs through real Chrome scripting APIs
+ // in an inactive tab, using the exact distributed extension function.
+ const readCaptured=async(url,html)=>{
+  const fixtureTab=await context.newPage();
+  try{
+   await fixtureTab.route('**/*',route=>route.fulfill({contentType:'text/html; charset=utf-8',body:html}));await fixtureTab.goto(url);
+   await context.pages()[0].bringToFront();
+   return await worker.evaluate(async url=>{
+    const tabs=await chrome.tabs.query({}),tab=tabs.find(x=>x.url===url);if(!tab)throw Error('Native fixture tab missing');
+    const result=await chrome.scripting.executeScript({target:{tabId:tab.id},func:readPropertyFromPage});const data=result?.[0]?.result;
+    if(!data||data.read_error)throw Error(data?.read_error||'Native fixture reader returned no data');return data;
+   },url);
+  }finally{await fixtureTab.close()}
+ };
+
  const live=await worker.evaluate(async()=>{
   const original=chrome.scripting.executeScript.bind(chrome.scripting),capture=[];
   chrome.scripting.executeScript=async options=>{const before=await original({target:options.target,func:()=>({url:location.href,title:document.title,body:document.body?.innerText?.slice(0,1200)})});const value=await original(options);capture.push({name:options.func?.name,before,results:value});return value};
@@ -29,7 +45,7 @@ try{
  });
  let source=live.data;
  if(source){
-  assert.equal(source.listing_id,'72832286');assert.equal(source.extension_version,'0.19.0');
+  assert.equal(source.listing_id,'72832286');assert.equal(source.extension_version,'0.20.0');
   assert.match(source.listing_text,/Off Street Parking for 2 Cars/);assert.match(source.listing_text,/driveway for two cars/);
   console.log('OUTDOOR_LIVE_IMPORT_PASS full original-listing text, off-street parking capacity, garden orientation and driveway');
  }else{
@@ -38,8 +54,7 @@ try{
   if(!live.capture?.some(x=>x.before?.some(v=>/security verification|cloudflare|not a bot/i.test(v.result?.body||''))))throw Error(live.error);
   const payload='7d:'+JSON.stringify(['$','div',null,{children:fixture}])+'\n';
   const html='<html><head><title>3 bedroom house for sale Central Road, Morden SM4</title></head><body><h1>3 bedroom house for sale Central Road, Morden SM4</h1><p>£525,000</p><p>3 bedroom house</p><script>self.__next_f={push(){}};self.__next_f.push('+JSON.stringify([1,payload])+')</script></body></html>';
-  await context.route('https://www.zoopla.co.uk/for-sale/details/72832286/',route=>route.fulfill({contentType:'text/html',body:html}));
-  source=await worker.evaluate(()=>extract('https://www.zoopla.co.uk/for-sale/details/72832286/'));
+  source=await readCaptured('https://www.zoopla.co.uk/for-sale/details/72832286/',html);
   assert.match(source.listing_text,/Off Street Parking for 2 Cars/);assert.match(source.listing_text,/driveway for two cars/);
   console.log('OUTDOOR_MV3_CAPTURED_SOURCE_PASS native extension reads original-listing source captured on 18 November; live runner blocked by Cloudflare');
  }
@@ -65,4 +80,38 @@ try{
  assert.match(result.row.garden_description,/Off Street Parking for 2 Cars/);assert.match(result.row.garden_description,/South-East Facing Garden/);
  assert.equal(result.row.viewing_at,row.viewing_at);assert.equal(result.row.comment_sabina,row.comment_sabina);assert.deepEqual(result.row.journey_estimates,row.journey_estimates);
  console.log('OUTDOOR_REAL_OCR_PASS '+JSON.stringify({floor_area_sqm:result.row.floor_area_sqm,plan_fallback_area_sqm:result.row.import_diagnostics.floorplan_measurements.labelled_values.floor_area_sqm,garden_area_sqm:result.row.garden_area_sqm,notes:result.row.garden_description,fields:result.outcome.fields,fixture_writes:result.writes}));
+ const regressions=JSON.parse(await readFile(resolve(root,'tests/fixtures/outdoor-regressions.json'),'utf8'));
+ for(const fixture of regressions){
+  const listing={listingId:fixture.listing_id,displayAddress:fixture.address,propertyImage:[{filename:'source-photo.jpg'}],floorPlan:{image:[{filename:'source-plan.jpg'}]},location:{coordinates:fixture.point},features:{bullets:[]},detailedDescription:'$d0'};
+  const text=fixture.listing_text,flight=':HL["style"]\n'+'d0:T'+Buffer.byteLength(text).toString(16)+','+text+'d1:'+JSON.stringify(['$','div',null,{children:listing}])+'\n';
+  const rightmove=fixture.name==='southbrook';
+  const url=rightmove?'https://www.rightmove.co.uk/properties/'+fixture.listing_id:'https://www.zoopla.co.uk/for-sale/details/'+fixture.listing_id+'/';
+  let script='self.__next_f={push(){}};self.__next_f.push('+JSON.stringify([1,flight])+')';
+  if(rightmove){
+   const nodes=[null],encode=value=>{const id=nodes.length;nodes.push(null);nodes[id]=Array.isArray(value)?value.map(encode):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).map(([k,v])=>[k,encode(v)])):value;return id};
+   nodes[0]={propertyData:encode({id:fixture.listing_id,address:{displayAddress:fixture.address},location:fixture.point,images:[{url:'https://media.rightmove.co.uk/property-photo/captured.jpg'}],floorplans:[{url:'https://media.rightmove.co.uk/property-floorplan/captured.jpg'}],keyFeatures:['Side Access to Garden'],text:{description:'Externally, the property benefits from a rear garden with patio area.'},features:{parking:[{displayText:'On street'}]}})};
+   script='window.__PAGE_MODEL='+JSON.stringify({data:JSON.stringify(nodes)})+';';
+  }
+  const html='<html><head><title>3 bedroom house for sale '+fixture.address+'</title></head><body><h1>3 bedroom house for sale '+fixture.address+'</h1><p>£550,000</p><script>'+script+'</script></body></html>';
+  const source=await readCaptured(url,html);assert.equal(source.address,fixture.address);assert.equal(source.location_hint.source,'listing-map');assert.match(source.listing_text,/garden/i);assert.doesNotMatch(source.listing_text,/\$d0/);
+  const checked=await page.evaluate(async({origin,fixture,source})=>{
+   const {readPlanImage,parsePlanText}=await import(origin+'/floorplan-ocr.js');
+   const {outdoorChanges,needsOutdoorRefresh}=await import(origin+'/outdoor-refresh.js');
+   const recognized=await readPlanImage(await (await fetch(origin+'/tests/fixtures/'+fixture.image)).blob());
+   const measurements=parsePlanText([recognized.text,recognized.headerText,recognized.footerText].join('\n'),recognized);
+   const old='rear garden EPC Rating D attractive three-bedroom house';
+   const p={id:fixture.name,address:source.address,url:fixture.url,garden_area_sqm:null,garden_description:old,floorplans:[{path:fixture.image}],manual_overrides:{},viewing_at:'2026-12-12T12:11:37Z',comment_sabina:'Keep owner comment',journey_estimates:{waterloo:{minutes:42}},import_diagnostics:{source_values:{garden_description:old}}};
+   const patch=outdoorChanges(p,{listingText:source.listing_text,measurements:[measurements]});
+   return {recognized,measurements,patch,needsRefresh:needsOutdoorRefresh({...p,...patch})};
+  },{origin,fixture:{...fixture,url},source});
+  console.log('OUTDOOR_REGRESSION_OCR '+JSON.stringify({name:fixture.name,...checked}));
+  assert.equal(checked.patch.garden_area_sqm??null,fixture.expected_area,fixture.name+' garden area');
+  assert.equal(checked.needsRefresh,false);assert.doesNotMatch(checked.patch.garden_description,/EPC|three-bedroom/);
+  if(fixture.name==='southbrook'){assert.match(checked.patch.garden_description,/17.39 × 6.99 m/);assert.match(checked.patch.garden_description,/Parking: On street/)}
+  if(fixture.name==='elmfield')assert.match(checked.patch.garden_description,/26.70 × 3.71 m/);
+  if(fixture.name==='woodvale'){assert.match(checked.patch.garden_description,/8.00 × 6.50 m/);assert.match(checked.patch.garden_description,/front/i)}
+  if(fixture.name==='beecholme')assert.match(checked.patch.garden_description,/Off street parking and garage/);
+  for(const key of ['viewing_at','comment_sabina','journey_estimates','address','manual_overrides'])assert.equal(Object.hasOwn(checked.patch,key),false);
+  console.log('OUTDOOR_REGRESSION_PASS '+fixture.name+' '+JSON.stringify({area:checked.patch.garden_area_sqm??null,notes:checked.patch.garden_description,map:source.location_hint}));
+ }
 }finally{await context.close();await new Promise(done=>server.close(done))}

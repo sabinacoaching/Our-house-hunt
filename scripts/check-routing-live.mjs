@@ -17,9 +17,9 @@ const browser=await chromium.launchPersistentContext('',{channel:'chromium',head
 let [extensionWorker]=browser.serviceWorkers();if(!extensionWorker)extensionWorker=await browser.waitForEvent('serviceworker');
 await browser.pages()[0].bringToFront();
 try{
- for(const [address,listing,latitude,longitude] of [['Alpine Close','74553564',51.3694953,-.0883864],['Lyncroft Gardens','73674598',51.4631369,-.3552057],['Rossindel Road','73709933',51.4621708,-.3708626]]){
+ for(const [address,listing,latitude,longitude,pointSource='listing-street-view'] of [['Alpine Close','74553564',51.3694953,-.0883864],['Lyncroft Gardens','73674598',51.4631369,-.3552057],['Rossindel Road','73709933',51.4621708,-.3708626],['Beecholme Avenue, Mitcham','74744520',51.413662,-.1511,'listing-map'],['Woodvale Walk, West Norwood SE27','74096214',51.425469,-.099918,'listing-map']]){
   const id='00000000-0000-4000-8000-000000000001',url='https://www.zoopla.co.uk/for-sale/details/'+listing;
-  let row={id,url,address,latitude,longitude,manual_overrides:{},journey_estimates:{},station_commutes:{},station_name:'',station_2_name:'',station_3_name:null,import_diagnostics:{nearby_stations:[],route_pending:true,source_location:{source:'listing-street-view',listing_url:url,address_input:address,latitude,longitude}}},writes=0,requests=0,handler;
+  let row={id,url,address,latitude,longitude,manual_overrides:{},journey_estimates:{},station_commutes:{},station_name:'',station_2_name:'',station_3_name:null,import_diagnostics:{nearby_stations:[],route_pending:true,source_location:{source:pointSource,listing_url:url,address_input:address,latitude,longitude}}},writes=0,requests=0,handler;
   const admin={auth:{getUser:async()=>({data:{user:{id:'test'}}})},from:()=>({select(){return this},eq(){return this},single:async()=>({data:row}),maybeSingle:async()=>({data:{id:'test'}}),update(){throw Error('Live test must not write to Supabase')}})};
   new Function('Deno','createClient','fetch',edgeCode)({env:{get:()=>''},serve:fn=>handler=fn},()=>admin,async(...args)=>{requests++;return fetch(...args)});
   const sb={from:()=>{let patch,filters=[];return {select(){return this},eq(key,value){filters.push([key,value]);return this},is(key,value){filters.push([key,value]);return this},update(value){patch=value;return this},single:async()=>({data:structuredClone(row)}),maybeSingle:async()=>{
@@ -40,6 +40,7 @@ try{
    if(address==='Lyncroft Gardens')assert.ok(row.journey_estimates.waterloo.minutes<=54,'the dominated 67-minute route must not be selected');
    const before=calls.length;await calculateGoogleRoutes(id,{sb,extension:async()=>{throw Error('Completed home must not recalculate')}});assert.equal(calls.length,before);
    console.log('LIVE_RESULT '+JSON.stringify({address,complete:true,ms:Date.now()-start,requests,writes,calls,journeys:row.journey_estimates,stations:row.station_commutes.google_routes,entrances:row.station_commutes.tfl_final.results}));
+   if(pointSource==='listing-map')console.log('LIVE_REPAIR_ROUTE '+JSON.stringify({address,latitude,longitude,url,source:row.import_diagnostics.source_location,work:row.import_diagnostics.google_routes_work}));
    if(address==='Alpine Close'){
     const beforeJourneys=structuredClone(row.journey_estimates),beforeStations=row.station_commutes.google_routes.results.slice(0,2),manualCalls=[];
     row={...row,...prepareStationChanges(row,{station_3_name:'Lebanon Road',manual_overrides:{...row.manual_overrides,station_3_name:true}})};

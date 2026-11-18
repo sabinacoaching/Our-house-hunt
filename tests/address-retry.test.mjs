@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
-const resumeCode=html.slice(html.indexOf('async function resumePendingRoutes('),html.indexOf('async function show()'));
+const resumeCode=html.slice(html.indexOf('async function resumePendingRoutes('),html.indexOf('const googleRouteJobs='));
 function setup(homes){
  const calls=[],pending=new Set();
  const resume=new Function('homes','user','pendingJourneyImportIds','finishNewHouseImport',resumeCode+';return resumePendingRoutes')(homes,{id:'member'},pending,async id=>calls.push(id));

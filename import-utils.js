@@ -20,6 +20,12 @@ export function validStreetViewHint(hint,address){
  // Street View opened from the original listing, not an independently guessed address.
  return !!String(address||'').trim();
 }
+export function validListingLocationHint(hint,address){
+ if(hint?.source==='listing-street-view')return validStreetViewHint({...hint,address:hint.address||hint.display_address||hint.address_input},address);
+ if(hint?.source!=='listing-map'||!String(address||'').trim())return false;
+ const lat=Number(hint.latitude),lon=Number(hint.longitude);
+ return hint.latitude!=null&&hint.longitude!=null&&Number.isFinite(lat)&&Number.isFinite(lon)&&lat>49&&lat<61&&lon> -9&&lon<3;
+}
 export function importChanges(property,incoming){
  const previous=property.import_diagnostics?.source_values||{},overrides=property.manual_overrides||{},changes={};
  for(const [field,value] of Object.entries(incoming)){
