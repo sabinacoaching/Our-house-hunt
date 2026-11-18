@@ -41,6 +41,15 @@ test('Zoopla reads the original listing media model without opening a gallery',a
  assert.deepEqual(Array.from(result.floorplans),['https://lid.zoocdn.com/u/1200/900/plan.jpg']);
  assert.equal(result.location_hint,null);
 });
+test('the published facts-card area takes priority over a different total in the description',async()=>{
+ const listing={listingId:123,propertyImage:[{filename:'first.jpg'}],floorPlan:{image:[]},floorArea:{value:732,unitsLabel:'sq. ft'},detailedDescription:'Total internal floor area 86 sqm. Private rear garden.'};
+ const script='self.__next_f.push('+JSON.stringify([1,'7d:'+JSON.stringify(['$', 'div',null,{children:listing}])+'\n'])+')';
+ const zoopla=await runPage({host:'www.zoopla.co.uk',path:'/for-sale/details/123',body:'£500,000\n2 bedroom house\n732 sq. ft\nTotal internal floor area 86 sqm',script});
+ assert.equal(zoopla.floor_area_sqm,68.01);assert.match(zoopla.listing_text,/Private rear garden/);
+ const nodes=[{propertyData:1},{id:2,images:3,floorplans:4},'123',[5],[],{url:6},'https://media.rightmove.co.uk/property-photo/a.jpeg'];
+ const rightmove=await runPage({host:'www.rightmove.co.uk',path:'/properties/123',body:'£500,000\n2 bedroom house\n732 sq. ft\nTotal internal floor area 86 sqm',script:'window.__PAGE_MODEL = '+JSON.stringify({data:JSON.stringify(nodes)})+';'});
+ assert.equal(rightmove.floor_area_sqm,68.01);
+});
 test('Zoopla location is available even when the listing provides no floor plan',async()=>{
  const listing={listingId:123,location:{coordinates:{latitude:51.48116,longitude:-0.356191}},propertyImage:[{filename:'first.jpg'}]};
  const script='self.__next_f.push('+JSON.stringify([1,'7d:'+JSON.stringify(['$', 'div',null,{children:listing}])+'\n'])+')';
@@ -71,5 +80,5 @@ test('an open Zoopla gallery cannot replace the complete address with the proper
  const headings=[{textContent:'2 bed terraced house for sale',closest:()=>null},{textContent:'2 bed terraced house for saleAlpine Close, Park Hill CR0',closest:()=>null}];
  const result=await runPage({host:'www.zoopla.co.uk',path:'/for-sale/details/123',body:'£439,999\n2 bedroom house',script,headings});
  assert.equal(result.address,'Alpine Close, Park Hill CR0');
- assert.equal(result.extension_version,'0.18.0');
+ assert.equal(result.extension_version,'0.19.0');
 });

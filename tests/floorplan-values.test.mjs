@@ -16,8 +16,8 @@ test('OCR does not overwrite a concurrent user correction',async()=>{
  globalThis.window={Tesseract:{createWorker:async()=>({recognize:async()=>({data:{text:'Ground floor\nFirst floor\nBedroom\nKitchen'}})})}};
  globalThis.fetch=async()=>({ok:true,blob:async()=>new Blob(['floorplan'],{type:'image/jpeg'})});
  globalThis.localStorage={getItem:()=>null,setItem(){}};
- const chain={update(){return this},eq(){return this},is(){return this},select:async()=>({data:[],error:null})};
+ const chain={eq(){return this},select(){return this},single:async()=>({data:structuredClone(p),error:null})};
  const p={id:'one',floorplans:[{path:'plan'}],floors:null,manual_overrides:{}};
- try{const result=await analyzeFloorplan({sb:{from:()=>chain},property:p,photo:async()=>'/plan'});assert.equal(result.status,'concurrent-edit');assert.equal(p.floors,null)}
+ try{const result=await analyzeFloorplan({sb:{from:()=>chain,rpc:async()=>({data:false,error:null})},property:p,photo:async()=>'/plan'});assert.equal(result.status,'concurrent-edit');assert.equal(p.floors,null)}
  finally{for(const [k,v] of Object.entries(original)){if(v===undefined)delete globalThis[k];else globalThis[k]=v}}
 });

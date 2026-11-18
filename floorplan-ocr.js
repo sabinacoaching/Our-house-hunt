@@ -1,6 +1,8 @@
+import {outdoorMeasurements,mainGardenArea,combineOutdoorDescription} from './outdoor-details.js?v=1';
 // Optional, client-side extraction of labelled measurements from a floor-plan image.
 // Never guesses dimensions where no labelled measurements are visible.
-let scriptTask=null,workerTask=null;
+let scriptTask=null,workerTask=null,ocrTail=Promise.resolve();
+const serialOcr=task=>{const next=ocrTail.then(task);ocrTail=next.catch(()=>{});return next};
 function loadScript(){
  if(window.Tesseract?.createWorker)return Promise.resolve(window.Tesseract);
  if(scriptTask)return scriptTask;
@@ -20,31 +22,32 @@ async function getWorker(){
  return workerTask;
 }
 const numeric=s=>Number(String(s).replace(',','.'));
-export function parsePlanText(original){
+function pairedArea(text,tolerant=false){
+ if(tolerant)text=String(text||'').replace(/(?<![a-z])(?:[so59]?q|sq)\s*m\b/gi,'sq m').replace(/(?<![a-z])(?:[so59]?q|sa|69)\s*(?:ft|tt)\b/gi,'sq ft');
+ const pairs=[];
+ for(const m of String(text||'').matchAll(/(\d{2,3}(?:\.\d{1,2})?)\s*(?:sq\.?\s*m|sqm|m2|m²)\s*[/=\-]\s*(\d{3,4}(?:\.\d+)?)\s*(?:sq\.?\s*ft|sqft|sq\.?\s*feet)/gi)){
+  const metric=Number(m[1]),feet=Number(m[2])*.09290304;
+  if(metric>=35&&metric<=500&&Math.abs(metric-feet)<Math.max(1,metric*.015))pairs.push(metric);
+ }
+ return pairs;
+}
+export function parsePlanText(original,{headerText='',footerText=''}={}){
  const text=String(original||'').replace(/[×✕]/g,'x').replace(/(\d),(?=\d{3}\b)/g,'$1').replace(/(\d),(\d)/g,'$1.$2').replace(/\s+/g,' ');
  const result={},areaMatches=[
    /\bapprox(?:imate)?\s+area\s*[:=]\s*(?:\d{3,4}(?:,\d{3})?\s*sq\.?\s*ft\s*\/\s*)?(\d{2,3}(?:\.\d{1,2})?)\s*(?:sq\.?\s*m(?:etres?)?|sqm|m2|m²)(?=\s|$|[.,;])/i,
-   /(?:total\s+(?:internal\s+|gross\s+)?(?:floor\s+)?area|gross\s+internal\s+(?:floor\s+)?area|gia|approx(?:imate)?\s+floor\s+area)[\s:;./\-]{0,15}.{0,95}?(\d{2,3}(?:\.\d{1,2})?)\s*(?:sq\.?\s*m(?:etres?)?|sqm|m2|m²)(?=\s|$|[.,;])/i,
+   /(?:total\s+(?:internal\s+|gross\s+)?(?:floor\s+)?area|gross\s+internal\s+(?:floor\s+)?area|(?<!gross\s)internal\s+area|gia|approx(?:imate)?\.?\s+(?:total\s+)?(?:floor\s+)?area)[\s:;./\-]{0,15}.{0,95}?(\d{2,3}(?:\.\d{1,2})?)\s*(?:sq\.?\s*m(?:etres?)?|sqm|m2|m²)(?=\s|$|[.,;])/i,
    /(\d{2,3}(?:\.\d{1,2})?)\s*(?:sq\.?\s*m|sqm|m2|m²).{0,45}?(?:total\s+(?:internal\s+)?area|gross\s+internal\s+area)\b/i,
    /(?:total\s+(?:internal\s+|gross\s+)?(?:floor\s+)?area|gross\s+internal\s+(?:floor\s+)?area|gia|approx(?:imate)?\s+floor\s+area)[\s:;./\-]{0,15}.{0,95}?(\d{3,4}(?:\.\d{1,2})?)\s*(?:sq\.?\s*f(?:t|eet)|sq\.?\s*ft|square\s+feet)(?=\s|$|[.,;])/i
  ];
  for(const [i,rx] of areaMatches.entries()){
-  const m=text.match(rx);if(m){const n=numeric(m[1].replace(/,(?=\d{3}\b)/g,''));const converted=i===areaMatches.length-1?Math.round(n*0.09290304*100)/100:n;if(converted>=35&&converted<=500){result.floor_area_sqm=converted;break}}
+  const matches=Array.from(text.matchAll(new RegExp(rx.source,rx.flags+'g'))).filter(m=>!/(?:garage|outbuilding|storage|external|(?:ground|first|second|third)\s+floor)\s*(?:[-:,.]\s*)?$/i.test(text.slice(0,m.index)));
+  const m=matches.find(m=>/gross\s+internal|total\s+internal/i.test(m[0]))||matches[0];if(m){const n=numeric(m[1].replace(/,(?=\d{3}\b)/g,''));const converted=i===areaMatches.length-1?Math.round(n*0.09290304*100)/100:n;if(converted>=35&&converted<=500){result.floor_area_sqm=converted;break}}
  }
- // A garden measurement must occur immediately after its label on the SAME printed line.
- // Do not join arbitrary room sizes to a garden label elsewhere in the floor plan.
- const gardenLines=String(original||'').split(/[\r\n]+/);
- let garden=null;
- for(const row of gardenLines){
-  const candidate=row.replace(/[×✕]/g,'x').replace(/(\d),(\d)/g,'$1.$2').trim()
-    .match(/^(?:(?:rear|private|back)\s+)?garden\s*[:( -]?\s*(?:(?:dimensions?|size|measures?|approx(?:imately)?)\s*[: -]?\s*)?(\d{1,2}(?:\.\d{1,2})?)\s*(?:m|metres?)?\s*(?:x|by)\s*(\d{1,2}(?:\.\d{1,2})?)\s*(?:m|metres?)\b/i);
-  if(candidate){garden=candidate;break}
- }
- // Other OCR lines can belong to a different room, so do not attach them to a garden label.
- if(garden){
-  const width=numeric(garden[1]),length=numeric(garden[2]),sqm=width*length;
-  if(width>1&&width<=40&&length>1&&length<=50&&sqm>=8&&sqm<=1500)result.garden_area_sqm=Math.round(sqm*100)/100;
- }
+ // Tiny grey headings may be unreadable. Accept their number only when the
+ // same metric/imperial pair independently agrees in BOTH image bands.
+ if(result.floor_area_sqm==null){const top=pairedArea(headerText),bottom=pairedArea(footerText,true);const agreed=[...new Set(top.filter(n=>bottom.some(v=>Math.abs(n-v)<.05)))];if(agreed.length===1)result.floor_area_sqm=agreed[0]}
+ result.outdoor=outdoorMeasurements(original);
+ const garden=mainGardenArea(result.outdoor);if(garden!=null)result.garden_area_sqm=garden;
  // Count storeys only when the plan explicitly labels a ground floor and subsequent levels.
  const planLabels=String(original||'');
  if(/\bground\s+floor\b/i.test(planLabels)&&/\bfirst\s+floor\b/i.test(planLabels)){
@@ -63,6 +66,75 @@ export function parsePlanText(original){
    result.plan_separate_wcs=wcRooms;
  }
  return result;
+}
+export async function readPlanImage(blob){
+ return serialOcr(async()=>{
+  const worker=await getWorker();let bitmap;
+  try{
+   if(typeof createImageBitmap!=='function'||typeof document==='undefined'){
+    const data=(await worker.recognize(blob)).data;return {text:data.text||'',headerText:'',footerText:''};
+   }
+   bitmap=await createImageBitmap(blob);
+   const scale=Math.min(3,2400/bitmap.width),canvas=document.createElement('canvas');
+   const draw=(y,height)=>{
+    canvas.width=Math.round(bitmap.width*scale);canvas.height=Math.round(height*scale);
+    const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(bitmap,0,y,bitmap.width,height,0,0,canvas.width,canvas.height);return canvas;
+   };
+   await worker.setParameters({tessedit_pageseg_mode:'3'});
+   const full=(await worker.recognize(draw(0,bitmap.height))).data;
+   let text=full.text||'';
+   await worker.setParameters({tessedit_pageseg_mode:'6'});
+   const head=(await worker.recognize(draw(0,Math.ceil(bitmap.height*.12)))).data;
+   let headerText=head.text||'';
+   const footerStart=Math.floor(bitmap.height*.78),footerText=(await worker.recognize(draw(footerStart,bitmap.height-footerStart))).data.text||'';
+   // Re-read small outdoor labels and their nearby dimensions as one local
+   // text block. A whole-page layout pass often separates these three lines.
+   const boxes=(full.lines||[]).filter(line=>/^\s*(?:(?:front|rear|back)\s+)?(?:gardens?|driveway|parking)\s*$/i.test(line.text||'')).slice(0,8);
+   const outdoorText=[];
+   for(const line of boxes){
+    const box=line.bbox,cx=(box.x0+box.x1)/(2*scale),y=Math.max(0,box.y0/scale-12),width=Math.min(bitmap.width,Math.max(320,(box.x1-box.x0)/scale+220)),x=Math.max(0,Math.min(bitmap.width-width,cx-width/2)),height=Math.min(bitmap.height-y,100);
+    const zoom=Math.min(4,1400/width);canvas.width=Math.round(width*zoom);canvas.height=Math.round(height*zoom);
+    const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(bitmap,x,y,width,height,0,0,canvas.width,canvas.height);
+    const local=(await worker.recognize(canvas)).data.text||'';outdoorText.push(local);
+   }
+   if(outdoorText.length)text+='\n'+outdoorText.join('\n');
+   const areaHeadings=[];
+   // Small grey headings need their own line pass, rather than competing with
+   // the much larger address/number. The crop is located by the observed total,
+   // and only reads the strip immediately above that printed number.
+   await worker.setParameters({tessedit_pageseg_mode:'7'});
+   for(const value of [...new Set(pairedArea(headerText))].slice(0,3)){
+    const word=(head.words||[]).find(w=>parseFloat(String(w.text).replace(',','.'))===value);if(!word?.bbox)continue;
+    const x=Math.max(0,word.bbox.x0/scale-60),bottom=Math.max(0,word.bbox.y0/scale-2),y=Math.max(0,bottom-20),width=Math.min(300,bitmap.width-x),height=bottom-y;if(height<4)continue;
+    canvas.width=Math.round(width*8);canvas.height=Math.round(height*8);const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(bitmap,x,y,width,height,0,0,canvas.width,canvas.height);
+    const pixels=ctx.getImageData(0,0,canvas.width,canvas.height);for(let i=0;i<pixels.data.length;i+=4){const ink=(pixels.data[i]+pixels.data[i+1]+pixels.data[i+2])/3<210?0:255;pixels.data[i]=pixels.data[i+1]=pixels.data[i+2]=ink}ctx.putImageData(pixels,0,0);
+    const label=(await worker.recognize(canvas)).data.text||'';areaHeadings.push(label);
+   }
+   if(areaHeadings.length)headerText=areaHeadings.join('\n')+'\n'+headerText;
+   return {text,headerText,footerText,outdoorText,areaHeadings};
+  }finally{bitmap?.close?.();if(worker.setParameters)await worker.setParameters({tessedit_pageseg_mode:'3'})}
+ });
+}
+export function floorplanChanges(p,measurements,{fingerprint='',listingText,now=new Date().toISOString()}={}){
+ const prior=p.import_diagnostics?.floorplan_measurements,source=p.import_diagnostics?.source_values||{},changes={};
+ const same=(a,b)=>a==null?b==null:String(a)===String(b);
+ const allowed=key=>!p.manual_overrides?.[key]&&(p[key]==null||p[key]===''||Object.hasOwn(source,key)&&same(p[key],source[key])||Object.hasOwn(prior?.values||{},key)&&same(p[key],prior.values[key]));
+ for(const key of ['floor_area_sqm','garden_area_sqm','floors']){
+  // The owner's priority is the advertised area; the plan only fills a missing floor area.
+  const savedPlanFallback=key==='floor_area_sqm'&&source.floor_area_sqm==null&&prior?.values?.floor_area_sqm!=null&&Number(p[key])===Number(prior.values.floor_area_sqm);
+  if(key==='floor_area_sqm'&&p[key]!=null&&p[key]!==''&&!savedPlanFallback)continue;
+  if(measurements[key]!=null&&allowed(key)&&!same(p[key],measurements[key]))changes[key]=measurements[key];
+ }
+ const raw=listingText??p.import_diagnostics?.listing_text??source.garden_description??p.garden_description??'';
+ const description=combineOutdoorDescription(raw,measurements.outdoor||[]);
+ if(description&&allowed('garden_description')&&!same(p.garden_description,description))changes.garden_description=description;
+ // Keep the exact inputs/provenance separate from the combined human-facing notes.
+ const values={...(prior?.values||{}),...Object.fromEntries(Object.entries(changes))};
+ for(const key of ['floor_area_sqm','garden_area_sqm','floors'])if(measurements[key]!=null&&!p.manual_overrides?.[key]&&same(p[key],measurements[key]))values[key]=measurements[key];
+ const labelled_values=Object.fromEntries(['floor_area_sqm','garden_area_sqm','floors'].filter(k=>measurements[k]!=null).map(k=>[k,measurements[k]]));
+ const diagnostic={version:'labelled-plan-v10',fingerprint,values,labelled_values,outdoor:measurements.outdoor||[],checked_at:now};
+ changes.import_diagnostics={...(p.import_diagnostics||{}),...(listingText!=null?{listing_text:listingText}:{}),floorplan_measurements:diagnostic};
+ return changes;
 }
 // Reject photos mistakenly categorised as floor plans by a listing's gallery.
 // Conservative validation: an unrecognisable image is not silently stored as a plan.
@@ -96,7 +168,7 @@ export async function inspectFloorplanImage(blob){
  }catch(e){result.reason="image-decoding-failed: "+String(e).slice(0,120);return result}
  finally{bitmap?.close?.()}
  try{
-  const worker=await getWorker(),recognized=await worker.recognize(blob);
+  const recognized=await serialOcr(async()=>{const worker=await getWorker();return worker.recognize(blob)});
   const txt=String(recognized.data?.text||'');
   const matches=txt.match(/\b(?:bedroom|bathroom|kitchen|reception|living\s+room|dining\s+room|ground\s+floor|first\s+floor|second\s+floor|floor\s*area|approx(?:imate)?\s+area|en[\s-]?suite|garden|shower\s+room|sitting\s+room)\b/gi)||[];
   const variety=new Set(matches.map(v=>v.toLowerCase()));
@@ -116,45 +188,42 @@ export async function inspectFloorplanImage(blob){
 export async function validateFloorplanImage(blob){
  return (await inspectFloorplanImage(blob)).accepted;
 }
-export async function analyzeFloorplan({sb,property,photo}){
+export async function analyzeFloorplan({sb,property,photo,recognize=readPlanImage,force=false}){
  const p=property;
  if(!p?.id||!(p.floorplans||[]).length)return {status:'not-needed'};
  const fingerprint=(p.floorplans||[])[0].path||(p.floorplans||[])[0].url;
  // Existing catalogue plans can be read directly from private Storage, avoiding unnecessary external listing requests.
  // Newly imported plans are archived from the original listing by the Chrome importer.
- const key='hh-plan-ocr-v9:'+p.id+':'+fingerprint;
+ const key='hh-plan-ocr-v10:'+p.id+':'+fingerprint;
  let last=0;try{last=Number(localStorage.getItem(key)||0)}catch{}
- if(last&&Date.now()-last<30*86400000)return {status:'already-checked'};
+ if(!force&&last&&Date.now()-last<30*86400000)return {status:'already-checked'};
  const imageUrl=await photo(p.floorplans[0]);
  if(!imageUrl||/\.pdf(?:\?|$)/i.test(fingerprint)||/^https:\/\/www\.onthemarket\.com\/details\/\d+\/#\/floorplans\/\d+$/i.test(imageUrl))return {status:'external-floorplan-viewer'};
  const res=await fetch(imageUrl);
  if(!res.ok)throw Error('Cannot read floor plan '+res.status);
  const blob=await res.blob();
  if(!blob.type.startsWith('image/'))return {status:'unsupported-plan'};
- const worker=await getWorker(),recognized=await worker.recognize(blob);
- const ocrText=recognized.data.text||'';
+ const recognized=await recognize(blob),ocrText=recognized.text||'';
  const planSignals=(ocrText.match(/\b(?:bedroom|bathroom|kitchen|dining\s+room|living\s+room|sitting\s+room|ground\s+floor|first\s+floor|total\s+(?:internal\s+)?floor\s+area|en[ -]?suite)\b/gi)||[]).length;
  if(planSignals<2)return {status:'unverified-floorplan-image'};
- const measurements=parsePlanText(ocrText),changes={};
- // Total floor area printed on the plan has priority over an approximate listing value.
- if(!p.manual_overrides?.floor_area_sqm&&p.floor_area_sqm==null&&measurements.floor_area_sqm!=null)changes.floor_area_sqm=measurements.floor_area_sqm;
- if(!p.manual_overrides?.garden_area_sqm&&p.garden_area_sqm==null&&measurements.garden_area_sqm!=null)changes.garden_area_sqm=measurements.garden_area_sqm;
- if(!p.manual_overrides?.floors&&p.floors==null&&measurements.floors!=null)changes.floors=measurements.floors;
+ const measurements=parsePlanText([ocrText,recognized.headerText,recognized.footerText].filter(Boolean).join('\n'),recognized);
+ const fresh=await sb.from('properties').select('*').eq('id',p.id).single();if(fresh.error)throw fresh.error;if(!fresh.data)return {status:'house-not-found'};
+ if((fresh.data.floorplans?.[0]?.path||fresh.data.floorplans?.[0]?.url)!==fingerprint)return {status:'concurrent-edit'};
+ const current=fresh.data,changes=floorplanChanges(current,measurements,{fingerprint});
  // Portal bathrooms count can include a separate WC; use labelled plan rooms only
  // when their total agrees with the total reported in the source, or the source did not give a count.
  const labelled=measurements.plan_bathrooms,standalone=measurements.plan_separate_wcs;
- const portalCount=p.bathrooms==null?null:Number(p.bathrooms);const existingTotal=portalCount==null?null:portalCount+(p.wc_count==null?0:Number(p.wc_count));
+ const portalCount=current.bathrooms==null?null:Number(current.bathrooms);const existingTotal=portalCount==null?null:portalCount+(current.wc_count==null?0:Number(current.wc_count));
  if(labelled!=null&&(portalCount==null||labelled+standalone===portalCount||labelled+standalone===existingTotal)){
-   if(!p.manual_overrides?.bathrooms&&p.bathrooms==null)changes.bathrooms=labelled;
-   if(!p.manual_overrides?.wc_count&&p.wc_count==null&&standalone>0)changes.wc_count=standalone;
+   if(!current.manual_overrides?.bathrooms&&current.bathrooms==null)changes.bathrooms=labelled;
+   if(!current.manual_overrides?.wc_count&&current.wc_count==null&&standalone>0)changes.wc_count=standalone;
  }
- if(!Object.keys(changes).length)return {status:'no-labelled-measurements'};
- let request=sb.from('properties').update(changes).eq('id',p.id).eq('manual_overrides',JSON.stringify(p.manual_overrides||{}));
- for(const field of Object.keys(changes))request=p[field]==null?request.is(field,null):request.eq(field,p[field]);
- const saved=await request.select('id');
+ const fields=Object.keys(changes).filter(k=>k!=='import_diagnostics');
+ if(!measurements.floor_area_sqm&&!measurements.outdoor?.length&&!fields.length)return {status:'no-labelled-measurements'};
+ const saved=await sb.rpc('house_hunt_save_manual_edit',{p_id:p.id,p_before:current,p_patch:changes});
  if(saved.error)throw saved.error;
- if(!saved.data?.length)return {status:'concurrent-edit'};
+ if(saved.data!==true)return {status:'concurrent-edit'};
  if(Object.keys(measurements).length)try{localStorage.setItem(key,String(Date.now()))}catch{}
- Object.assign(p,changes);
- return {status:'saved',fields:Object.keys(changes)};
+ Object.assign(p,current,changes);
+ return {status:fields.length?'saved':'checked',fields};
 }

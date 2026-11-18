@@ -1,3 +1,4 @@
+import {normalizeListingOutdoors} from '../outdoor-details.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -75,8 +76,8 @@ function harness({missingAddress=false}={}){
  const options={sb,extension,routingDate:date,delay:async()=>{}};
  const queue=id=>calculateGoogleRoutes(id,options);
  const digest=async blob=>createHash('sha256').update(Buffer.from(await blob.arrayBuffer())).digest('hex');
- const make=new Function('sb','pendingJourneyImportIds','extension','probeImporter','listing','user','crypto','photoDigest','report','mediaRevision','refresh','analyzeFloorplan','photo','finishNewHouseImport','inspectFloorplanImage','validStreetViewHint','sameStreet','streetViewListingUrl','queueGoogleHouse',importCode+';return importHouse');
- const importHouse=make(sb,pending,extension,async()=>true,x=>x,{id:'member'},webcrypto,digest,x=>reports.push(x),'fixture',async()=>{},async()=>{},async()=>'',async id=>retries.push(id),async()=>({accepted:true}),validStreetViewHint,sameStreet,streetViewListingUrl,queue);
+ const make=new Function('normalizeListingOutdoors','sb','pendingJourneyImportIds','extension','probeImporter','listing','user','crypto','photoDigest','report','mediaRevision','refresh','analyzeFloorplan','photo','finishNewHouseImport','inspectFloorplanImage','validStreetViewHint','sameStreet','streetViewListingUrl','queueGoogleHouse',importCode+';return importHouse');
+ const importHouse=make(normalizeListingOutdoors,sb,pending,extension,async()=>true,x=>x,{id:'member'},webcrypto,digest,x=>reports.push(x),'fixture',async()=>{},async()=>{},async()=>'',async id=>retries.push(id),async()=>({accepted:true}),validStreetViewHint,sameStreet,streetViewListingUrl,queue);
  return {rows,calls,files,retries,importHouse,queue,fail:address=>{failingAddress=address}};
 }
 
