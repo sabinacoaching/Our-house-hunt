@@ -95,10 +95,10 @@ async function readPropertyFromPage(){
     if(!listing)continue;
     const point=listing.location?.coordinates,lat=Number(point?.latitude),lon=Number(point?.longitude);
     if(point?.latitude!=null&&point?.longitude!=null&&Number.isFinite(lat)&&Number.isFinite(lon)&&lat>49&&lat<61&&lon> -9&&lon<3)listingMapPoint={source:'listing-map',latitude:lat,longitude:lon,address:null};
-    const media=items=>(items||[]).map(x=>x.filename).filter(x=>typeof x==='string'&&/^[a-z0-9_-]+\.(?:jpg|jpeg|png|webp|gif|avif)$/i.test(x)).map(x=>'https://lid.zoocdn.com/u/1200/900/'+x);
+    const media=(items,size='1200/900')=>(items||[]).map(x=>x.filename).filter(x=>typeof x==='string'&&/^[a-z0-9_-]+\.(?:jpg|jpeg|png|webp|gif|avif)$/i.test(x)).map(x=>'https://lid.zoocdn.com/u/'+size+'/'+x);
     const photosFromSource=media(listing.propertyImage);
     if(photosFromSource.length!==listing.propertyImage.length)continue;
-    authoritativePhotos=photosFromSource;authoritativePlans=Array.isArray(listing.floorPlan?.image)?media(listing.floorPlan.image):null;
+    authoritativePhotos=photosFromSource;authoritativePlans=Array.isArray(listing.floorPlan?.image)?media(listing.floorPlan.image,'1600/1200'):null;
     const rawDescription=listing.detailedDescription||'',detail=/^\$[0-9a-f]+$/.test(rawDescription)?texts.get(rawDescription.slice(1))||'':rawDescription;
     listingText=[...(listing.features?.bullets||[]),detail||mainText.split(/\n\s*(?:Zoopla tools|Stamp duty calculator|About the agent)\s*\n/i)[0]].filter(x=>typeof x==='string'&&x.trim()).join('\n\n');
     structuredAddress=listing.displayAddress||'';

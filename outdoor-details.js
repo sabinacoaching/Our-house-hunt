@@ -10,6 +10,17 @@ const room=/\b(?:bedroom|bathroom|kitchen|reception|dining|living room|ground fl
 const kindFor=s=>/driveway|parking|car[ -]?port/i.test(s)?'parking':/front/i.test(s)?'front_garden':/rear|back/i.test(s)?'rear_garden':/communal/i.test(s)?'communal_garden':'garden';
 function dimensions(text){
  const value=clean(text);
+ // Small print sometimes loses the apostrophe separating feet and inches.
+ // Bracketed metres remain usable when exactly one feet/inches split agrees.
+ const bracketPairs=[...value.matchAll(/(\d{1,3}(?:\s*['’′]\s*\d{0,2}|\s+\d{1,2})?["”″]?)\s*\((\d{1,3}[.,]\d{1,2})\)/g)].filter(m=>{
+  const metric=number(m[2]),raw=m[1],choices=[];
+  if(/['’′]/.test(raw)){const parts=raw.match(/(\d+)\s*['’′]\s*(\d*)/);if(Number(parts[2]||0)<=11)choices.push((Number(parts[1])+Number(parts[2]||0)/12)*.3048)}
+  else{const digits=raw.replace(/\D/g,'');choices.push(Number(digits)*.3048);for(let split=1;split<digits.length;split++){const feet=Number(digits.slice(0,split)),inches=Number(digits.slice(split));if(inches<=11)choices.push((feet+inches/12)*.3048)}}
+  return metric>=.5&&metric<=200&&choices.filter(n=>Math.abs(n-metric)<.06).length===1;
+ });
+ if(bracketPairs.length===2&&/x|by/i.test(value.slice(bracketPairs[0].index+bracketPairs[0][0].length,bracketPairs[1].index))){
+  const a=number(bracketPairs[0][2]),b=number(bracketPairs[1][2]);return {width_m:a,length_m:b,area_sqm:round(a*b),dimensions:bracketPairs[0][2].replace(',','.')+' × '+bracketPairs[1][2].replace(',','.')+' m'};
+ }
  // Some plans print metres only in brackets beside each imperial side.
  // Require agreement between both units instead of treating any bracketed
  // numbers near a garden as its size.
@@ -58,6 +69,10 @@ export function mainGardenArea(items){
  const rear=items.filter(x=>x.kind==='rear_garden'&&x.area_sqm!=null),generic=items.filter(x=>x.kind==='garden'&&x.area_sqm!=null);
  const choices=rear.length?rear:generic;
  return choices.length===1?choices[0].area_sqm:null;
+}
+export function retainOutdoorMeasurements(fresh,known=[]){
+ const key=x=>x.kind+':'+String(x.label||'').toLowerCase();
+ return [...fresh.filter(x=>x.dimensions||!known.some(p=>key(p)===key(x)&&p.dimensions)),...known.filter(p=>p.dimensions&&!fresh.some(x=>key(x)===key(p)&&x.dimensions))];
 }
 export function plainListingText(raw){
  return String(raw||'').replace(/<\s*(?:br\b[^>]*|\/(?:p|div|li|h[1-6]))\s*>/gi,'\n').replace(/<[^>]*>/g,' ')

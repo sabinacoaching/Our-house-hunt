@@ -21,3 +21,10 @@ test('OCR does not overwrite a concurrent user correction',async()=>{
  try{const result=await analyzeFloorplan({sb:{from:()=>chain,rpc:async()=>({data:false,error:null})},property:p,photo:async()=>'/plan'});assert.equal(result.status,'concurrent-edit');assert.equal(p.floors,null)}
  finally{for(const [k,v] of Object.entries(original)){if(v===undefined)delete globalThis[k];else globalThis[k]=v}}
 });
+test('printed metric Gross Internal Area wins over converted feet and a total including the garage',()=>{
+ assert.equal(parsePlanText('Approximate Gross Internal Area = 92.66 sq m/ 997 sq ft\nGarage = 11.84 sq m/128 sq ft\nTotal = 104.5 sq m/1125 sq ft').floor_area_sqm,92.66);
+ assert.equal(parsePlanText('Total Approximate Gross Internal Area = 89.77 sq m/ 966 sq ft').floor_area_sqm,89.77);
+ assert.equal(parsePlanText('GROSS INTERNAL AREA\nAPPROX TOTAL: 81.sq.m - 871.sq.ft').floor_area_sqm,81);
+ assert.equal(parsePlanText('Approximate Area: 45 sqm\nGross Internal Area 96 sqm').floor_area_sqm,96);
+ assert.equal(parsePlanText('APPROX. GROSS INTERNAL FLOOR AREA WITH GARAGE: 1597 SQFT/148 SQM\nAPPROX. GROSS INTERNAL FLOOR AREA WITHOUT GARAGE: 1297 SQFT/120 SQM').floor_area_sqm,120);
+});

@@ -1,4 +1,4 @@
-import {outdoorMeasurements,mainGardenArea,combineOutdoorDescription} from './outdoor-details.js?v=2';
+import {outdoorMeasurements,mainGardenArea,combineOutdoorDescription,retainOutdoorMeasurements} from './outdoor-details.js?v=2';
 // Optional, client-side extraction of labelled measurements from a floor-plan image.
 // Never guesses dimensions where no labelled measurements are visible.
 let scriptTask=null,workerTask=null,ocrTail=Promise.resolve();
@@ -25,7 +25,7 @@ const numeric=s=>Number(String(s).replace(',','.'));
 function pairedArea(text,tolerant=false){
  if(tolerant)text=String(text||'').replace(/(?<![a-z])(?:[so59]?q|sq)\s*m\b/gi,'sq m').replace(/(?<![a-z])(?:[so59]?q|sa|69)\s*(?:ft|tt)\b/gi,'sq ft');
  const pairs=[];
- for(const m of String(text||'').matchAll(/(\d{2,3}(?:\.\d{1,2})?)\s*(?:sq\.?\s*m|sqm|m2|m²)\s*[/=\-]\s*(\d{3,4}(?:\.\d+)?)\s*(?:sq\.?\s*ft|sqft|sq\.?\s*feet)/gi)){
+ for(const m of String(text||'').matchAll(/(\d{2,3}(?:\.\d{1,2})?)\s*\.?\s*(?:sq\.?\s*m|sqm|m2|m²)\s*[/=\-]\s*(\d{3,4}(?:\.\d+)?)\s*\.?\s*(?:sq\.?\s*ft|sqft|sq\.?\s*feet)/gi)){
   const metric=Number(m[1]),feet=Number(m[2])*.09290304;
   if(metric>=35&&metric<=500&&Math.abs(metric-feet)<Math.max(1,metric*.015))pairs.push(metric);
  }
@@ -34,15 +34,22 @@ function pairedArea(text,tolerant=false){
 export function parsePlanText(original,{headerText='',footerText=''}={}){
  const text=String(original||'').replace(/[×✕]/g,'x').replace(/(\d),(?=\d{3}\b)/g,'$1').replace(/(\d),(\d)/g,'$1.$2').replace(/\s+/g,' ');
  const result={},areaMatches=[
-   /\bapprox(?:imate)?\s+area\s*[:=]\s*(?:\d{3,4}(?:,\d{3})?\s*sq\.?\s*ft\s*\/\s*)?(\d{2,3}(?:\.\d{1,2})?)\s*(?:sq\.?\s*m(?:etres?)?|sqm|m2|m²)(?=\s|$|[.,;])/i,
-   /(?:total\s+(?:internal\s+|gross\s+)?(?:floor\s+)?area|gross\s+internal\s+(?:floor\s+)?area|(?<!gross\s)internal\s+area|gia|approx(?:imate)?\.?\s+(?:total\s+)?(?:floor\s+)?area)[\s:;./\-]{0,15}.{0,95}?(\d{2,3}(?:\.\d{1,2})?)\s*(?:sq\.?\s*m(?:etres?)?|sqm|m2|m²)(?=\s|$|[.,;])/i,
-   /(\d{2,3}(?:\.\d{1,2})?)\s*(?:sq\.?\s*m|sqm|m2|m²).{0,45}?(?:total\s+(?:internal\s+)?area|gross\s+internal\s+area)\b/i,
-   /(?:total\s+(?:internal\s+|gross\s+)?(?:floor\s+)?area|gross\s+internal\s+(?:floor\s+)?area|gia|approx(?:imate)?\s+floor\s+area)[\s:;./\-]{0,15}.{0,95}?(\d{3,4}(?:\.\d{1,2})?)\s*(?:sq\.?\s*f(?:t|eet)|sq\.?\s*ft|square\s+feet)(?=\s|$|[.,;])/i
+   /\bapprox(?:imate)?\s+area\s*[:=]\s*(?:\d{3,4}(?:,\d{3})?\s*sq\.?\s*ft\s*\/\s*)?(\d{2,3}(?:\.\d{1,2})?)\s*\.?\s*(?:sq\.?\s*m(?:etres?)?|sqm|m2|m²)(?=\s|$|[.,;/()\-])/i,
+   /(?:total\s+(?:internal\s+|gross\s+)?(?:floor\s+)?area|gross\s+internal\s+(?:floor\s+)?area|(?<!gross\s)internal\s+area|gia|approx(?:imate)?\.?\s+(?:total\s+)?(?:floor\s+)?area)[\s:;./\-]{0,15}.{0,95}?(\d{2,3}(?:\.\d{1,2})?)\s*\.?\s*(?:sq\.?\s*m(?:etres?)?|sqm|m2|m²)(?=\s|$|[.,;/()\-])/i,
+   /(\d{2,3}(?:\.\d{1,2})?)\s*\.?\s*(?:sq\.?\s*m|sqm|m2|m²).{0,45}?(?:total\s+(?:internal\s+)?area|gross\s+internal\s+area)\b/i,
+   /(?:total\s+(?:internal\s+|gross\s+)?(?:floor\s+)?area|gross\s+internal\s+(?:floor\s+)?area|gia|approx(?:imate)?\s+floor\s+area)[\s:;./\-]{0,15}.{0,95}?(\d{3,4}(?:\.\d{1,2})?)\s*\.?\s*(?:sq\.?\s*f(?:t|eet)|sq\.?\s*ft|square\s+feet)(?=\s|$|[.,;/()\-])/i
  ];
+ const candidates=[];
  for(const [i,rx] of areaMatches.entries()){
   const matches=Array.from(text.matchAll(new RegExp(rx.source,rx.flags+'g'))).filter(m=>!/(?:garage|outbuilding|storage|external|(?:ground|first|second|third)\s+floor)\s*(?:[-:,.]\s*)?$/i.test(text.slice(0,m.index)));
-  const m=matches.find(m=>/gross\s+internal|total\s+internal/i.test(m[0]))||matches[0];if(m){const n=numeric(m[1].replace(/,(?=\d{3}\b)/g,''));const converted=i===areaMatches.length-1?Math.round(n*0.09290304*100)/100:n;if(converted>=35&&converted<=500){result.floor_area_sqm=converted;break}}
+  for(const m of matches){
+   if(i===2&&/\b(?:area|gia)\b/i.test(text.slice(Math.max(0,m.index-110),m.index)))continue;
+   const n=numeric(m[1].replace(/,(?=\d{3}\b)/g,'')),feet=i===areaMatches.length-1,value=feet?Math.round(n*.09290304*100)/100:n;if(value<35||value>500)continue;
+   const rank=/without\s+garage|excl(?:uding|\.)?\s+garage/i.test(m[0])?-2:/with\s+garage|including\s+garage/i.test(m[0])?20:/gross\s+internal|\bgia\b/i.test(m[0])?0:/total\s+internal/i.test(m[0])?1:/internal\s+area/i.test(m[0])?2:5;
+   candidates.push({value,rank:rank+(feet?.5:0),index:m.index});
+  }
  }
+ candidates.sort((a,b)=>a.rank-b.rank||a.index-b.index);if(candidates.length)result.floor_area_sqm=candidates[0].value;
  // Tiny grey headings may be unreadable. Accept their number only when the
  // same metric/imperial pair independently agrees in BOTH image bands.
  if(result.floor_area_sqm==null){const top=pairedArea(headerText),bottom=pairedArea(footerText,true);const agreed=[...new Set(top.filter(n=>bottom.some(v=>Math.abs(n-v)<.05)))];if(agreed.length===1)result.floor_area_sqm=agreed[0]}
@@ -137,13 +144,17 @@ export function floorplanChanges(p,measurements,{fingerprint='',listingText,now=
   if(measurements[key]!=null&&allowed(key)&&!same(p[key],measurements[key]))changes[key]=measurements[key];
  }
  const raw=listingText??p.import_diagnostics?.listing_text??source.garden_description??p.garden_description??'';
- const description=combineOutdoorDescription(raw,measurements.outdoor||[]);
+ const outdoorRecord=p.import_diagnostics?.outdoor_details;
+ const planFingerprint=(p.floorplans||[]).map(x=>x.sha256||x.path||x.url).join('|');
+ const known=outdoorRecord?.plan_fingerprint===planFingerprint?outdoorRecord.measurements||[]:prior?.fingerprint===fingerprint?prior.outdoor||[]:[];
+ const outdoor=retainOutdoorMeasurements(measurements.outdoor||[],known);
+ const description=combineOutdoorDescription(raw,outdoor);
  if(description&&allowed('garden_description')&&!same(p.garden_description,description))changes.garden_description=description;
  // Keep the exact inputs/provenance separate from the combined human-facing notes.
  const values={...(prior?.values||{}),...Object.fromEntries(Object.entries(changes))};
  for(const key of ['floor_area_sqm','garden_area_sqm','floors'])if(measurements[key]!=null&&!p.manual_overrides?.[key]&&same(p[key],measurements[key]))values[key]=measurements[key];
  const labelled_values=Object.fromEntries(['floor_area_sqm','garden_area_sqm','floors'].filter(k=>measurements[k]!=null).map(k=>[k,measurements[k]]));
- const diagnostic={version:'labelled-plan-v11',fingerprint,values,labelled_values,outdoor:measurements.outdoor||[],checked_at:now};
+ const diagnostic={version:'labelled-plan-v11',fingerprint,values,labelled_values,outdoor,checked_at:now};
  changes.import_diagnostics={...(p.import_diagnostics||{}),...(listingText!=null?{listing_text:listingText}:{}),floorplan_measurements:diagnostic};
  return changes;
 }

@@ -38,7 +38,7 @@ test('Zoopla reads the original listing media model without opening a gallery',a
  const script='self.__next_f.push('+JSON.stringify([1,rsc])+')';
  const result=await runPage({host:'www.zoopla.co.uk',path:'/for-sale/details/123',body:'£500,000\n2 bedroom house',script});
  assert.deepEqual(Array.from(result.images),['https://lid.zoocdn.com/u/1200/900/first.jpg','https://lid.zoocdn.com/u/1200/900/second.jpg']);
- assert.deepEqual(Array.from(result.floorplans),['https://lid.zoocdn.com/u/1200/900/plan.jpg']);
+ assert.deepEqual(Array.from(result.floorplans),['https://lid.zoocdn.com/u/1600/1200/plan.jpg']);
  assert.equal(result.location_hint.source,'listing-map');
 });
 test('the published facts-card area takes priority over a different total in the description',async()=>{

@@ -860,7 +860,7 @@ async function refreshOutdoorCatalogue(force=false){
    if(!user)break;outdoorsAttempted.add(p.id);
    report('Gardens and parking: checking '+(++checked)+'/'+pending.length+' · '+p.address);
    try{
-    const outcome=await refreshOutdoorProperty({sb,property:p,readListing:async url=>extension('IMPORT_URL',{url},70000),photo});
+    const outcome=await refreshOutdoorProperty({sb,property:p,readListing:async url=>extension('IMPORT_URL',{url},70000),photo,loadListingPlan:async url=>{const data=await extension('FETCH_IMAGE',{url},45000);return new Blob([Uint8Array.from(atob(data.base64),c=>c.charCodeAt(0))],{type:data.mime})}});
     if(outcome.fields.length)updated++;if(outcome.status==='partial')partial++;
     const home=homes.find(x=>x.id===p.id);if(home)Object.assign(home,p);if(selected?.id===p.id)Object.assign(selected,p);render();
    }catch(error){partial++;console.warn('Garden and parking refresh',p.address,error)}

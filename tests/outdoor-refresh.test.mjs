@@ -37,3 +37,12 @@ test('a failed listing read retains earlier facts, remains retryable and cannot 
 test('a damaged imperial line cannot hide the clearly printed metric garden sides',()=>{
  const items=outdoorMeasurements('GARDEN\n26\'3" x 21\'s"\n8.00 x 6.50M\n(APPROXIMATE)');assert.equal(items[0].area_sqm,52);assert.equal(items[0].dimensions,'8.00 × 6.50 m');
 });
+test('bracketed metric sides survive a missing imperial apostrophe only with an agreeing feet/inches split',()=>{
+ assert.equal(outdoorMeasurements('Garden\n87\'6 (26.70)\nx 122 (3.71)')[0].area_sqm,99.06);
+ assert.equal(outdoorMeasurements('Garden\n876 (26.70)\nx 122 (8.71)')[0].area_sqm,undefined);
+});
+test('a weaker repeat read of the same plan retains previously verified sides',()=>{
+ const p=property(),first=outdoorChanges(p,{listingText:'Rear garden. Parking: On street.',measurements:[{outdoor:outdoorMeasurements('Garden\n12.0m x 5.0m')}]});
+ const current={...p,...first},again=outdoorChanges(current,{listingText:'Rear garden. Parking: On street.',measurements:[{outdoor:[{kind:'garden',label:'Garden'}]}]});
+ assert.match(again.import_diagnostics.outdoor_details.values.garden_description,/12.0 × 5.0 m/);assert.equal(again.import_diagnostics.outdoor_details.values.garden_area_sqm,60);
+});

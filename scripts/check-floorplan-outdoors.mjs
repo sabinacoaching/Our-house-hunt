@@ -26,7 +26,7 @@ try{
  const readCaptured=async(url,html)=>{
   const fixtureTab=await context.newPage();
   try{
-   await fixtureTab.route('**/*',route=>route.fulfill({contentType:'text/html',body:html}));await fixtureTab.goto(url);
+   await fixtureTab.route('**/*',route=>route.fulfill({contentType:'text/html; charset=utf-8',body:html}));await fixtureTab.goto(url);
    await context.pages()[0].bringToFront();
    return await worker.evaluate(async url=>{
     const tabs=await chrome.tabs.query({}),tab=tabs.find(x=>x.url===url);if(!tab)throw Error('Native fixture tab missing');
@@ -84,8 +84,15 @@ try{
  for(const fixture of regressions){
   const listing={listingId:fixture.listing_id,displayAddress:fixture.address,propertyImage:[{filename:'source-photo.jpg'}],floorPlan:{image:[{filename:'source-plan.jpg'}]},location:{coordinates:fixture.point},features:{bullets:[]},detailedDescription:'$d0'};
   const text=fixture.listing_text,flight=':HL["style"]\n'+'d0:T'+Buffer.byteLength(text).toString(16)+','+text+'d1:'+JSON.stringify(['$','div',null,{children:listing}])+'\n';
-  const url='https://www.zoopla.co.uk/for-sale/details/'+fixture.listing_id+'/';
-  const html='<html><head><title>3 bedroom house for sale '+fixture.address+'</title></head><body><h1>3 bedroom house for sale '+fixture.address+'</h1><p>£550,000</p><script>self.__next_f={push(){}};self.__next_f.push('+JSON.stringify([1,flight])+')</script></body></html>';
+  const rightmove=fixture.name==='southbrook';
+  const url=rightmove?'https://www.rightmove.co.uk/properties/'+fixture.listing_id:'https://www.zoopla.co.uk/for-sale/details/'+fixture.listing_id+'/';
+  let script='self.__next_f={push(){}};self.__next_f.push('+JSON.stringify([1,flight])+')';
+  if(rightmove){
+   const nodes=[null],encode=value=>{const id=nodes.length;nodes.push(null);nodes[id]=Array.isArray(value)?value.map(encode):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).map(([k,v])=>[k,encode(v)])):value;return id};
+   nodes[0]={propertyData:encode({id:fixture.listing_id,address:{displayAddress:fixture.address},location:fixture.point,images:[{url:'https://media.rightmove.co.uk/property-photo/captured.jpg'}],floorplans:[{url:'https://media.rightmove.co.uk/property-floorplan/captured.jpg'}],keyFeatures:['Side Access to Garden'],text:{description:'Externally, the property benefits from a rear garden with patio area.'},features:{parking:[{displayText:'On street'}]}})};
+   script='window.__PAGE_MODEL='+JSON.stringify({data:JSON.stringify(nodes)})+';';
+  }
+  const html='<html><head><title>3 bedroom house for sale '+fixture.address+'</title></head><body><h1>3 bedroom house for sale '+fixture.address+'</h1><p>£550,000</p><script>'+script+'</script></body></html>';
   const source=await readCaptured(url,html);assert.equal(source.address,fixture.address);assert.equal(source.location_hint.source,'listing-map');assert.match(source.listing_text,/garden/i);assert.doesNotMatch(source.listing_text,/\$d0/);
   const checked=await page.evaluate(async({origin,fixture,source})=>{
    const {readPlanImage,parsePlanText}=await import(origin+'/floorplan-ocr.js');
@@ -93,10 +100,10 @@ try{
    const recognized=await readPlanImage(await (await fetch(origin+'/tests/fixtures/'+fixture.image)).blob());
    const measurements=parsePlanText([recognized.text,recognized.headerText,recognized.footerText].join('\n'),recognized);
    const old='rear garden EPC Rating D attractive three-bedroom house';
-   const p={id:fixture.name,address:source.address,url:'https://www.zoopla.co.uk/for-sale/details/'+fixture.listing_id,garden_area_sqm:null,garden_description:old,floorplans:[{path:fixture.image}],manual_overrides:{},viewing_at:'2026-12-12T12:11:37Z',comment_sabina:'Keep owner comment',journey_estimates:{waterloo:{minutes:42}},import_diagnostics:{source_values:{garden_description:old}}};
+   const p={id:fixture.name,address:source.address,url:fixture.url,garden_area_sqm:null,garden_description:old,floorplans:[{path:fixture.image}],manual_overrides:{},viewing_at:'2026-12-12T12:11:37Z',comment_sabina:'Keep owner comment',journey_estimates:{waterloo:{minutes:42}},import_diagnostics:{source_values:{garden_description:old}}};
    const patch=outdoorChanges(p,{listingText:source.listing_text,measurements:[measurements]});
    return {recognized,measurements,patch,needsRefresh:needsOutdoorRefresh({...p,...patch})};
-  },{origin,fixture,source});
+  },{origin,fixture:{...fixture,url},source});
   console.log('OUTDOOR_REGRESSION_OCR '+JSON.stringify({name:fixture.name,...checked}));
   assert.equal(checked.patch.garden_area_sqm??null,fixture.expected_area,fixture.name+' garden area');
   assert.equal(checked.needsRefresh,false);assert.doesNotMatch(checked.patch.garden_description,/EPC|three-bedroom/);
