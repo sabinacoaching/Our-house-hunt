@@ -429,6 +429,7 @@ function render(list){
   tr.append(cell(bath));
   tr.append(cell(editor(p,'floors','number')));
   const floorArea=node('div','hh-stack');floorArea.append(labelledEditor(p,'m²','floor_area_sqm','number'));
+  if(p.floor_area_sqm==null)floorArea.append(node('span','hh-mini','No confirmed floor area'));
    const planUpload=node('button','hh-inline-plan-upload',(p.floorplans||[]).length?'Add / replace floor plan':'Upload floor plan');planUpload.type='button';planUpload.onclick=()=>window.hhOpenFloorplanUpload?.(p);floorArea.append(planUpload);
   if((p.floorplans||[]).length){
     const plan=node('a','hh-plan-link','Floor plan ↗');plan.href='#';plan.target='_blank';plan.rel='noopener noreferrer';plan.title='Open the original floor plan';
@@ -438,6 +439,7 @@ function render(list){
   tr.append(cell(floorArea));
   const garden=node('div','hh-stack');
   garden.append(labelledEditor(p,'Size (m²)','garden_area_sqm','number'),labelledEditor(p,'Description','garden_description','textarea'));
+  if(p.garden_area_sqm==null)garden.append(node('span','hh-mini','No confirmed garden area'));
   tr.append(cell(garden));
   const station=node('div','hh-stack');
   for(let i=0;i<3;i++){

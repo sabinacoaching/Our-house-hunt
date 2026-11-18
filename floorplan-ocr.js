@@ -1,4 +1,4 @@
-import {outdoorMeasurements,mainGardenArea,combineOutdoorDescription,retainOutdoorMeasurements} from './outdoor-details.js?v=3';
+import {outdoorMeasurements,mainGardenArea,combineOutdoorDescription,retainOutdoorMeasurements} from './outdoor-details.js?v=4';
 // Optional, client-side extraction of labelled measurements from a floor-plan image.
 // Never guesses dimensions where no labelled measurements are visible.
 let scriptTask=null,workerTask=null,ocrTail=Promise.resolve();

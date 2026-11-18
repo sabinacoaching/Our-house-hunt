@@ -85,3 +85,10 @@ test('house and garden manual values survive a complete recalculation',()=>{
  const patch=outdoorChanges(p,{listingText:'Garden 20m x 5m',listingData:{floor_area_sqm:100},measurements:[{floor_area_sqm:105}]});
  assert.equal(patch.floor_area_sqm,undefined);assert.equal(patch.garden_area_sqm,undefined);assert.equal(patch.garden_description,undefined);
 });
+test('a weaker read retains front/rear gardens even when their sides were never labelled',()=>{
+ const p=property();p.floorplans=[{path:'same-plan.jpg'}];
+ const first=outdoorChanges(p,{listingText:'Private garden.',measurements:[{outdoor:outdoorMeasurements('Front garden\nRear garden')}]});
+ const again=outdoorChanges({...p,...first},{listingText:'Private garden.',measurements:[{outdoor:[]}]});
+ assert.equal(again.garden_description,undefined);
+ assert.deepEqual(again.import_diagnostics.outdoor_details.measurements,first.import_diagnostics.outdoor_details.measurements);
+});

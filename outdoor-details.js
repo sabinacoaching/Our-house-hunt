@@ -73,7 +73,7 @@ export function retainOutdoorMeasurements(fresh,known=[]){
  const key=x=>x.kind+':'+String(x.label||'').toLowerCase();
  const near=(a,b)=>Math.abs(Number(a)-Number(b))<.03;
  const sameSize=(a,b)=>key(a)===key(b)&&(near(a.width_m,b.width_m)&&near(a.length_m,b.length_m)||near(a.width_m,b.length_m)&&near(a.length_m,b.width_m));
- return [...fresh.filter(x=>x.dimensions||!known.some(p=>key(p)===key(x)&&p.dimensions)),...known.filter(p=>p.dimensions&&!fresh.some(x=>x.dimensions&&sameSize(x,p)))];
+ return [...fresh.filter(x=>x.dimensions||!known.some(p=>key(p)===key(x)&&p.dimensions)),...known.filter(p=>p.dimensions?!fresh.some(x=>x.dimensions&&sameSize(x,p)):!fresh.some(x=>key(x)===key(p)))];
 }
 export function plainListingText(raw){
  return String(raw||'').replace(/<\s*(?:br\b[^>]*|\/(?:p|div|li|h[1-6]))\s*>/gi,'\n').replace(/<[^>]*>/g,' ')

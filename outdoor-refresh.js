@@ -1,4 +1,4 @@
-import {listingOutdoorDetails,combineOutdoorDescription,mainGardenArea,retainOutdoorMeasurements} from './outdoor-details.js?v=3';
+import {listingOutdoorDetails,combineOutdoorDescription,mainGardenArea,retainOutdoorMeasurements} from './outdoor-details.js?v=4';
 import {readPlanImage,parsePlanText,floorplanChanges} from './floorplan-ocr.js?v=20';
 import {importChanges} from './import-utils.js';
 
