@@ -20,10 +20,23 @@ const context=await chromium.launchPersistentContext('',{channel:'chromium',head
 try{
  let [worker]=context.serviceWorkers();if(!worker)worker=await context.waitForEvent('serviceworker');
  await context.pages()[0].bringToFront();
- const source=await worker.evaluate(()=>extract('https://www.zoopla.co.uk/for-sale/details/72832286/'));
- assert.equal(source.listing_id,'72832286');assert.equal(source.extension_version,'0.19.0');
- assert.match(source.listing_text,/Off Street Parking for 2 Cars/);assert.match(source.listing_text,/driveway for two cars/);
- console.log('OUTDOOR_LIVE_IMPORT_PASS full original-listing text, off-street parking capacity, garden orientation and driveway');
+ const live=await worker.evaluate(async()=>{
+  const original=chrome.scripting.executeScript.bind(chrome.scripting),capture=[];
+  chrome.scripting.executeScript=async options=>{const value=await original(options);capture.push({name:options.func?.name,results:value});return value};
+  try{return {data:await extract('https://www.zoopla.co.uk/for-sale/details/72832286/')}}
+  catch(error){return {error:String(error),capture}}
+  finally{chrome.scripting.executeScript=original}
+ });
+ let source=live.data;
+ if(source){
+  assert.equal(source.listing_id,'72832286');assert.equal(source.extension_version,'0.19.0');
+  assert.match(source.listing_text,/Off Street Parking for 2 Cars/);assert.match(source.listing_text,/driveway for two cars/);
+  console.log('OUTDOOR_LIVE_IMPORT_PASS full original-listing text, off-street parking capacity, garden orientation and driveway');
+ }else{
+  console.log('OUTDOOR_LIVE_IMPORT_FAILURE '+JSON.stringify(live));
+  const fixture=JSON.parse(await readFile(resolve(root,'tests/fixtures/central-road-listing.json'),'utf8'));
+  source={floor_area_sqm:68.01,listing_text:[...fixture.features.bullets,fixture.detailedDescription].join('\n\n')};
+ }
  const data=normalizeListingOutdoors(source),page=await context.newPage();
  await page.goto(origin+'/tests/fixtures/central-road-listing.json');
  const row={id:'fixture-central',address:'70 Central Rd, Morden',floor_area_sqm:data.floor_area_sqm,garden_area_sqm:null,garden_description:data.garden_description,manual_overrides:{},floors:null,bathrooms:1,wc_count:null,floorplans:[{path:'plan.jpg'}],viewing_at:'2026-12-12T12:00:00Z',comment_sabina:'Keep original comment',journey_estimates:{waterloo:{minutes:43}},station_name:'Morden',import_diagnostics:{listing_text:data.listing_text,source_values:{floor_area_sqm:data.floor_area_sqm,garden_description:data.garden_description}}};
@@ -43,4 +56,5 @@ try{
  assert.match(result.row.garden_description,/Off Street Parking for 2 Cars/);assert.match(result.row.garden_description,/South-East Facing Garden/);
  assert.equal(result.row.viewing_at,row.viewing_at);assert.equal(result.row.comment_sabina,row.comment_sabina);assert.deepEqual(result.row.journey_estimates,row.journey_estimates);
  console.log('OUTDOOR_REAL_OCR_PASS '+JSON.stringify({floor_area_sqm:result.row.floor_area_sqm,plan_fallback_area_sqm:result.row.import_diagnostics.floorplan_measurements.labelled_values.floor_area_sqm,garden_area_sqm:result.row.garden_area_sqm,notes:result.row.garden_description,fields:result.outcome.fields,fixture_writes:result.writes}));
+ if(!live.data)throw Error('Live original-listing check failed; see OUTDOOR_LIVE_IMPORT_FAILURE');
 }finally{await context.close();await new Promise(done=>server.close(done))}
