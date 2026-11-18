@@ -72,6 +72,7 @@ export function listingOutdoorDetails(raw){
 export function combineOutdoorDescription(listingText,planItems=[]){
  const notes=listingOutdoorDetails(listingText).notes;
  for(const item of planItems){
+  if(!item.dimensions&&planItems.some(x=>x.kind===item.kind&&x.label.toLowerCase()===item.label.toLowerCase()&&x.dimensions))continue;
   const name=item.kind==='front_garden'?'Front garden':item.kind==='rear_garden'?'Rear garden':item.kind==='communal_garden'?'Communal garden':item.kind==='parking'?item.label:'Garden';
   notes.push(item.dimensions?name+' (floor plan): '+item.dimensions+'; approximately '+item.area_sqm+' m².':name+' shown on the floor plan.');
  }

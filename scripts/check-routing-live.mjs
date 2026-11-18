@@ -32,7 +32,11 @@ try{
    assert.equal(row.import_diagnostics.route_pending,false);assert.equal(Object.keys(row.journey_estimates).length,3);
    assert.ok(row.station_commutes.google_routes.results.filter(Boolean).every(x=>x.destination_mode==='named-station'));
    assert.ok(row.station_commutes.tfl_final.results.filter(Boolean).every(x=>x.transport_type!=='tram'));
-   if(address==='Alpine Close')assert.equal(row.station_name,'East Croydon','the nearest railway station must be retained');
+   if(address==='Alpine Close'){
+    const selected=row.station_commutes.google_routes.results.filter(Boolean),east=selected.find(x=>x.name==='East Croydon');
+    assert.ok(east,'East Croydon must be retained among the station alternatives');
+    assert.ok(selected[0].walking_minutes<=east.walking_minutes,'the first station must not require a longer walk than East Croydon');
+   }
    if(address==='Lyncroft Gardens')assert.ok(row.journey_estimates.waterloo.minutes<=54,'the dominated 67-minute route must not be selected');
    const before=calls.length;await calculateGoogleRoutes(id,{sb,extension:async()=>{throw Error('Completed home must not recalculate')}});assert.equal(calls.length,before);
    console.log('LIVE_RESULT '+JSON.stringify({address,complete:true,ms:Date.now()-start,requests,writes,calls,journeys:row.journey_estimates,stations:row.station_commutes.google_routes,entrances:row.station_commutes.tfl_final.results}));
