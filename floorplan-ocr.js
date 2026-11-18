@@ -67,7 +67,7 @@ export function parsePlanText(original,{headerText='',footerText=''}={}){
  }
  return result;
 }
-async function recognizeMeasurements(blob){
+export async function readPlanImage(blob){
  return serialOcr(async()=>{
   const worker=await getWorker();let bitmap;
   try{
@@ -81,11 +81,23 @@ async function recognizeMeasurements(blob){
     const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(bitmap,0,y,bitmap.width,height,0,0,canvas.width,canvas.height);return canvas;
    };
    await worker.setParameters({tessedit_pageseg_mode:'3'});
-   const text=(await worker.recognize(draw(0,bitmap.height))).data.text||'';
+   const full=(await worker.recognize(draw(0,bitmap.height))).data;
+   let text=full.text||'';
    await worker.setParameters({tessedit_pageseg_mode:'6'});
    const headerText=(await worker.recognize(draw(0,Math.ceil(bitmap.height*.12)))).data.text||'';
    const footerStart=Math.floor(bitmap.height*.78),footerText=(await worker.recognize(draw(footerStart,bitmap.height-footerStart))).data.text||'';
-   return {text,headerText,footerText};
+   // Re-read small outdoor labels and their nearby dimensions as one local
+   // text block. A whole-page layout pass often separates these three lines.
+   const boxes=(full.lines||[]).filter(line=>/^\s*(?:(?:front|rear|back)\s+)?(?:gardens?|driveway|parking)\s*$/i.test(line.text||'')).slice(0,8);
+   const outdoorText=[];
+   for(const line of boxes){
+    const box=line.bbox,cx=(box.x0+box.x1)/(2*scale),y=Math.max(0,box.y0/scale-12),width=Math.min(bitmap.width,Math.max(320,(box.x1-box.x0)/scale+220)),x=Math.max(0,Math.min(bitmap.width-width,cx-width/2)),height=Math.min(bitmap.height-y,100);
+    const zoom=Math.min(4,1400/width);canvas.width=Math.round(width*zoom);canvas.height=Math.round(height*zoom);
+    const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(bitmap,x,y,width,height,0,0,canvas.width,canvas.height);
+    const local=(await worker.recognize(canvas)).data.text||'';outdoorText.push(local);
+   }
+   if(outdoorText.length)text+='\n'+outdoorText.join('\n');
+   return {text,headerText,footerText,outdoorText};
   }finally{bitmap?.close?.();if(worker.setParameters)await worker.setParameters({tessedit_pageseg_mode:'3'})}
  });
 }
@@ -162,7 +174,7 @@ export async function inspectFloorplanImage(blob){
 export async function validateFloorplanImage(blob){
  return (await inspectFloorplanImage(blob)).accepted;
 }
-export async function analyzeFloorplan({sb,property,photo,recognize=recognizeMeasurements,force=false}){
+export async function analyzeFloorplan({sb,property,photo,recognize=readPlanImage,force=false}){
  const p=property;
  if(!p?.id||!(p.floorplans||[]).length)return {status:'not-needed'};
  const fingerprint=(p.floorplans||[])[0].path||(p.floorplans||[])[0].url;
