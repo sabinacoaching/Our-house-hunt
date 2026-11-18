@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url';
 import {resolve,extname} from 'node:path';
 import assert from 'node:assert/strict';
 import {normalizeListingOutdoors} from '../outdoor-details.js';
-const root=fileURLToPath(new URL('../',import.meta.url)),extension=resolve(root,'extension');
+const root=fileURLToPath(new URL('../',import.meta.url)).replace(/\/$/,''),extension=resolve(root,'extension');
 const server=createServer(async(req,res)=>{
  try{
   const path=resolve(root,'.'+new URL(req.url,'http://localhost').pathname);
@@ -22,7 +22,7 @@ try{
  await context.pages()[0].bringToFront();
  const live=await worker.evaluate(async()=>{
   const original=chrome.scripting.executeScript.bind(chrome.scripting),capture=[];
-  chrome.scripting.executeScript=async options=>{const value=await original(options);capture.push({name:options.func?.name,results:value});return value};
+  chrome.scripting.executeScript=async options=>{const before=await original({target:options.target,func:()=>({url:location.href,title:document.title,body:document.body?.innerText?.slice(0,1200)})});const value=await original(options);capture.push({name:options.func?.name,before,results:value});return value};
   try{return {data:await extract('https://www.zoopla.co.uk/for-sale/details/72832286/')}}
   catch(error){return {error:String(error),capture}}
   finally{chrome.scripting.executeScript=original}

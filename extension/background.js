@@ -15,6 +15,7 @@ function waitForLoad(tabId,timeout=30000){
  });
 }
 async function readPropertyFromPage(){
+ try{
  const source=/zoopla/i.test(location.hostname)?'Zoopla':'Rightmove';
  const mainText=document.body?.innerText?.slice(0,180000)||'';
  const meta=k=>document.querySelector('meta[property="'+k+'"]')?.content||document.querySelector('meta[name="'+k+'"]')?.content||'';
@@ -307,29 +308,20 @@ async function readPropertyFromPage(){
  const wcText=mainText+' '+description;
  const wcNumber=wcText.match(/\b(\d+)\s+(?:separate|downstairs|ground.floor)\s+(?:wcs?|toilets?|cloakrooms?)\b/i);
  const wcs=wcNumber?Number(wcNumber[1]):/\b(?:separate|downstairs|ground.floor)\s+(?:wc|toilet|cloakroom)\b/i.test(wcText)?1:null;
- const floorAreaPattern=/(?:total\s+)?(?:internal\s+)?(?:floor\s+(?:area|size|space)|gross\s+internal\s+area|living\s+area)\s*(?:of|:|-|approximately|approx\.?)*\s*([\d,.]+)\s*(sq\.?\s?ft|square\s+feet|sq\.?\s?m|sqm|m²)/ig;
+ const floorAreaPattern=/(?:total\s+)?(?:internal\s+)?(?:floor\s+(?:area|size|space)|gross\s+internal\s+area|living\s+area)\s*(?:of|:|-|approximately|approx\.?)*\s*([\d,.]+)\s*(sq\.?\s?ft|square\s+feet|sq\.?\s?m|sqm|m²|m2)/ig;
  let area=null,match;
  if(listingArea&&Number.isFinite(listingArea.value)){
-  const sqm=/ft|feet/i.test(listingArea.units)?listingArea.value*.09290304:/\bm\b|sqm|metre|meter|m²/i.test(listingArea.units)?listingArea.value:null;
+  const sqm=/ft|feet/i.test(listingArea.units)?listingArea.value*.09290304:/\bm\b|sqm|metre|meter|m²|m2/i.test(listingArea.units)?listingArea.value:null;
   if(sqm>=30&&sqm<=2000)area=Math.round(sqm*100)/100;
  }
  // The main facts card has precedence over measurements in the long description.
  if(area==null){
-  const m=mainText.slice(0,3800).match(/(?:^|\n)\s*([\d,]+)\s*(sq\.?\s*ft|square\s+feet|sq\.?\s*m|sqm|m²)\b/i);
+  const m=mainText.slice(0,3800).match(/(?:^|\n)\s*([\d,]+(?:\.\d+)?)\s*(sq\.?\s*ft|square\s+feet|sq\.?\s*m|sqm|m²|m2)(?=\s|$|[.,;])/i);
   if(m){const v=Number(m[1].replace(/,/g,'')),sqm=/ft|feet/i.test(m[2])?v*.09290304:v;if(sqm>=30&&sqm<=2000)area=Math.round(sqm*100)/100}
  }
  for(const candidate of (mainText+'\n'+description).matchAll(floorAreaPattern)){
    const v=Number(candidate[1].replace(/,/g,''));if(v<=0)continue;const sqm=/ft|feet/i.test(candidate[2])?v*.09290304:v;
    if(area==null&&sqm>=30&&sqm<2000){area=Math.round(sqm*10)/10;break}
- }
-
- // Zoopla's facts panel often prints bare "1,161 sq. ft" without a Floor Area label.
- // Its first main facts panel has precedence over any unrelated measurements lower down.
- if(area==null){
-   const facts=mainText.slice(0,3800);
-   const m=facts.match(/(?:^|\n)\s*([\d,]+)\s*(sq\.?\s*ft|square\s+feet|sq\.?\s*m|sqm|m²)\b/i);
-   if(m){const v=Number(m[1].replace(/,/g,''));const sqm=/ft|feet/i.test(m[2])?v*0.09290304:v;
-     if(sqm>=30&&sqm<=550)area=Math.round(sqm*100)/100}
  }
 
  // Only extract the garden's dimensions or description where the listing explicitly states them.
@@ -451,6 +443,7 @@ async function readPropertyFromPage(){
  const agency_website=null;
  if(!listingText)listingText=mainText.split(/\n\s*(?:Zoopla tools|Stamp duty calculator|Similar properties|Mortgage calculator|About the agent)\s*\n/i)[0];
  return {listing_id:location.pathname.match(/\/(?:details|properties)\/(\d+)/)?.[1]||null,source,title,address,agency_name,agency_email,agency_website,agency_address,agency_profile_url,price,bedrooms,bathrooms,wc_count:wcs,floors,floor_area_sqm:area,garden_area_sqm:gardenArea,garden_description:gardenDescription,listing_text:listingText.slice(0,80000),nearby_stations,station_name:stationName,station_distance_miles:stationMiles,station_2_name:station2Name,station_2_distance_miles:station2Miles,latitude,longitude,location_hint,property_type:propertyType,tenure,images:gallery,floorplans:plans,floorplan_status:plans.length?'found-in-original-listing':clickedPlanTab?'tab-opened-but-image-not-found':floorTab?'floorplan-tab-click-failed':'floorplan-tab-not-found',floorplan_diagnostic:{tabFound:!!floorTab,tabClicked:clickedPlanTab,candidateCount:plans.length,error:planTabError},extension_version:'0.19.0'};
+ }catch(error){return {listing_id:location.pathname.match(/\/(?:details|properties)\/(\d+)/)?.[1]||null,read_error:String(error?.message||error)}}
 }
 async function readAgencyProfile(expectedName){
  const normalize=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
@@ -497,6 +490,7 @@ async function extract(url){
   await new Promise(r=>setTimeout(r,1600));
   const result=await chrome.scripting.executeScript({target:{tabId:tab.id},func:readPropertyFromPage});
   const data=result?.[0]?.result,expected=new URL(url).pathname.match(/\/(?:details|properties)\/(\d+)/)?.[1];
+  if(data?.read_error)throw Error(data.read_error);
   if(!data||!expected||data.listing_id!==expected)throw Error('The original listing is unavailable or redirected to another page');
   if(data.agency_name&&!data.agency_address&&data.agency_profile_url)data.agency_address=await readBranchAddress(data.agency_profile_url,data.agency_name);
   return data;
