@@ -91,3 +91,9 @@ test('streamed Zoopla descriptions resolve UTF-8 text records and supply the mat
  assert.equal(result.address,listing.displayAddress);assert.match(result.listing_text,/Off-street parking for two cars/);assert.match(result.listing_text,/Café/);assert.doesNotMatch(result.listing_text,/\$d0/);
  assert.equal(result.location_hint.source,'listing-map');assert.equal(result.location_hint.latitude,51.413662);
 });
+test('a document navigation returning null is retried before an empty address can escape the importer',async()=>{
+ let calls=0,removed=0;const url='https://www.zoopla.co.uk/for-sale/details/123';
+ const chrome={runtime:{onMessage:{addListener(){}}},tabs:{create:async()=>({id:7}),get:async()=>({id:7,url,status:'complete'}),remove:async()=>{removed++},onUpdated:{addListener(){},removeListener(){}}},scripting:{executeScript:async()=>[{result:++calls===1?null:{listing_id:'123',address:'Beecholme Avenue, Mitcham CR4',images:['photo.jpg']}}]}};
+ const context=vm.createContext({URL,console,chrome,setTimeout:(fn,ms)=>{if(ms<10000)queueMicrotask(fn);return 1},clearTimeout(){}});
+ const result=await vm.runInContext(source+';extract('+JSON.stringify(url)+')',context);assert.equal(result.address,'Beecholme Avenue, Mitcham CR4');assert.equal(calls,2);assert.equal(removed,1);
+});

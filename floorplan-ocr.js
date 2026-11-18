@@ -93,7 +93,14 @@ export async function readPlanImage(blob){
    const footerStart=Math.floor(bitmap.height*.78),footerText=(await worker.recognize(draw(footerStart,bitmap.height-footerStart))).data.text||'';
    // Re-read small outdoor labels and their nearby dimensions as one local
    // text block. A whole-page layout pass often separates these three lines.
-   const boxes=[...(full.lines||[]),...(sparse.lines||[])].filter(line=>/^\s*(?:(?:front|rear|back)\s+)?(?:gardens?|driveway|parking)\s*$/i.test(line.text||'')).filter((line,i,all)=>!all.slice(0,i).some(x=>Math.abs(x.bbox.x0-line.bbox.x0)<12&&Math.abs(x.bbox.y0-line.bbox.y0)<12)).slice(0,8);
+   const labels=[...(full.lines||[]),...(sparse.lines||[])].filter(line=>/^\s*(?:(?:front|rear|back)\s+)?(?:gardens?|driveway|parking)\s*$/i.test(line.text||''));
+   for(const word of sparse.words||[]){
+    if(!/^(?:gardens?|driveway|parking)$/i.test((word.text||'').trim()))continue;
+    const parent=(sparse.lines||[]).find(line=>line.bbox.x0<=word.bbox.x0&&line.bbox.x1>=word.bbox.x1&&line.bbox.y0<=word.bbox.y0&&line.bbox.y1>=word.bbox.y1);
+    if(/\b(?:to|onto|access to)\s+garden\b|\b(?:kitchen|bedroom|bathroom|conservatory)\b/i.test(parent?.text||''))continue;
+    const qualified=parent?.text?.match(/\b(?:front|rear|back)\s+gardens?\b/i)?.[0];labels.push({...word,text:qualified||word.text});
+   }
+   const boxes=labels.filter((line,i,all)=>!all.slice(0,i).some(x=>Math.abs(x.bbox.x0-line.bbox.x0)<12&&Math.abs(x.bbox.y0-line.bbox.y0)<12)).slice(0,8);
    const outdoorText=[];
    for(const line of boxes){
     const box=line.bbox,cx=(box.x0+box.x1)/(2*scale),y=Math.max(0,box.y0/scale-8),labelHeight=(box.y1-box.y0)/scale,width=Math.min(bitmap.width,Math.max(140,(box.x1-box.x0)/scale+labelHeight*7)),x=Math.max(0,Math.min(bitmap.width-width,cx-width/2)),height=Math.min(bitmap.height-y,Math.max(70,labelHeight*5));

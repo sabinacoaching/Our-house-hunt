@@ -410,7 +410,7 @@ async function readPropertyFromPage(){
   const street=streetControls.find(el=>el.getAttribute?.('role')==='tab')||streetControls[0];
   if(street){
    street.click();
-   for(let attempt=0;attempt<40;attempt++){
+   for(let attempt=0;attempt<(listingMapPoint?12:40);attempt++){
     await new Promise(r=>setTimeout(r,500));
     const panel=source==='Zoopla'?document.querySelector('[role="tabpanel"][id$="-content-street_view"]'):document;
     if(attempt===6&&!panel)street.click();
@@ -506,8 +506,14 @@ async function extract(url){
   if(!expectedId||finalId!==expectedId)throw Error('The original listing is unavailable or redirected to another page');
   // Give the app's client-rendered listing content time to appear in the DOM.
   await new Promise(r=>setTimeout(r,1600));
-  const result=await chrome.scripting.executeScript({target:{tabId:tab.id},func:readPropertyFromPage});
-  const data=result?.[0]?.result,expected=new URL(url).pathname.match(/\/(?:details|properties)\/(\d+)/)?.[1];
+  let data;
+  // Chrome can discard an async injection when a listing replaces its document.
+  // Retry the same verified tab before returning a missing address or point.
+  for(let attempt=0;attempt<3;attempt++){
+   if(attempt){await waitForLoad(tab.id);await new Promise(r=>setTimeout(r,1000));const current=(await chrome.tabs.get(tab.id)).url||'';if(new URL(current).pathname.match(/\/(?:details|properties)\/(\d+)/)?.[1]!==expectedId)throw Error('The original listing redirected to another property')}
+   const result=await chrome.scripting.executeScript({target:{tabId:tab.id},func:readPropertyFromPage});data=result?.[0]?.result;if(data!=null)break;
+  }
+  const expected=new URL(url).pathname.match(/\/(?:details|properties)\/(\d+)/)?.[1];
   if(data?.read_error)throw Error(data.read_error);
   if(!data||!expected||data.listing_id!==expected)throw Error('The original listing is unavailable or redirected to another page');
   if(data.agency_name&&!data.agency_address&&data.agency_profile_url)data.agency_address=await readBranchAddress(data.agency_profile_url,data.agency_name);
