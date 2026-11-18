@@ -81,3 +81,10 @@ test('a published garden length is retained in notes without inventing its width
  const abingdon=outdoorMeasurements("Rear Garden\nApproximate\n41'4 (12.60)\nKitchen\n4m x 3m\nFront Garden\nApproximate\n15'6 (4.72)");
  assert.equal(abingdon[0].length_m,12.60);assert.equal(abingdon[1].length_m,4.72);assert.equal(abingdon[0].area_sqm,undefined);
 });
+
+test('extracts parking from a feature list without station or council tax and removes repeated long phrases',()=>{
+ const d=listingOutdoorDetails('Garage | 0.2 Miles to Mitcham Tram Stop | Council Tax Band: D |\nPrivate driveway for a minimum of two cars.\nPrivate driveway for a minimum of two cars. The rear garden has a patio.');
+ assert.match(d.garden_description,/Garage/);assert.doesNotMatch(d.garden_description,/Tram Stop|Council Tax/);
+ assert.equal((d.garden_description.match(/Private driveway for a minimum of two cars/g)||[]).length,1);
+ assert.match(d.garden_description,/rear garden has a patio/);
+});

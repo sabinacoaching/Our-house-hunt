@@ -37,7 +37,7 @@ dialog.hh-photo-viewer[open]{display:flex;flex-direction:column}
 <link rel="stylesheet" href="./comparison.css?v=30">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css'">
 </head><body>
-<header class="top"><div class="brand">⌂ &nbsp;<span>Our House Hunt</span></div><div id="viewControls" class="hh-view-controls" hidden></div><div class="topright"><strong id="who"></strong><span id="hhVersion" title="Current House Hunt site version" style="font-size:11px;color:#72817f">v65</span><button id="refresh" class="secondary" hidden>Refresh</button><details id="appMenu" class="hh-app-menu" hidden><summary>Menu</summary><div class="hh-app-menu-items"><button id="refreshOutdoors" class="secondary" type="button">Recalculate house and garden data</button><a href="downloads/our-house-hunt-importer-v0.20.0.zip" download>Download importer 0.20.0</a><hr><button id="exportExcel" class="secondary" type="button">Export Excel</button><button id="exportPdf" class="secondary" type="button">Export PDF</button><hr><button id="changePassword" class="secondary" hidden>Change password</button><button id="logout" class="secondary" hidden>Sign out</button></div></details></div></header>
+<header class="top"><div class="brand">⌂ &nbsp;<span>Our House Hunt</span></div><div id="viewControls" class="hh-view-controls" hidden></div><div class="topright"><strong id="who"></strong><span id="hhVersion" title="Current House Hunt site version" style="font-size:11px;color:#72817f">v66</span><button id="refresh" class="secondary" hidden>Refresh</button><details id="appMenu" class="hh-app-menu" hidden><summary>Menu</summary><div class="hh-app-menu-items"><button id="refreshOutdoors" class="secondary" type="button">Recalculate house and garden data</button><a href="downloads/our-house-hunt-importer-v0.20.0.zip" download>Download importer 0.20.0</a><hr><button id="exportExcel" class="secondary" type="button">Export Excel</button><button id="exportPdf" class="secondary" type="button">Export PDF</button><hr><button id="changePassword" class="secondary" hidden>Change password</button><button id="logout" class="secondary" hidden>Sign out</button></div></details></div></header>
 <main>
 <section id="login" class="panel login" hidden>
 <h1>Welcome home</h1><p>Your shared shortlist, notes and viewings.</p>
@@ -84,7 +84,7 @@ dialog.hh-photo-viewer[open]{display:flex;flex-direction:column}
 <script type="module">
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.49.8';
 import {createViewingDateFields} from './viewing-date.js?v=2';
-import {setupComparison,stationOptions,stationDistance,matchesStation,viewingStatuses,viewingStatusLabels,viewingStatusKey,matchesViewingStatus,statusEditorOptions,compareAgencies} from './comparison.js?v=75';
+import {setupComparison,stationOptions,stationDistance,matchesStation,viewingStatuses,viewingStatusLabels,viewingStatusKey,matchesViewingStatus,statusEditorOptions,compareAgencies} from './comparison.js?v=76';
 import {calculateGoogleRoutes,needsGoogleRouteResume} from './google-routes-runner.js?v=10';
 import {prepareStationChanges,changedStationNames,hasPendingStationChoices} from './station-choice-state.js?v=1';
 import {calculateManualStationRoutes} from './manual-station-routes.js?v=2';
@@ -94,9 +94,9 @@ import {createUniquePhotoStore,photoDigest} from './photo-dedup.js?v=4';
 import {canonicalListing,importChanges,validateGeocode,validListingLocationHint,sameStreet,streetViewListingUrl} from './import-utils.js?v=6';
 import {reconcileOne,mediaRevision} from './reconcile-media.js?v=1';
 import {createEditHistory} from './edit-history.js?v=4';
-import {analyzeFloorplan,inspectFloorplanImage} from './floorplan-ocr.js?v=20';
-import {normalizeListingOutdoors} from './outdoor-details.js?v=4';
-import {needsOutdoorRefresh,refreshOutdoorProperty} from './outdoor-refresh.js?v=3';
+import {analyzeFloorplan,inspectFloorplanImage} from './floorplan-ocr.js?v=21';
+import {normalizeListingOutdoors} from './outdoor-details.js?v=5';
+import {needsOutdoorRefresh,refreshOutdoorProperty} from './outdoor-refresh.js?v=4';
 const sb=createClient('https://ficnuovumurmhzdujjvj.supabase.co','sb_publishable_yrArzwZ2GizO5ATuiAkymg_LdpVZKC9');
 const $=id=>document.getElementById(id);
 const detailViewingDate=createViewingDateFields($('editViewing'),{clearButton:true});
@@ -375,7 +375,7 @@ async function finishNewHouseImport(id){
    const missingPlan=!(p.floorplans||[]).length;
    const missingGeo=p.latitude==null||p.longitude==null||!p.station_name||!p.station_2_name||p.station_distance_miles==null||p.station_2_distance_miles==null;
    const missingFacts=p.floors==null||p.floor_area_sqm==null;
-   if(!missingPlan&&!missingGeo&&!missingFacts){const routeProblems=await calculateImportRoutes(p);if(!routeProblems.length){report('Import complete: '+p.address+'.');await refresh();return}}
+   if(!missingPlan&&!missingGeo&&!missingFacts&&p.import_diagnostics?.floorplan_measurements){const routeProblems=await calculateImportRoutes(p);if(!routeProblems.length){report('Import complete: '+p.address+'.');await refresh();return}}
    report('Completing '+p.address+' automatically (pass '+(attempt+1)+'/3)…');
    if(missingPlan||missingFacts){
     try{await enrichProperty(p)}catch(e){console.warn('Original listing retry',p.address,e)}
@@ -389,7 +389,7 @@ async function finishNewHouseImport(id){
    if(missingGeo&&!googleCapable){
     try{await enrichWalkingStations(p)}catch(e){console.warn('Station/geocoding retry',p.address,e)}
    }
-   if((p.floorplans||[]).length&&(p.floor_area_sqm==null||p.floors==null||p.garden_area_sqm==null)){
+   if((p.floorplans||[]).length&&(p.floor_area_sqm==null||p.floors==null||p.garden_area_sqm==null||!p.import_diagnostics?.floorplan_measurements)){
     try{await analyzeFloorplan({sb,property:p,photo})}catch(e){console.warn('Plan recognition retry',p.address,e)}
    }
    const routeProblems=await calculateImportRoutes(p);
@@ -611,7 +611,7 @@ async function fillGeoMissing(){
  }
 }
 async function fillPlanMeasurements(){
- const pending=homes.filter(p=>p.floorplans?.length&&(p.floor_area_sqm==null||p.garden_area_sqm==null||p.floors==null));
+ const pending=homes.filter(p=>p.floorplans?.length&&(p.floor_area_sqm==null||p.garden_area_sqm==null||p.floors==null||!p.import_diagnostics?.floorplan_measurements));
  let filled=0;
  for(const p of pending){
    try{

@@ -1,6 +1,18 @@
 import {setupStationAccess,stationWalkingMiles} from './station-commutes.js?v=27';
 import {stationChoice} from './station-choice-state.js?v=1';
 import {createViewingDateFields,formatViewingDate} from './viewing-date.js?v=2';
+// Compare at the precision of square feet. Legacy records store metric values;
+// reconstruct the nearest square foot when the original value is unavailable.
+export function additionalPlanArea(p){
+ if(p.manual_overrides?.floor_area_sqm)return null;
+ const listed=p.import_diagnostics?.source_values?.floor_area_sqm;
+ const planned=p.import_diagnostics?.floorplan_measurements?.labelled_values?.floor_area_sqm;
+ const current=p.floor_area_sqm;
+ if(listed==null||planned==null||current==null)return null;
+ const a=Number(listed),b=Number(planned),c=Number(current);
+ if(!Number.isFinite(a)||!Number.isFinite(b)||a<=0||b<=0||Math.abs(a-c)>.02)return null;
+ return Math.round(a/.09290304)===Math.round(b/.09290304)?null:b;
+}
 export function manualJourney(previous,minutes,updatedAt){
  const old=previous||{};
  const {arrival,departure,arrival_gap_minutes,date,calculated_at,audit_version,calculation_version,...rest}=old;
@@ -428,7 +440,11 @@ function render(list){
   bath.append(labelledEditor(p,'Bathrooms','bathrooms','number'),labelledEditor(p,'Separate WC','wc_count','number'));
   tr.append(cell(bath));
   tr.append(cell(editor(p,'floors','number')));
-  const floorArea=node('div','hh-stack');floorArea.append(labelledEditor(p,'m²','floor_area_sqm','number'));
+  const floorArea=node('div','hh-stack');
+  const areaLine=node('div','hh-floor-area-line');areaLine.style.display='flex';areaLine.style.alignItems='center';areaLine.style.gap='4px';
+  areaLine.append(labelledEditor(p,'m²','floor_area_sqm','number'));
+  const planArea=additionalPlanArea(p);if(planArea!=null){const extra=node('span','hh-plan-area','/ '+planArea);extra.title='Second value: floor plan (m²)';areaLine.append(extra)}
+  floorArea.append(areaLine);
    const planUpload=node('button','hh-inline-plan-upload',(p.floorplans||[]).length?'Add / replace floor plan':'Upload floor plan');planUpload.type='button';planUpload.onclick=()=>window.hhOpenFloorplanUpload?.(p);floorArea.append(planUpload);
   if((p.floorplans||[]).length){
     const plan=node('a','hh-plan-link','Floor plan ↗');plan.href='#';plan.target='_blank';plan.rel='noopener noreferrer';plan.title='Open the original floor plan';

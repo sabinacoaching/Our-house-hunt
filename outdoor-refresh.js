@@ -1,5 +1,5 @@
-import {listingOutdoorDetails,combineOutdoorDescription,mainGardenArea,retainOutdoorMeasurements} from './outdoor-details.js?v=4';
-import {readPlanImage,parsePlanText,floorplanChanges} from './floorplan-ocr.js?v=20';
+import {listingOutdoorDetails,combineOutdoorDescription,mainGardenArea,retainOutdoorMeasurements} from './outdoor-details.js?v=5';
+import {readPlanImage,parsePlanText,floorplanChanges} from './floorplan-ocr.js?v=21';
 
 export const outdoorVersion='measurements-v4';
 export const planFingerprint=p=>(p.floorplans||[]).map(x=>x.sha256||x.path||x.url).join('|');

@@ -124,12 +124,18 @@ function outdoorExcerpt(sentence,inSection=false){
 }
 export function listingOutdoorDetails(raw){
  const text=plainListingText(raw),notes=[];let outdoorSection=false;
- const add=value=>{value=value.trim();const key=value.toLowerCase().replace(/[^a-z0-9]/g,'');if(key&&!notes.some(n=>n.toLowerCase().replace(/[^a-z0-9]/g,'')===key))notes.push(value)};
+ const add=value=>{
+  value=value.trim();const key=value.toLowerCase().replace(/[^a-z0-9]/g,'');if(!key)return;
+  const keys=notes.map(n=>n.toLowerCase().replace(/[^a-z0-9]/g,''));
+  if(keys.some(k=>k===key||(key.length>=35&&k.includes(key))))return;
+  for(let i=keys.length-1;i>=0;i--)if(keys[i].length>=35&&key.includes(keys[i]))notes.splice(i,1);
+  notes.push(value);
+ };
  for(const row of text.split('\n')){
   if(!row.trim()){outdoorSection=false;continue}
   if(sectionEnd.test(row))outdoorSection=false;
   if(/^(?:(?:front|rear|back|private|enclosed|communal)\s+)?(?:gardens?|driveway|parking|garage|outside|exterior)\s*[:.]?$/i.test(row))outdoorSection=true;
-  for(const sentence of row.split(/(?<=[.!?])\s+(?=[A-Z“"'])/)){
+  for(const sentence of row.split(/\s*\|\s*|(?<=[.!?])\s+(?=[A-Z“"'])/)){
    const excerpt=outdoorExcerpt(sentence,outdoorSection);if(excerpt)add(excerpt);
   }
  }
