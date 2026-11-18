@@ -37,3 +37,8 @@ test('Station Road footer total is not rejected because it follows the storey la
  const text='Ground Floor First Floor Second Floor\nTotal area (approx.): 117.1 sq. m (1260.4 sq. ft)\nOutbuilding area (approx.): 6.3 sq. m (67.8 sq. ft)';
  assert.equal(parsePlanText(text).floor_area_sqm,117.1);
 });
+test('Acacia Road uses the overall GIA rather than the preceding storey subtotal',()=>{
+ const floors='GROUND FLOOR\n560SQFT/52.0SQM\nFIRST FLOOR\n486SQFT/452SQM\nAPPROXIMATE GROSS INTERNAL AREA';
+ assert.equal(parsePlanText(floors+'\n1046 SQ FT/97.2SQM').floor_area_sqm,97.2);
+ assert.equal(parsePlanText(floors).floor_area_sqm,undefined);
+});

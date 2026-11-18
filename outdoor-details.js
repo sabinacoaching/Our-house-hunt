@@ -42,6 +42,16 @@ function dimensions(text){
  }
  return null;
 }
+function singleLength(text){
+ const value=clean(text),metric=value.match(/(?:^|[\s(])(\d{1,3}(?:[.,]\d{1,2})?)\s*m(?:etres?)?\b/i);
+ if(/\bx\b|\bby\b|\d\s*x\s*\d|[×✕]/i.test(value))return null;
+ const imperial=value.match(/(\d{1,3})\s*(?:ft|feet|['’′])\s*(?:(\d{1,2})\s*(?:in(?:ches)?|["”″]))?/i);
+ if(!metric&&!imperial)return null;
+ const feet=imperial?(Number(imperial[1])+Number(imperial[2]||0)/12)*.3048:null;
+ const length=metric?number(metric[1]):round(feet);
+ if(length<.5||length>200||Number(imperial?.[2]||0)>11||metric&&feet!=null&&Math.abs(length-feet)>.15)return null;
+ return {length_m:length,length_text:metric?metric[1].replace(',','.')+' m':imperial[0].trim()};
+}
 export function outdoorMeasurements(original){
  const rows=String(original||'').split(/[\r\n]+/).map(clean).filter(Boolean),found=[];
  for(let i=0;i<rows.length;i++){
@@ -60,8 +70,8 @@ export function outdoorMeasurements(original){
    section+=' '+rows[next];const d=dimensions(rows[next])||dimensions(section);
    if(d&&(!measurement||!d.converted_from)){measurement=d;metric=!d.converted_from;if(metric)break}
   }
-  const item={kind,label:name,...measurement};
-  if(!found.some(p=>p.kind===kind&&p.label.toLowerCase()===name.toLowerCase()&&p.area_sqm===item.area_sqm))found.push(item);
+  const item={kind,label:name,...measurement,...(!measurement?singleLength(section):{})};
+  if(!found.some(p=>p.kind===kind&&p.label.toLowerCase()===name.toLowerCase()&&p.area_sqm===item.area_sqm&&p.width_m===item.width_m&&p.length_m===item.length_m))found.push(item);
  }
  return found;
 }
@@ -72,8 +82,9 @@ export function mainGardenArea(items){
 export function retainOutdoorMeasurements(fresh,known=[]){
  const key=x=>x.kind+':'+String(x.label||'').toLowerCase();
  const near=(a,b)=>Math.abs(Number(a)-Number(b))<.03;
- const sameSize=(a,b)=>key(a)===key(b)&&(near(a.width_m,b.width_m)&&near(a.length_m,b.length_m)||near(a.width_m,b.length_m)&&near(a.length_m,b.width_m));
- return [...fresh.filter(x=>x.dimensions||!known.some(p=>key(p)===key(x)&&p.dimensions)),...known.filter(p=>p.dimensions?!fresh.some(x=>x.dimensions&&sameSize(x,p)):!fresh.some(x=>key(x)===key(p)))];
+ const measured=x=>!!(x.dimensions||x.length_text);
+ const sameSize=(a,b)=>key(a)===key(b)&&(a.length_text&&b.length_text?near(a.length_m,b.length_m):near(a.width_m,b.width_m)&&near(a.length_m,b.length_m)||near(a.width_m,b.length_m)&&near(a.length_m,b.width_m));
+ return [...fresh.filter(x=>measured(x)||!known.some(p=>key(p)===key(x)&&measured(p))),...known.filter(p=>measured(p)?!fresh.some(x=>measured(x)&&sameSize(x,p)):!fresh.some(x=>key(x)===key(p)))];
 }
 export function plainListingText(raw){
  return String(raw||'').replace(/<\s*(?:br\b[^>]*|\/(?:p|div|li|h[1-6]))\s*>/gi,'\n').replace(/<[^>]*>/g,' ')
@@ -128,9 +139,10 @@ export function listingOutdoorDetails(raw){
 export function combineOutdoorDescription(listingText,planItems=[]){
  const notes=listingOutdoorDetails(listingText).notes;
  for(const item of planItems){
-  if(!item.dimensions&&planItems.some(x=>x.kind===item.kind&&x.label.toLowerCase()===item.label.toLowerCase()&&x.dimensions))continue;
+  if(item.length_text&&planItems.some(x=>x.dimensions&&x.kind===item.kind&&x.label.toLowerCase()===item.label.toLowerCase()&&(Math.abs(x.length_m-item.length_m)<.03||Math.abs(x.width_m-item.length_m)<.03)))continue;
+  if(!item.dimensions&&!item.length_text&&planItems.some(x=>x.kind===item.kind&&x.label.toLowerCase()===item.label.toLowerCase()&&(x.dimensions||x.length_text)))continue;
   const name=item.kind==='front_garden'?'Front garden':item.kind==='rear_garden'?'Rear garden':item.kind==='communal_garden'?'Communal garden':item.kind==='parking'?item.label:'Garden';
-  notes.push(item.dimensions?name+' (floor plan): '+item.dimensions+'; approximately '+item.area_sqm+' m².':name+' shown on the floor plan.');
+  notes.push(item.dimensions?name+' (floor plan): '+item.dimensions+'; approximately '+item.area_sqm+' m².':item.length_text?name+' (floor plan): length '+item.length_text+'; width not stated.':name+' shown on the floor plan.');
  }
  return [...new Set(notes)].join('\n');
 }

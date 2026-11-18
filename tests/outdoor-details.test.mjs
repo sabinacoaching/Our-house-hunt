@@ -72,3 +72,10 @@ test('the single-plan path cannot shrink the saved largest garden on a weaker OC
  assert.equal(patch.garden_area_sqm,undefined);assert.match(patch.garden_description,/20 × 5 m/);
  assert.equal(patch.import_diagnostics.floorplan_measurements.labelled_values.garden_area_sqm,100);
 });
+test('a published garden length is retained in notes without inventing its width or area',()=>{
+ const items=outdoorMeasurements("Rear garden extends to\n35'0\" (10.67m)\nKitchen\n4m x 3m");
+ assert.equal(items[0].length_m,10.67);assert.equal(items[0].area_sqm,undefined);
+ assert.match(combineOutdoorDescription('',items),/length 10.67 m; width not stated/);
+ assert.equal(parsePlanText("Garden\n74 feet").garden_area_sqm,undefined);
+ assert.equal(outdoorMeasurements('To Garden\nConservatory\n10m').length,0);
+});

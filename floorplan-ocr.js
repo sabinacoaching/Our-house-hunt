@@ -48,10 +48,13 @@ export function parsePlanText(original,{headerText='',footerText=''}={}){
    return !/(?:ground|first|second|third)\s+floor\s*(?:[-:,.]\s*)?$/i.test(before)||/^(?:total|gross\s+internal|gia)\b/i.test(m[0]);
   });
   for(const m of matches){
+   // Reverse-form headings must share a line with their number. Otherwise a
+   // preceding storey's subtotal can be mistaken for the overall GIA footer.
+   if(i===2&&!String(original||'').split(/[\r\n]+/).some(line=>new RegExp(rx.source,rx.flags).test(line.replace(/[×✕]/g,'x').replace(/(\d),(\d)/g,'$1.$2'))))continue;
    if(i===2&&/\b(?:area|gia)\b/i.test(text.slice(Math.max(0,m.index-110),m.index)))continue;
    const n=numeric(m[1].replace(/,(?=\d{3}\b)/g,'')),feet=i===areaMatches.length-1,value=feet?Math.round(n*.09290304*100)/100:n;if(value<35||value>500)continue;
    const rank=/without\s+garage|excl(?:uding|\.)?\s+garage/i.test(m[0])?-2:/with\s+garage|including\s+garage/i.test(m[0])?20:/gross\s+internal|\bgia\b/i.test(m[0])?0:/total\s+internal/i.test(m[0])?1:/internal\s+area/i.test(m[0])?2:5;
-   candidates.push({value,rank:rank+(feet?.5:0),index:m.index});
+   candidates.push({value,rank:rank+(feet?.5:0)+(i===2?10:0),index:m.index});
   }
  }
  // OCR can read the printed superscript ² as '?'. Accept that damaged unit
@@ -169,7 +172,7 @@ export function floorplanChanges(p,measurements,{fingerprint='',listingText,now=
  const values={...(prior?.values||{}),...Object.fromEntries(Object.entries(changes))};
  for(const key of ['floor_area_sqm','garden_area_sqm','floors'])if(measurements[key]!=null&&!p.manual_overrides?.[key]&&same(p[key],measurements[key]))values[key]=measurements[key];
  const labelled_values=Object.fromEntries(['floor_area_sqm','garden_area_sqm','floors'].filter(k=>measurements[k]!=null).map(k=>[k,measurements[k]]));
- const diagnostic={version:'labelled-plan-v12',fingerprint,values,labelled_values,outdoor,checked_at:now};
+ const diagnostic={version:'labelled-plan-v13',fingerprint,values,labelled_values,outdoor,checked_at:now};
  changes.import_diagnostics={...(p.import_diagnostics||{}),...(listingText!=null?{listing_text:listingText}:{}),floorplan_measurements:diagnostic};
  return changes;
 }
@@ -231,7 +234,7 @@ export async function analyzeFloorplan({sb,property,photo,recognize=readPlanImag
  const fingerprint=(p.floorplans||[])[0].path||(p.floorplans||[])[0].url;
  // Existing catalogue plans can be read directly from private Storage, avoiding unnecessary external listing requests.
  // Newly imported plans are archived from the original listing by the Chrome importer.
- const key='hh-plan-ocr-v12:'+p.id+':'+fingerprint;
+ const key='hh-plan-ocr-v13:'+p.id+':'+fingerprint;
  let last=0;try{last=Number(localStorage.getItem(key)||0)}catch{}
  if(!force&&last&&Date.now()-last<30*86400000)return {status:'already-checked'};
  const imageUrl=await photo(p.floorplans[0]);
