@@ -40,12 +40,12 @@ jobs:
           HH_UI_SNAPSHOT_LOG: '1'
       - name: Check real listing text and floor-plan OCR
         run: xvfb-run --auto-servernum node scripts/check-floorplan-outdoors.mjs
-      - name: Compare routing inputs with the successful v63 live check
+      - name: Compare routing inputs with the successful v65 live check
         id: routing_baseline
         run: |
           python - <<'PYCODE'
-          import hashlib,json,pathlib,re,os
-          baseline=json.loads(pathlib.Path('.github/routing-baseline-v63.json').read_text())
+          import hashlib,json,pathlib,re,os,urllib.request
+          baseline=json.loads(pathlib.Path('.github/routing-baseline-v65.json').read_text())
           changed=[]
           for path,expected in baseline['files'].items():
             file=pathlib.Path(path)
@@ -57,6 +57,13 @@ jobs:
               value=re.sub(r'(outdoor-details|outdoor-refresh|floorplan-ocr)\.js\?v=\d+',r'\1.js?v=VERSION',value)
               data=value.encode()
             if hashlib.sha256(data).hexdigest()!=expected:changed.append(path)
+          verified=False
+          if not changed:
+            try:
+              with urllib.request.urlopen('https://api.github.com/repos/sabinacoaching/Our-house-hunt/actions/runs/'+str(baseline['successful_run']),timeout=15) as response:run=json.load(response)
+              verified=run.get('head_sha')==baseline['commit'] and run.get('conclusion')=='success'
+            except Exception as error:print('ROUTING_BASELINE_STATUS_UNAVAILABLE',type(error).__name__)
+          if not verified:changed.append('successful live run not verified')
           with open(os.environ['GITHUB_OUTPUT'],'a') as output:output.write('unchanged='+str(not changed).lower()+'\n')
           print('ROUTING_BASELINE_MATCH' if not changed else 'ROUTING_INPUTS_CHANGED',baseline['commit'],baseline['successful_run'],changed)
           PYCODE

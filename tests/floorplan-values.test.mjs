@@ -33,3 +33,7 @@ test('Hatch Road accepts a damaged square-metre superscript only when the printe
  assert.equal(parsePlanText('Kitchen\nBedroom\nTotal floor area 92.8 m? (998 sq.ft.) approx').floor_area_sqm,92.8);
  assert.notEqual(parsePlanText('Total floor area 92.8 m? (700 sq.ft.) approx').floor_area_sqm,92.8);
 });
+test('Station Road footer total is not rejected because it follows the storey labels',()=>{
+ const text='Ground Floor First Floor Second Floor\nTotal area (approx.): 117.1 sq. m (1260.4 sq. ft)\nOutbuilding area (approx.): 6.3 sq. m (67.8 sq. ft)';
+ assert.equal(parsePlanText(text).floor_area_sqm,117.1);
+});

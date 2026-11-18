@@ -41,7 +41,12 @@ export function parsePlanText(original,{headerText='',footerText=''}={}){
  ];
  const candidates=[];
  for(const [i,rx] of areaMatches.entries()){
-  const matches=Array.from(text.matchAll(new RegExp(rx.source,rx.flags+'g'))).filter(m=>!/(?:garage|outbuilding|storage|external|(?:ground|first|second|third)\s+floor)\s*(?:[-:,.]\s*)?$/i.test(text.slice(0,m.index)));
+  const matches=Array.from(text.matchAll(new RegExp(rx.source,rx.flags+'g'))).filter(m=>{
+   const before=text.slice(0,m.index);
+   if(/(?:garage|outbuilding|storage|external)\s*(?:[-:,.]\s*)?$/i.test(before))return false;
+   // A footer total often follows the last storey label in reading order.
+   return !/(?:ground|first|second|third)\s+floor\s*(?:[-:,.]\s*)?$/i.test(before)||/^(?:total|gross\s+internal|gia)\b/i.test(m[0]);
+  });
   for(const m of matches){
    if(i===2&&/\b(?:area|gia)\b/i.test(text.slice(Math.max(0,m.index-110),m.index)))continue;
    const n=numeric(m[1].replace(/,(?=\d{3}\b)/g,'')),feet=i===areaMatches.length-1,value=feet?Math.round(n*.09290304*100)/100:n;if(value<35||value>500)continue;
