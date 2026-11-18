@@ -84,7 +84,8 @@ export async function readPlanImage(blob){
    const full=(await worker.recognize(draw(0,bitmap.height))).data;
    let text=full.text||'';
    await worker.setParameters({tessedit_pageseg_mode:'6'});
-   const headerText=(await worker.recognize(draw(0,Math.ceil(bitmap.height*.12)))).data.text||'';
+   const head=(await worker.recognize(draw(0,Math.ceil(bitmap.height*.12)))).data;
+   let headerText=head.text||'';
    const footerStart=Math.floor(bitmap.height*.78),footerText=(await worker.recognize(draw(footerStart,bitmap.height-footerStart))).data.text||'';
    // Re-read small outdoor labels and their nearby dimensions as one local
    // text block. A whole-page layout pass often separates these three lines.
@@ -97,7 +98,20 @@ export async function readPlanImage(blob){
     const local=(await worker.recognize(canvas)).data.text||'';outdoorText.push(local);
    }
    if(outdoorText.length)text+='\n'+outdoorText.join('\n');
-   return {text,headerText,footerText,outdoorText};
+   const areaHeadings=[];
+   // Small grey headings need their own line pass, rather than competing with
+   // the much larger address/number. The crop is located by the observed total,
+   // and only reads the strip immediately above that printed number.
+   await worker.setParameters({tessedit_pageseg_mode:'7'});
+   for(const value of [...new Set(pairedArea(headerText))].slice(0,3)){
+    const word=(head.words||[]).find(w=>parseFloat(String(w.text).replace(',','.'))===value);if(!word?.bbox)continue;
+    const x=Math.max(0,word.bbox.x0/scale-60),bottom=Math.max(0,word.bbox.y0/scale-2),y=Math.max(0,bottom-20),width=Math.min(300,bitmap.width-x),height=bottom-y;if(height<4)continue;
+    canvas.width=Math.round(width*8);canvas.height=Math.round(height*8);const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(bitmap,x,y,width,height,0,0,canvas.width,canvas.height);
+    const pixels=ctx.getImageData(0,0,canvas.width,canvas.height);for(let i=0;i<pixels.data.length;i+=4){const ink=(pixels.data[i]+pixels.data[i+1]+pixels.data[i+2])/3<210?0:255;pixels.data[i]=pixels.data[i+1]=pixels.data[i+2]=ink}ctx.putImageData(pixels,0,0);
+    const label=(await worker.recognize(canvas)).data.text||'';areaHeadings.push(label);
+   }
+   if(areaHeadings.length)headerText=areaHeadings.join('\n')+'\n'+headerText;
+   return {text,headerText,footerText,outdoorText,areaHeadings};
   }finally{bitmap?.close?.();if(worker.setParameters)await worker.setParameters({tessedit_pageseg_mode:'3'})}
  });
 }
