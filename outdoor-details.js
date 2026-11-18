@@ -45,7 +45,9 @@ function dimensions(text){
 function singleLength(text){
  const value=clean(text),metric=value.match(/(?:^|[\s(])(\d{1,3}(?:[.,]\d{1,2})?)\s*m(?:etres?)?\b/i);
  if(/\bx\b|\bby\b|\d\s*x\s*\d|[×✕]/i.test(value))return null;
- const imperial=value.match(/(\d{1,3})\s*(?:ft|feet|['’′])\s*(?:(\d{1,2})\s*(?:in(?:ches)?|["”″]))?/i);
+ const bracket=value.match(/(\d{1,3})\s*['’′]\s*(\d{1,2})?\s*["”″]?\s*\((\d{1,3}[.,]\d{1,2})\s*m?\)/i);
+ if(bracket){const metres=number(bracket[3]),feet=(Number(bracket[1])+Number(bracket[2]||0)/12)*.3048;if(Number(bracket[2]||0)<=11&&metres>=.5&&metres<=200&&Math.abs(metres-feet)<.06)return {length_m:metres,length_text:bracket[3].replace(',','.')+' m'};return null}
+ const imperial=value.match(/(\d{1,3})\s*(?:ft|feet|['’′])\s*(?:(\d{1,2})\s*(?:in(?:ches)?|["”″]))?(?!\d)/i);
  if(!metric&&!imperial)return null;
  const feet=imperial?(Number(imperial[1])+Number(imperial[2]||0)/12)*.3048:null;
  const length=metric?number(metric[1]):round(feet);

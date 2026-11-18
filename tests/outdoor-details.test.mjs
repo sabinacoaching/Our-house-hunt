@@ -78,4 +78,6 @@ test('a published garden length is retained in notes without inventing its width
  assert.match(combineOutdoorDescription('',items),/length 10.67 m; width not stated/);
  assert.equal(parsePlanText("Garden\n74 feet").garden_area_sqm,undefined);
  assert.equal(outdoorMeasurements('To Garden\nConservatory\n10m').length,0);
+ const abingdon=outdoorMeasurements("Rear Garden\nApproximate\n41'4 (12.60)\nKitchen\n4m x 3m\nFront Garden\nApproximate\n15'6 (4.72)");
+ assert.equal(abingdon[0].length_m,12.60);assert.equal(abingdon[1].length_m,4.72);assert.equal(abingdon[0].area_sqm,undefined);
 });
