@@ -569,10 +569,11 @@ async function googleRoute(input){
   tab=await chrome.tabs.create({url,active:false});await waitForLoad(tab.id,30000);
   const response=await chrome.scripting.executeScript({target:{tabId:tab.id},func:houseHuntReadMapsPage,args:[args]});
   const page=response?.[0]?.result;if(page?.error)throw Error(page.error+(page.diagnostic?' ['+JSON.stringify(page.diagnostic)+']':''));if(kind==='station_transit'&&page?.noRoute)return {unavailable:true,source:'Google Maps',origin,destination,station_id:stationNamed?station.station_id:null,destination_name:stationNamed?station.name:null,url:page.url};if(!page?.rows?.length)throw Error('Google Maps script returned no result after a page navigation');
+  if(mode==='arrive')page.rows=page.rows.map(row=>({...row,_detail:{url,mode:'arrive',time24,date:dateISO,page:'initial'}}));
   if(mode==='arrive'&&page.hasLater)try{
    const later=await chrome.scripting.executeScript({target:{tabId:tab.id},func:houseHuntReadMapsPage,args:[{...args,phase:'later'}]}),extra=later?.[0]?.result;
    if(extra?.error?.includes('GOOGLE_VERIFICATION_REQUIRED'))throw Error(extra.error);
-   if(extra?.rows?.length)page.rows=page.rows.concat(extra.rows);
+   if(extra?.rows?.length)page.rows=page.rows.concat(extra.rows.map(row=>({...row,_detail:{url,mode:'arrive',time24,date:dateISO,page:'later'}})));
   }catch(error){if(String(error?.message||error).includes('GOOGLE_VERIFICATION_REQUIRED'))throw error}
   let probeStatus='not-needed';
   if(mode==='arrive'){
@@ -588,17 +589,41 @@ async function googleRoute(input){
      const extra=await chrome.scripting.executeScript({target:{tabId:probeTab.id},func:houseHuntReadMapsPage,args:[{...args,mode:'depart',time24:probeTime}]});
      const value=extra?.[0]?.result;if(value?.error)throw Error(value.error);
      if(!value||!value.noRoute&&!value.rows?.length)throw Error('Google later-departure route results unavailable');
-     if(value.rows?.length)page.rows=page.rows.concat(value.rows);probeStatus='checked';
+     if(value.rows?.length)page.rows=page.rows.concat(value.rows.map(row=>({...row,_detail:{url:probeUrl,mode:'depart',time24:probeTime,date:dateISO,page:'initial'}})));probeStatus='checked';
     }finally{if(probeTab?.id)await chrome.tabs.remove(probeTab.id).catch(()=>{})}
    }
   }
-  const parsed=mode==='walking'?HouseHuntGoogleRoutes.readWalk(page.rows):HouseHuntGoogleRoutes.readTransit(page.rows,hour*60+minute,mode);
+  let detailedSelection=null;
+  if(target){
+   const deadline=hour*60+minute,seen=new Set(),candidates=[];
+   for(const row of page.rows){const key=[row.heading,row.duration,(row.modes||[]).join('|')].join('::');if(seen.has(key))continue;seen.add(key);
+    const preview=HouseHuntGoogleRoutes.candidateDetails({...row,walking_legs:[1]},deadline);if(preview)candidates.push({...preview,row});}
+   const order=(a,b)=>(a.transfers>=2)-(b.transfers>=2)||a.minutes-b.minutes||a.transfers-b.transfers||a.arrival_gap-b.arrival_gap||b.departure-a.departure;
+   const groups=[candidates.filter(c=>c.arrival_gap<=5).sort(order),candidates.filter(c=>c.arrival_gap>5).sort(order)];
+   for(const [groupIndex,group] of groups.entries()){
+    const confirmed=[];
+    for(const candidate of group){
+     const ref=candidate.row._detail;if(!ref)throw Error('Cannot verify route details');let detailTab;
+     try{
+      detailTab=await chrome.tabs.create({url:ref.url,active:false});await waitForLoad(detailTab.id,30000);
+      const response=await chrome.scripting.executeScript({target:{tabId:detailTab.id},func:houseHuntReadMapsPage,args:[{...args,mode:ref.mode,time24:ref.time24,phase:'details',detailsPage:ref.page,heading:candidate.row.heading,duration:candidate.row.duration}]});
+      const detail=response?.[0]?.result;if(detail?.error)throw Error(detail.error);if(!detail?.details_verified||!Array.isArray(detail.walking_legs))throw Error('Route walking details not verified');
+      const row={...candidate.row,walking_legs:detail.walking_legs,details_verified:true};
+      const evaluated=HouseHuntGoogleRoutes.rankDetailedTransit([row],deadline).selected;if(evaluated)confirmed.push(row);
+     }finally{if(detailTab?.id)await chrome.tabs.remove(detailTab.id).catch(()=>{})}
+     if(confirmed.length>=(groupIndex===0?1:3))break;
+    }
+    if(confirmed.length){detailedSelection=HouseHuntGoogleRoutes.rankDetailedTransit(confirmed,deadline);break}
+   }
+   if(!detailedSelection?.selected)throw Error('No verified route met the walking and arrival requirements');
+  }
+  const parsed=mode==='walking'?HouseHuntGoogleRoutes.readWalk(page.rows):target?detailedSelection.selected:HouseHuntGoogleRoutes.readTransit(page.rows,hour*60+minute,mode);
   if(!parsed){if(kind==='station_transit'&&page.rows.some(r=>(r.modes||[]).some(m=>/^walk(?:ing)?$/i.test(m)))&&page.rows.every(r=>(r.modes||[]).length&&(r.modes||[]).every(m=>/^walk(?:ing)?$/i.test(m))))return {unavailable:true,source:'Google Maps',origin,destination,station_id:stationNamed?station.station_id:null,destination_name:stationNamed?station.name:null,url:page.url};throw Error('No valid Google Maps route for the requested time')}
   if(mode==='walking')return {...parsed,source:'Google Maps',origin,destination,station_id:stationNamed?station.station_id:null,destination_name:stationNamed?station.name:null,url:page.url};
   const stamp=n=>String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0');
   const dayBefore=new Date(date);dayBefore.setUTCDate(dayBefore.getUTCDate()-1);
   const depDate=parsed.departure>parsed.arrival?dayBefore.toISOString().slice(0,10):dateISO;
-  return {station_id:stationNamed?station.station_id:null,destination_name:stationNamed?station.name:null,selection_version:'pareto-arrival-v2',departure_probe:probeStatus,alternatives:page.rows,minutes:parsed.minutes,departure:depDate+'T'+stamp(parsed.departure)+':00',arrival:dateISO+'T'+stamp(parsed.arrival)+':00',date:dateISO,desired_arrival:target?.time||null,source:'Google Maps',origin,destination,url:page.url};
+  return {station_id:stationNamed?station.station_id:null,destination_name:stationNamed?station.name:null,selection_version:target?'walk-limited-v1':'pareto-arrival-v2',departure_probe:probeStatus,alternatives:page.rows,...(target?{walking_legs:parsed.row.walking_legs,first_walk_minutes:parsed.first_walk_minutes,transfers:parsed.transfers,warning_two_transfers:parsed.transfers>=2,within_arrival_window:detailedSelection.within_window,selected_candidates:detailedSelection.top_three.map(x=>({minutes:x.minutes,departure:x.departure,arrival:x.arrival,arrival_gap:x.arrival_gap,transfers:x.transfers,first_walk_minutes:x.first_walk_minutes}))}:{}),minutes:parsed.minutes,departure:depDate+'T'+stamp(parsed.departure)+':00',arrival:dateISO+'T'+stamp(parsed.arrival)+':00',date:dateISO,desired_arrival:target?.time||null,source:'Google Maps',origin,destination,url:page.url};
  }finally{if(tab?.id)await chrome.tabs.remove(tab.id).catch(()=>{})}
 }
 chrome.runtime.onMessage.addListener((req,sender,sendResponse)=>{

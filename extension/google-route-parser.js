@@ -26,6 +26,38 @@
   const window=earlier.filter(x=>target-x.arrival<=5);
   return (window.length?window.sort((a,b)=>a.minutes-b.minutes||b.arrival-a.arrival):earlier.sort((a,b)=>b.arrival-a.arrival||a.minutes-b.minutes))[0]||null;
  }
+ // Extract the actual step-by-step walking durations from Google Maps details.
+ function readWalkingLegs(text){
+  const lines=String(text||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean),out=[];
+  for(let i=0;i<lines.length;i++)if(/^walk(?:ing)?$/i.test(lines[i])){
+   let found=null;for(let j=i+1;j<Math.min(lines.length,i+5);j++){
+    if(/^(?:walk|train|bus|tram|underground|subway)$/i.test(lines[j]))break;
+    if(/^(?:about\s+)?\d+\s*(?:h(?:ou)?rs?|hours?|mins?|minutes?)\b/i.test(lines[j])){found=duration(lines[j]);break}
+   }
+   if(found!=null)out.push(found);
+  }
+  return out;
+ }
+ function candidateDetails(row,target){
+  const t=times(row?.heading),minutes=duration(row?.duration);if(!t||!minutes)return null;
+  const elapsed=(t.arrival-t.departure+1440)%1440;if(Math.abs(elapsed-minutes)>1||t.arrival>target)return null;
+  const modes=(row.modes||[]).filter(x=>/^(train|bus|tram|subway|rail|underground|ferry|light rail)$/i.test(x));
+  if(!modes.length)return null;const steps=Array.isArray(row.walking_legs)?row.walking_legs:[];
+  const explicitWalk=(row.modes||[]).some(x=>/^walk$/i.test(x));
+  if(explicitWalk&&!steps.length)return null;
+  const firstWalk=explicitWalk?Number(steps[0]):0;if(!Number.isFinite(firstWalk)||firstWalk<0)return null;
+  return {departure:t.departure,arrival:t.arrival,minutes,heading:row.heading,arrival_gap:target-t.arrival,transfers:Math.max(0,modes.length-1),first_walk_minutes:firstWalk};
+ }
+ // Inspect the candidate ranking separately from Google extraction. Never treat missing
+ // walking details as confirmation and never use a train or tram reached after >15 minutes.
+ function rankDetailedTransit(rows,target){
+  const valid=(rows||[]).map(row=>{const c=candidateDetails(row,target);if(!c)return null;
+   const first=(row.modes||[]).find(x=>/^(train|bus|tram|subway|rail|underground|ferry|light rail)$/i.test(x));
+   if(!/^bus$/i.test(first||'')&&c.first_walk_minutes>15)return null;return {...c,row};}).filter(Boolean);
+  const within=valid.filter(x=>x.arrival_gap<=5),pool=within.length?within:valid;
+  pool.sort((a,b)=>(a.transfers>=2)-(b.transfers>=2)||a.minutes-b.minutes||a.transfers-b.transfers||a.arrival_gap-b.arrival_gap||b.departure-a.departure);
+  return {selected:pool[0]||null,top_three:pool.slice(0,3),within_window:within.length>0};
+ }
  function readWalk(rows){
   const options=[];
   for(const r of rows||[]){const minutes=duration(r.duration),m=String(r.distance||'').replace(/\u00a0|\u202f/g,' ').match(/([\d,.]+)\s*(mi(?:le)?s?|km|kilomet(?:er|re)s?|m(?:et(?:er|re)s?)?|ft|feet)\b/i);if(!minutes||!m)continue;
@@ -33,5 +65,5 @@
    options.push({walking_minutes:minutes,walking_miles:Math.round(miles*1000)/1000,display_distance:r.distance});
   }return options.sort((a,b)=>a.walking_minutes-b.walking_minutes||a.walking_miles-b.walking_miles)[0]||null;
  }
- root.HouseHuntGoogleRoutes={duration,times,readTransit,readWalk};
+ root.HouseHuntGoogleRoutes={duration,times,readTransit,readWalk,readWalkingLegs,candidateDetails,rankDetailedTransit};
 })(globalThis);

@@ -35,6 +35,30 @@ async function houseHuntReadMapsPage(request){
   }
   await waitFor(correctSchedule,'Requested Google timetable',20000);
   const first=await stableCards(),url=location.href;if(first.noRoute)return {noRoute:true,url};
+  if(request.phase==='details'){
+   if(request.detailsPage==='later'){
+    const laterButton=[...document.querySelectorAll('button')].find(x=>/later trips/i.test(x.getAttribute('aria-label')||''));
+    if(!laterButton)throw Error('Route details: later results unavailable');const before=JSON.stringify(cards());laterButton.click();await stableCards(before);
+   }
+   const norm=x=>String(x||'').replace(/[\u00a0\u202f]/g,' ').replace(/\s+/g,' ').trim();
+   const options=[...document.querySelectorAll('[data-trip-index][role="link"],[data-trip-index][role="button"]')].filter(e=>e.querySelector('h1'));
+   const selected=options.find(e=>norm(e.querySelector('h1')?.innerText)===norm(request.heading)&&norm(e.innerText).includes(norm(request.duration)));
+   if(!selected)throw Error('Route details: selected option not found');selected.click();
+   const detail=await waitFor(()=>{
+    const body=document.body?.innerText||'';if(/\nWalk\s*\n/i.test(body)&&/\bfrom\s+.+\bto\s+/is.test(body))return {body};
+    const button=[...selected.querySelectorAll('button,[role="button"],a')].find(x=>(x.innerText||'').trim()==='Details');if(button){button.click();return null}return null;
+   },'Google itinerary details',25000);
+   const lines=detail.body.split(/\r?\n/).map(x=>x.trim()).filter(Boolean),walking=[];
+   for(let i=0;i<lines.length;i++)if(/^walk(?:ing)?$/i.test(lines[i])){
+    let minutes=null;for(let j=i+1;j<Math.min(lines.length,i+5);j++){
+     if(/^(?:walk|train|bus|tram|underground|subway)$/i.test(lines[j]))break;
+     const m=lines[j].match(/^(?:about\s+)?(?:(\d+)\s*(?:h(?:ou)?rs?|hours?)\s*)?(?:(\d+)\s*(?:mins?|minutes?))\b/i);
+     if(m){minutes=Number(m[1]||0)*60+Number(m[2]||0);break}
+    }if(minutes==null)throw Error('Route details: walking time unavailable');walking.push(minutes);
+   }
+   if(!walking.length)throw Error('Route details: walking legs unavailable');
+   return {walking_legs:walking,details_verified:true};
+  }
   const later=request.mode==='arrive'?[...document.querySelectorAll('button')].find(x=>/later trips/i.test(x.getAttribute('aria-label')||'')):null;
   if(request.phase==='later'){
    if(!later)return {rows:[],url};
