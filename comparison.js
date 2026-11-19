@@ -1,4 +1,4 @@
-import {setupStationAccess,stationWalkingMiles} from './station-commutes.js?v=27';
+import {setupStationAccess,stationWalkingMiles,stationWalkingMinutes} from './station-commutes.js?v=28';
 import {stationChoice} from './station-choice-state.js?v=1';
 import {createViewingDateFields,formatViewingDate} from './viewing-date.js?v=2';
 // Compare at the precision of square feet. Legacy records store metric values;
@@ -59,6 +59,15 @@ export function stationDistance(property,selection=null){
   const value=stationWalkingMiles(property,i);
   return value==null||value===''?null:Number(value);
  }).filter(v=>v!==null&&Number.isFinite(v)&&v>=0);
+ return values.length?Math.min(...values):null;
+}
+export function nearestSelectedWalkingMinutes(property,selection=null){
+ const fields=['station_name','station_2_name','station_3_name'];
+ const values=fields.map((field,i)=>{
+  if(!stationKey(property[field])||(selection!==null&&!selection.has(stationKey(property[field]))))return null;
+  const value=stationWalkingMinutes(property,i);
+  return value==null||value===''?null:Number(value);
+ }).filter(value=>value!==null&&Number.isFinite(value)&&value>=0);
  return values.length?Math.min(...values):null;
 }
 export function matchesStation(property,selection){

@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {stationOptions,stationDistance,matchesStation} from '../comparison.js';
+import {stationOptions,stationDistance,nearestSelectedWalkingMinutes,matchesStation} from '../comparison.js';
 
 const homes=[
  {id:'a',station_name:'Isleworth',station_distance_miles:.4,station_2_name:'Syon Lane',station_2_distance_miles:1.1},
@@ -38,5 +38,17 @@ test('both status selectors and the table support the new statuses without offer
  assert.match(comparison,/requested_viewing:'Requested viewing'/);
  assert.match(comparison,/only_wo:'Only w\/o'/);
  assert.match(html,/matchesStation\(p,stationSelection\)/);
- assert.match(html,/stationDistance\(p,stationSelection\)/);
+ assert.match(html,/nearestSelectedWalkingMinutes\(p,stationSelection\)/);
+});
+
+test('walking time sort uses the quickest selected station and ignores missing times',()=>{
+ const p={station_name:'Alpha',station_2_name:'Beta',station_3_name:'Gamma',station_commutes:{results:[{name:'Alpha',walking_minutes:12},{name:'Beta',walking_minutes:5},{name:'Gamma',walking_minutes:2}]}};
+ assert.equal(nearestSelectedWalkingMinutes(p,new Set(['alpha','beta'])),5);
+ assert.equal(nearestSelectedWalkingMinutes(p,new Set(['alpha'])),12);
+ assert.equal(nearestSelectedWalkingMinutes(p,null),2);
+ assert.equal(nearestSelectedWalkingMinutes(p,new Set(['other'])),null);
+ p.station_commutes.google_verified={Beta:{walking_minutes:17}};
+ assert.equal(nearestSelectedWalkingMinutes(p,new Set(['alpha','beta'])),12);
+ delete p.station_commutes.results[0].walking_minutes;
+ assert.equal(nearestSelectedWalkingMinutes(p,new Set(['alpha'])),null);
 });

@@ -116,6 +116,19 @@ try{
  await page.evaluate(()=>window.__delayStationSave=0);
  console.log('MEASUREMENT_DRAFT_UI_PASS refresh retains and saves an in-progress garden edit');
  console.log('OUTDOOR_NOTES_UI_PASS complete multiline garden/parking text is visible in its existing garden block');
+ // Contrasting walking times and distances exercise the combined station filter and sorting.
+ await page.evaluate(()=>{window.__originalWalking=window.__fixtureRows.map(p=>structuredClone(p.station_commutes));for(const [i,p] of window.__fixtureRows.entries()){const minutes=[[8,2,25],[5,20,25],[9,3,25],[60,60,60],[61,61,61],[62,62,62]][i];p.station_commutes.google_routes.results.forEach((x,j)=>x.walking_minutes=minutes[j])}});
+ await page.locator('#refresh').click();
+ const selectStations=async names=>{await page.getByTitle('Filter houses by station').click();const menu=page.locator('.hh-status-filter-menu:visible');await menu.getByRole('button',{name:'Clear all',exact:true}).click();for(const name of names)await menu.locator('label').filter({hasText:name}).locator('input').check();await menu.getByRole('button',{name:'Apply',exact:true}).click()};
+ await selectStations(['Alpha Station','Beta Station']);await page.locator('#sort').selectOption('station_asc');
+ assert.deepEqual(await addresses(),['Alpha Road','Gamma Road','Beta Road','Legacy Road','Offer Road']);
+ await selectStations(['Alpha Station']);assert.deepEqual(await addresses(),['Beta Road','Alpha Road','Gamma Road','Legacy Road','Offer Road']);
+ await page.locator('#search').fill('Alpha');assert.deepEqual(await addresses(),['Alpha Road']);
+ await page.getByRole('button',{name:'Clear filters',exact:true}).click();
+ assert.equal(await page.locator('#search').inputValue(),'');assert.equal(await page.locator('#sort').inputValue(),'station_asc');assert.equal((await addresses()).length,5);
+ await page.locator('#search').fill('Beta');assert.equal(await page.getByRole('button',{name:'Clear filters',exact:true}).isVisible(),true);await page.getByRole('button',{name:'Clear filters',exact:true}).click();assert.equal(await page.locator('#search').inputValue(),'');
+ await page.evaluate(()=>window.__fixtureRows.forEach((p,i)=>p.station_commutes=window.__originalWalking[i]));await page.locator('#refresh').click();await page.locator('#sort').selectOption('manual');
+ console.log('FILTER_WALK_MINUTES_UI_PASS combined station filter, minutes ordering, search reset and retained sort');
  const savedDates=await page.evaluate(()=>Object.fromEntries(window.__fixtureRows.map(p=>[p.id,p.viewing_at])));
  const views=page.locator('#viewControls'),appMenu=page.locator('#appMenu'),dateDialog=page.locator('.hh-viewing-dialog');
  assert.equal(await page.locator('.filters #exportExcel,.filters #exportPdf').count(),0);
