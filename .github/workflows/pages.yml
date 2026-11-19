@@ -2,7 +2,9 @@ name: Publish House Hunt
 on:
   push:
     branches: [main]
+    paths-ignore: [CONTEXT.md, TASKLOG.md, AGENTS.md, README.md]
   pull_request:
+    paths-ignore: [CONTEXT.md, TASKLOG.md, AGENTS.md, README.md]
   workflow_dispatch:
 permissions:
   contents: read
