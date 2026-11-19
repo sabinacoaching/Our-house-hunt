@@ -3,9 +3,12 @@ on:
   workflow_dispatch:
   workflow_call:
   push:
-    branches: [extension-native-transport-20261109]
+    branches: [extension-native-transport-20261109, work-import-queue-20261119]
     paths:
       - 'extension/**'
+      - 'index.html'
+      - 'import-queue.js'
+      - 'scripts/check-catalogue-ui.mjs'
       - 'scripts/check-native-extension.mjs'
       - 'scripts/check-routing-live.mjs'
       - '.github/workflows/extension-native-check.yml'
