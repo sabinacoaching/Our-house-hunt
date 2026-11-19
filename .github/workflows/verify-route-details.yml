@@ -2,7 +2,7 @@ name: Verify route detail reader
 on:
   push:
     branches: [work-route-details-20261119]
-    paths: ['.github/workflows/verify-route-details.yml']
+    paths: ['extension/**', '.github/workflows/verify-route-details.yml']
 permissions:
   contents: read
 jobs:
