@@ -405,10 +405,10 @@ try{
  // Synthetic browser-only benchmark: no network images, isolated fixture data.
  const results=[];
  for(const count of [80,160,320]){
-  await page.evaluate(count=>{const base=structuredClone(window.__fixtureRows[0]);window.__fixtureRows.splice(0);for(let i=0;i<count;i++)window.__fixtureRows.push({...structuredClone(base),id:'benchmark-'+i,address:'Benchmark Road '+i,status:'interested',images:[],sort_order:i});performance.mark('catalogue-bench-start')},count);
+  const benchmarkStart=Date.now();await page.evaluate(count=>{const base=structuredClone(window.__fixtureRows[0]);window.__fixtureRows.splice(0);for(let i=0;i<count;i++)window.__fixtureRows.push({...structuredClone(base),id:'benchmark-'+i,address:'Benchmark Road '+i,status:'interested',images:[],sort_order:i})},count);
   await page.locator('#refresh').click();await page.waitForFunction(count=>document.querySelectorAll('.hh-table tbody tr').length===count,count,{timeout:60000});
-  const loadMs=await page.evaluate(()=>performance.now()-performance.getEntriesByName('catalogue-bench-start').at(-1).startTime);
-  const sortMs=await page.evaluate(()=>{const sort=document.querySelector('#sort'),start=performance.now();sort.value='station_asc';sort.dispatchEvent(new Event('change'));return performance.now()-start});
+  const loadMs=Date.now()-benchmarkStart;
+  const sortStart=Date.now();await page.locator('#sort').selectOption('station_asc');const sortMs=Date.now()-sortStart;
   results.push({homes:count,load_ms:Math.round(loadMs),sort_ms:Math.round(sortMs)});
  }
  console.log('CATALOGUE_SYNTHETIC_BENCH '+JSON.stringify(results));
