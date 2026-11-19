@@ -11,6 +11,7 @@ import {validListingLocationHint,sameStreet,streetViewListingUrl} from '../impor
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const importCode=html.slice(html.indexOf('function blob64('),html.indexOf('// Resume only imports'));
 const date='2026-11-10',deadlines={waterloo:'07:40',dilly:'18:40',dancelab:'19:50'};
+async function waitFor(predicate){for(let i=0;i<200;i++){if(predicate())return;await new Promise(resolve=>setTimeout(resolve,1))}throw Error('Background import did not finish')}
 const examples=[
  {url:'https://www.zoopla.co.uk/for-sale/details/100001',address:'23 Future Road, Isleworth',lat:51.47,lon:-.33},
  {url:'https://www.rightmove.co.uk/properties/100002',address:'8 Future Lane, Twickenham',lat:51.45,lon:-.35},
@@ -85,6 +86,7 @@ test('every new Zoopla and Rightmove import runs the production Google controlle
  const h=harness();
  for(const item of examples){
   await h.importHouse(item.url);
+  await waitFor(()=>[...h.rows.values()].find(x=>x.url===item.url)?.import_diagnostics.route_pending===false);
   const p=[...h.rows.values()].find(x=>x.url===item.url);
   assert.equal(p.address,item.address,'a neighbouring panorama must not replace the address');
   assert.equal(p.latitude,item.lat);assert.equal(p.longitude,item.lon);
@@ -102,6 +104,7 @@ test('every new Zoopla and Rightmove import runs the production Google controlle
 test('an interrupted new import retains its other results and resumes only the missing component',async()=>{
  const h=harness(),item=examples[1];h.fail(item.address);
  await h.importHouse(item.url);
+ await waitFor(()=>h.retries.length>0);
  const p=[...h.rows.values()][0];
  assert.equal(p.import_diagnostics.route_pending,true);assert.equal(p.journey_estimates.waterloo.minutes,30);
  assert.equal(p.journey_estimates.dancelab.minutes,30);assert.ok(p.station_name);

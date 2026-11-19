@@ -57,7 +57,8 @@ await page.addInitScript(()=>{
  window.addEventListener('message',event=>{
   const request=event.data;if(request?.source!=='our-house-hunt-site')return;
   let data,ok=true,error;
-  if(request.action==='PING')data={version:window.__outdoorFixture?'0.20.0':'0.18.0'};
+  if(request.action==='PING')data={extension:'Our House Hunt',version:window.__outdoorFixture?'0.20.0':'0.18.0'};
+  else if(request.action==='IMPORT_URL'&&window.__holdImport)return;
   else if(request.action==='IMPORT_URL'&&window.__outdoorFixture)data={listing_text:'Rear garden 12.0m x 5.0m\n\nOff-street parking for two cars.'};
   else if(request.action==='GOOGLE_ROUTE'){
    const {route}=request;window.__extensionCalls.push(route);
@@ -316,6 +317,15 @@ try{
  for(const p of await page.evaluate(()=>window.__fixtureRows)){assert.equal(p.garden_area_sqm,60);assert.match(p.garden_description,/Off-street parking for two cars/)}
  assert.deepEqual(await page.evaluate(()=>window.__fixtureRows.map(({garden_area_sqm,garden_description,import_diagnostics,...p})=>p)),beforeOutdoor);
  console.log('OUTDOOR_REFRESH_UI_PASS Menu reprocesses existing cards, displays sizes and parking, preserves exact dates, comments, routes and station choices');
+ await page.evaluate(()=>window.__holdImport=true);
+ await page.locator('#urlInput').fill('https://www.zoopla.co.uk/for-sale/details/888001');await page.locator('#importButton').click();
+ await page.waitForFunction(()=>document.querySelector('#importQueue')?.innerText.includes('Saving'));
+ await page.locator('#urlInput').fill('https://www.rightmove.co.uk/properties/888002');await page.locator('#importButton').click();
+ await page.waitForFunction(()=>document.querySelectorAll('.hh-import-item').length===2);
+ assert.match(await page.locator('#importQueue').innerText(),/Saving.*888001/s);
+ assert.match(await page.locator('#importQueue').innerText(),/Queued.*888002/s);
+ assert.equal(await page.locator('#importButton').isEnabled(),true);
+ console.log('IMPORT_QUEUE_UI_PASS second link accepted while first listing is being read');
  if(process.env.HH_UI_SCREENSHOT)await page.screenshot({path:process.env.HH_UI_SCREENSHOT,fullPage:false});
  console.log('CATALOGUE_UI_PASS agency sorting, workflow filters, independent enquiry/request, current decision, legacy preservation, archive restore');
  console.log('MANUAL_STATION_UI_PASS inline rename, detail rename, automatic walking/PT, Refresh retry, reopen resumes only missing component');
