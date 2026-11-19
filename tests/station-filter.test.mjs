@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {stationOptions,stationDistance,nearestSelectedWalkingMinutes,matchesStation} from '../comparison.js';
+import {stationOptions,stationDistance,nearestSelectedWalkingMinutes,nearestSelectedWalkingStation,matchesJourneyTimes,matchesStation} from '../comparison.js';
 
 const homes=[
  {id:'a',station_name:'Isleworth',station_distance_miles:.4,station_2_name:'Syon Lane',station_2_distance_miles:1.1},
@@ -51,4 +51,14 @@ test('walking time sort uses the quickest selected station and ignores missing t
  assert.equal(nearestSelectedWalkingMinutes(p,new Set(['alpha','beta'])),12);
  delete p.station_commutes.results[0].walking_minutes;
  assert.equal(nearestSelectedWalkingMinutes(p,new Set(['alpha'])),null);
+});
+
+test('walking sort uses selected stations and reports the matching station',()=>{
+ const p={station_name:'Hounslow',station_2_name:'Norbury',station_commutes:{results:[{name:'Hounslow',walking_minutes:13},{name:'Norbury',walking_minutes:10}]}};
+ assert.deepEqual(nearestSelectedWalkingStation(p,new Set(['hounslow','norbury'])),{name:'Norbury',minutes:10});
+ assert.deepEqual(nearestSelectedWalkingStation(p,new Set(['hounslow'])),{name:'Hounslow',minutes:13});
+});
+test('journey filters combine each destination, exclude missing values and respect the maximum',()=>{
+ const p={journey_estimates:{dancelab:{minutes:40},dilly:{minutes:60},waterloo:{minutes:35}}};
+ assert.equal(matchesJourneyTimes(p,{dancelab:40,waterloo:35}),true);assert.equal(matchesJourneyTimes(p,{dancelab:39}),false);assert.equal(matchesJourneyTimes(p,{dilly:59}),false);assert.equal(matchesJourneyTimes({}, {waterloo:40}),false);assert.equal(matchesJourneyTimes({},{}),true);
 });

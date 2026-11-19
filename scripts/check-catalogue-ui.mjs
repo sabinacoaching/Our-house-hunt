@@ -129,6 +129,20 @@ try{
  await page.locator('#search').fill('Beta');assert.equal(await page.getByRole('button',{name:'Clear filters',exact:true}).isVisible(),true);await page.getByRole('button',{name:'Clear filters',exact:true}).click();assert.equal(await page.locator('#search').inputValue(),'');
  await page.evaluate(()=>window.__fixtureRows.forEach((p,i)=>p.station_commutes=window.__originalWalking[i]));await page.locator('#refresh').click();await page.locator('#sort').selectOption('manual');
  console.log('FILTER_WALK_MINUTES_UI_PASS combined station filter, minutes ordering, search reset and retained sort');
+ // Reproduce 13 vs 10 minute case with prices after filtering and sorting.
+ await page.evaluate(()=>{window.__stationScenario=window.__fixtureRows.map(p=>({name:p.station_name,commutes:structuredClone(p.station_commutes),journeys:structuredClone(p.journey_estimates)}));for(const [i,name,minutes] of [[0,'Hounslow',13],[1,'Norbury',10]]){const p=window.__fixtureRows[i];p.station_name=name;p.station_commutes.google_routes.stations[0]=name;p.station_commutes.google_routes.results[0].walking_minutes=minutes;p.journey_estimates={dancelab:{minutes:i===0?40:55},waterloo:{minutes:i===0?50:35},dilly:{minutes:60}}}});
+ await page.locator('#refresh').click();await selectStations(['Hounslow','Norbury']);await page.locator('#sort').selectOption('station_asc');
+ assert.deepEqual(await addresses(),['Beta Road','Alpha Road'],'10 walking minutes precedes 13');
+ const visiblePrices=page.locator('.hh-table tbody tr .hh-house-price');assert.equal(await visiblePrices.count(),2);assert.deepEqual(await visiblePrices.allTextContents(),['£500,000','£500,000']);
+ assert.match(await page.locator('.hh-table tbody tr').first().locator('.hh-sort-station').innerText(),/Norbury · 10 min/);
+ await page.evaluate(()=>document.querySelector('.hh-table-shell').scrollLeft=1200);assert.equal(await visiblePrices.first().isVisible(),true);await page.evaluate(()=>document.querySelector('.hh-table-shell').scrollLeft=0);
+ const journeyMenu=async()=>{await page.getByTitle('Filter journey times').click();return page.locator('.hh-journey-filter:visible')};
+ let jm=await journeyMenu();await jm.getByLabel('Dance Lab (minutes)').fill('45');await jm.getByRole('button',{name:'Apply',exact:true}).click();assert.deepEqual(await addresses(),['Alpha Road']);assert.equal(await page.locator('.hh-table tbody tr .hh-house-price').innerText(),'£500,000');
+ jm=await journeyMenu();await jm.getByLabel('Dance Lab (minutes)').fill('60');await jm.getByLabel('Waterloo (minutes)').fill('40');await jm.getByRole('button',{name:'Apply',exact:true}).click();assert.deepEqual(await addresses(),['Beta Road']);
+ await page.getByRole('button',{name:'Clear filters',exact:true}).click();assert.equal((await addresses()).length,5);
+ await page.evaluate(()=>window.__fixtureRows.forEach((p,i)=>{p.station_name=window.__stationScenario[i].name;p.station_commutes=window.__stationScenario[i].commutes;p.journey_estimates=window.__stationScenario[i].journeys}));await page.locator('#refresh').click();await page.locator('#sort').selectOption('manual');
+ console.log('FILTER_SORT_PRICE_JOURNEY_PASS 10 before 13, selected station label, visible price and combined journey filters');
+
  // Area bounds use the displayed first figure, even when the plan has a different total.
  await page.evaluate(()=>{window.__areaOriginal=window.__fixtureRows.map(p=>({area:p.floor_area_sqm,diagnostics:structuredClone(p.import_diagnostics)}));window.__fixtureRows.forEach((p,i)=>p.floor_area_sqm=[80,85,100,null,75,90][i]);const p=window.__fixtureRows[0];p.import_diagnostics.source_values={floor_area_sqm:80};p.import_diagnostics.floorplan_measurements={labelled_values:{floor_area_sqm:120}}});
  await page.locator('#refresh').click();

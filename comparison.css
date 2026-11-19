@@ -315,9 +315,14 @@ html{overscroll-behavior-x:none}
 .hh-calendar-clear{align-self:start;font-size:12px;padding:5px 8px}
 
 /* Area filter and price in the fixed house column. */
-.hh-house-heading{display:flex;align-items:center;gap:8px;position:relative;min-height:24px}
-.hh-house-price{position:absolute;left:50%;transform:translateX(-50%);font-size:14px;font-weight:750;white-space:nowrap;color:#253433}
+.hh-house-heading{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:4px;min-width:0;min-height:24px}
+.hh-house-price{grid-column:2;font-size:14px;font-weight:750;white-space:nowrap;color:#253433}
 .hh-area-filter{height:auto;min-height:0;resize:none;display:flex;flex-direction:column;gap:9px}
 .hh-area-filter label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600}
 .hh-table .hh-area-filter input{width:100%;min-width:0;padding:7px;border:1px solid #cbd7d1;background:#fff}
 .hh-area-filter-error{color:#b73b38;font-size:12px;margin:0}
+
+.hh-journey-filter{height:auto;min-height:0;resize:none;display:flex;flex-direction:column;gap:9px}
+.hh-journey-filter label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600}
+.hh-table .hh-journey-filter input{width:100%;min-width:0;padding:7px;border:1px solid #cbd7d1;background:#fff}
+.hh-sort-station{display:block;color:#486b5d;font-size:12px;font-weight:650}

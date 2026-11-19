@@ -17,5 +17,5 @@ test('empty results leave room to open and resize the filter; its actions stay v
 test('clearing the combined filters resets station and status without changing saved data',()=>{
  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
  assert.match(html,/resetComparisonFilters/);
- assert.match(html,/onclick=\(\)=>\{viewingSelections=null;stationSelection=null;areaFilter=null;\$\('stageFilter'\)\.value='all';\$\('search'\)\.value='';render\(\)\}/);
+ assert.match(html,/onclick=\(\)=>\{viewingSelections=null;stationSelection=null;areaFilter=null;journeyFilters=\{\};\$\('stageFilter'\)\.value='all';\$\('search'\)\.value='';render\(\)\}/);
 });

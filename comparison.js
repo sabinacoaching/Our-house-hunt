@@ -68,14 +68,19 @@ export function stationDistance(property,selection=null){
  }).filter(v=>v!==null&&Number.isFinite(v)&&v>=0);
  return values.length?Math.min(...values):null;
 }
-export function nearestSelectedWalkingMinutes(property,selection=null){
- const fields=['station_name','station_2_name','station_3_name'];
- const values=fields.map((field,i)=>{
-  if(!stationKey(property[field])||(selection!==null&&!selection.has(stationKey(property[field]))))return null;
-  const value=stationWalkingMinutes(property,i);
-  return value==null||value===''?null:Number(value);
- }).filter(value=>value!==null&&Number.isFinite(value)&&value>=0);
- return values.length?Math.min(...values):null;
+export function nearestSelectedWalkingStation(property,selection=null){
+ const fields=['station_name','station_2_name','station_3_name'];let best=null;
+ for(const [i,field] of fields.entries()){
+  const name=property[field];if(!stationKey(name)||(selection!==null&&!selection.has(stationKey(name))))continue;
+  const raw=stationWalkingMinutes(property,i);if(raw==null||raw==='')continue;const minutes=Number(raw);
+  if(Number.isFinite(minutes)&&minutes>=0&&(!best||minutes<best.minutes))best={name:String(name).trim(),minutes};
+ }
+ return best;
+}
+export function nearestSelectedWalkingMinutes(property,selection=null){return nearestSelectedWalkingStation(property,selection)?.minutes??null}
+export function matchesJourneyTimes(p,limits){
+ for(const [id,max] of Object.entries(limits||{})){if(max==null)continue;const raw=p.journey_estimates?.[id]?.minutes;if(raw==null||raw===''||!Number.isFinite(Number(raw))||Number(raw)<=0||Number(raw)>max)return false}
+ return true;
 }
 export function matchesStation(property,selection){
  return selection===null||['station_name','station_2_name','station_3_name'].some(field=>selection.has(stationKey(property[field])));
@@ -94,7 +99,7 @@ export async function openFloorPlan(plan,photo,win=window){
   if(tab)tab.location.replace(url);else win.location.assign(url);
  }catch(error){if(tab)tab.close();throw error}
 }
-export function setupComparison({sb,history,photo,displayPhoto,uniquePhotos,openHouse,openPhotoBrowser,onReorder,canReorder,onStatusChange,onAddressChange,onStationChange,onViewingDateSaved,getAreaFilter,onAreaFilterChange,shouldAutoCalculate,onRestore,getStatusSelection,onStatusFilterChange,getStations,getStationSelection,onStationFilterChange}){
+export function setupComparison({sb,history,photo,displayPhoto,uniquePhotos,openHouse,openPhotoBrowser,onReorder,canReorder,onStatusChange,onAddressChange,onStationChange,onViewingDateSaved,getAreaFilter,onAreaFilterChange,getJourneyFilters,onJourneyFiltersChange,getSortMode,shouldAutoCalculate,onRestore,getStatusSelection,onStatusFilterChange,getStations,getStationSelection,onStationFilterChange}){
 const stationAccess=setupStationAccess({sb,history,shouldAutoCalculate});
 const $=id=>document.getElementById(id),node=(tag,cls='',content)=>{const x=document.createElement(tag);x.className=cls;if(content!==undefined)x.textContent=content;return x};
 const statuses=viewingStatuses;
@@ -334,6 +339,15 @@ function render(list){
  const head=node('thead'),hr=node('tr');
  for(const [columnIndex,title] of labels.entries()){
   const th=node('th','',title);
+  if(title==='Journey times'){
+   th.classList.add('hh-status-filter-heading');const selected=getJourneyFilters?.()||{};
+   const trigger=node('button','hh-status-filter-button',Object.keys(selected).length?'▾ Filtered':'▾ Filter');trigger.type='button';trigger.title='Filter journey times';if(Object.keys(selected).length)trigger.classList.add('hh-status-filter-applied');
+   const menu=node('div','hh-status-filter-menu hh-journey-filter');menu.hidden=true;menu.append(node('strong','','Maximum journey time (minutes)'));const fields={};
+   for(const [id,label] of [['dancelab','Dance Lab'],['dilly','The Dilly'],['waterloo','Waterloo']]){const wrap=node('label','',label+' (minutes)'),input=node('input');input.type='number';input.min='1';input.step='1';input.value=selected[id]??'';wrap.append(input);menu.append(wrap);fields[id]=input}
+   const error=node('p','hh-area-filter-error'),actions=node('div','hh-status-filter-actions'),cancel=node('button','','Cancel'),apply=node('button','','Apply');cancel.type=apply.type='button';cancel.onclick=()=>{menu.hidden=true};
+   apply.onclick=()=>{const values={};for(const [id,input] of Object.entries(fields)){if(!input.value)continue;const n=Number(input.value);if(!Number.isFinite(n)||n<=0){error.textContent='Enter a positive number of minutes.';return}values[id]=n}menu.hidden=true;onJourneyFiltersChange?.(values)};
+   actions.append(cancel,apply);menu.append(error,actions);menu.addEventListener('click',e=>e.stopPropagation());trigger.onclick=e=>{e.stopPropagation();menu.hidden=!menu.hidden};th.append(trigger,menu);
+  }
   if(title==='Total floor area'){
    th.classList.add('hh-status-filter-heading');const selected=getAreaFilter?.()||null;
    const trigger=node('button','hh-status-filter-button',selected?'▾ Filtered':'▾ Filter');trigger.type='button';trigger.title='Filter by floor area in square metres';if(selected)trigger.classList.add('hh-status-filter-applied');
@@ -495,6 +509,7 @@ function render(list){
   garden.append(labelledEditor(p,'Size (m²)','garden_area_sqm','number'),labelledEditor(p,'Description','garden_description','textarea'));
   tr.append(cell(garden));
   const station=node('div','hh-stack');
+  if(['station_asc','station_desc'].includes(getSortMode?.())){const best=nearestSelectedWalkingStation(p,getStationSelection?.()??null);station.append(node('small','hh-sort-station',best?'Sorting: '+best.name+' · '+Math.round(best.minutes)+' min':'Sorting: walking time unavailable'))}
   for(let i=0;i<3;i++){
    if(i===2&&!p.station_3_name)continue;
    const name=i===0?p.station_name:i===1?p.station_2_name:p.station_3_name;
