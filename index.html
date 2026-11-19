@@ -38,7 +38,7 @@ dialog.hh-photo-viewer[open]{display:flex;flex-direction:column}
 <link rel="stylesheet" href="./comparison.css?v=30">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css'">
 </head><body>
-<header class="top"><div class="brand">⌂ &nbsp;<span>Our House Hunt</span></div><div id="viewControls" class="hh-view-controls" hidden></div><div class="topright"><strong id="who"></strong><span id="hhVersion" title="Current House Hunt site version" style="font-size:11px;color:#72817f">v69</span><button id="refresh" class="secondary" hidden>Refresh</button><details id="appMenu" class="hh-app-menu" hidden><summary>Menu</summary><div class="hh-app-menu-items"><button id="refreshOutdoors" class="secondary" type="button">Recalculate house and garden data</button><a href="downloads/our-house-hunt-importer-v0.20.0.zip" download>Download importer 0.20.0</a><hr><button id="exportExcel" class="secondary" type="button">Export Excel</button><button id="exportPdf" class="secondary" type="button">Export PDF</button><hr><button id="changePassword" class="secondary" hidden>Change password</button><button id="logout" class="secondary" hidden>Sign out</button></div></details></div></header>
+<header class="top"><div class="brand">⌂ &nbsp;<span>Our House Hunt</span></div><div id="viewControls" class="hh-view-controls" hidden></div><div class="topright"><strong id="who"></strong><span id="hhVersion" title="Current House Hunt site version" style="font-size:11px;color:#72817f">v70</span><button id="refresh" class="secondary" hidden>Refresh</button><details id="appMenu" class="hh-app-menu" hidden><summary>Menu</summary><div class="hh-app-menu-items"><button id="refreshOutdoors" class="secondary" type="button">Recalculate house and garden data</button><a href="downloads/our-house-hunt-importer-v0.20.0.zip" download>Download importer 0.20.0</a><hr><button id="exportExcel" class="secondary" type="button">Export Excel</button><button id="exportPdf" class="secondary" type="button">Export PDF</button><hr><button id="changePassword" class="secondary" hidden>Change password</button><button id="logout" class="secondary" hidden>Sign out</button></div></details></div></header>
 <main>
 <section id="login" class="panel login" hidden>
 <h1>Welcome home</h1><p>Your shared shortlist, notes and viewings.</p>
@@ -86,7 +86,7 @@ dialog.hh-photo-viewer[open]{display:flex;flex-direction:column}
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.49.8';
 import {createViewingDateFields} from './viewing-date.js?v=2';
 import {createImportQueue} from './import-queue.js?v=1';
-import {setupComparison,stationOptions,stationDistance,matchesStation,viewingStatuses,viewingStatusLabels,viewingStatusKey,matchesViewingStatus,statusEditorOptions,compareAgencies} from './comparison.js?v=78';
+import {setupComparison,stationOptions,stationDistance,matchesStation,viewingStatuses,viewingStatusLabels,viewingStatusKey,matchesViewingStatus,statusEditorOptions,compareAgencies} from './comparison.js?v=79';
 import {calculateGoogleRoutes,needsGoogleRouteResume} from './google-routes-runner.js?v=10';
 import {prepareStationChanges,changedStationNames,hasPendingStationChoices} from './station-choice-state.js?v=1';
 import {calculateManualStationRoutes} from './manual-station-routes.js?v=2';
@@ -688,7 +688,8 @@ async function reorderHouses(dragId,targetId,step=0,exactPosition=null){
  }catch(e){report('Could not move house: '+e.message,true);await refresh()}
  finally{reorderBusy=false;}
 }
-async function refresh(){const r=await sb.from('properties').select('*').order('created_at',{ascending:false});if(r.error){report('Cannot load houses: '+r.error.message,true);return}homes=r.data||[];render();if(selected){const p=homes.find(x=>x.id===selected.id);if(p){selected=p;await loadNotes()}}}
+let refreshEpoch=0;
+async function refresh(){const epoch=++refreshEpoch,r=await sb.from('properties').select('*').order('created_at',{ascending:false});if(epoch!==refreshEpoch)return;if(r.error){report('Cannot load houses: '+r.error.message,true);return}homes=r.data||[];render();if(selected){const p=homes.find(x=>x.id===selected.id);if(p){selected=p;await loadNotes()}}}
 async function restoreHouse(p){
  const r=await history.save(p,{status:'',manual_overrides:{...(p.manual_overrides||{}),status:true}});
  if(r.error){report('Could not restore house: '+r.error.message,true);return}
@@ -974,7 +975,7 @@ $('floorPlanFile').onchange=async()=>{
  finally{button.disabled=false;button.textContent='Upload floor plan'}
 };
 const history=createEditHistory({sb,prepareChanges:prepareStationChanges,onRestored:async last=>{const wasOpen=$('dialog').open;if(wasOpen)$('dialog').close();await refresh();if(wasOpen&&selected)await openHouse(selected);if(Object.keys(last.before||{}).some(key=>['station_name','station_2_name','station_3_name'].includes(key)))void resumeManualStationRoutes(last.id)}});
-const enhancements=setupComparison({sb,history,photo,displayPhoto,uniquePhotos,openHouse,openPhotoBrowser,onReorder:reorderHouses,canReorder:()=> viewingSelections===null&&stationSelection===null&&$('sort').value==='manual'&&$('stageFilter').value==='all'&&!$('search').value.trim(),getStatusSelection:selectedViewingStatuses,onStatusFilterChange:applyViewingStatuses,getStations:()=>stationOptions(homes),getStationSelection:()=>stationSelection,onStationFilterChange:keys=>{const options=stationOptions(homes);stationSelection=keys.length===options.length?null:new Set(keys);render()},onStatusChange:async()=>{await refresh()},onAddressChange:async p=>{await refresh();void updateLocationForAddress(p.id)},onStationChange:stationNameChanged,shouldAutoCalculate:()=>false,onRestore:restoreHouse});
+const enhancements=setupComparison({sb,history,photo,displayPhoto,uniquePhotos,openHouse,openPhotoBrowser,onReorder:reorderHouses,canReorder:()=> viewingSelections===null&&stationSelection===null&&$('sort').value==='manual'&&$('stageFilter').value==='all'&&!$('search').value.trim(),getStatusSelection:selectedViewingStatuses,onStatusFilterChange:applyViewingStatuses,getStations:()=>stationOptions(homes),getStationSelection:()=>stationSelection,onStationFilterChange:keys=>{const options=stationOptions(homes);stationSelection=keys.length===options.length?null:new Set(keys);render()},onStatusChange:async()=>{await refresh()},onViewingDateSaved:p=>{++refreshEpoch;const current=homes.find(h=>h.id===p.id);if(current){current.viewing_at=p.viewing_at;current.manual_overrides=p.manual_overrides}void refresh()},onAddressChange:async p=>{await refresh();void updateLocationForAddress(p.id)},onStationChange:stationNameChanged,shouldAutoCalculate:()=>false,onRestore:restoreHouse});
 setupExports({getVisible:()=>visibleHomes.slice(),getAll:()=>homes.slice(),photo});
 const session=await sb.auth.getSession();user=session.data.session?.user||null;if(user){await show();}else $('login').hidden=false;
 // No automatic polling: properties are read at sign-in and upon explicit Refresh or a saved edit.

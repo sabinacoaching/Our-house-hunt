@@ -200,6 +200,17 @@ try{
  await dateButton().click();await dateDialog.getByRole('button',{name:'Save date',exact:true}).click();assert.match(await dateDialog.locator('.hh-date-error').innerText(),/Choose a date/);
  await enterViewing(dateDialog,{day:12,month:12,time:'12:00'});await dateDialog.getByRole('button',{name:'Save date',exact:true}).click();
  await page.waitForFunction(()=>window.__fixtureRows.find(p=>p.id==='alpha').viewing_at==='2026-12-12T12:00:00.000Z');
+ // A background refresh redraws the table while the date save is in flight.
+ await page.evaluate(()=>window.__delayStationSave=450);
+ await dateButton().click();await enterViewing(dateDialog,{day:13,month:12,time:'17:45'});
+ await dateDialog.getByRole('button',{name:'Save date',exact:true}).click();
+ await page.evaluate(()=>document.querySelector('#refresh').click());
+ await dateDialog.waitFor({state:'hidden'});
+ assert.equal(await dateButton().innerText(),'13 Dec\n17:45','The visible row updates even if it was redrawn during save');
+ await page.evaluate(()=>window.__delayStationSave=0);
+ await dateButton().click();assert.equal(await dateDialog.getByRole('button',{name:'13 December',exact:true}).getAttribute('aria-pressed'),'true');
+ await enterViewing(dateDialog,{day:12,month:12,time:'12:00'});await dateDialog.getByRole('button',{name:'Save date',exact:true}).click();
+ await dateDialog.waitFor({state:'hidden'});assert.equal(await dateButton().innerText(),'12 Dec\n12:00','The date can be changed again without reloading');
  await page.getByRole('button',{name:'Viewing date Beta Road',exact:true}).click();
  await dateDialog.getByRole('button',{name:'Next month',exact:true}).click();
  assert.equal(await dateDialog.locator('.hh-calendar-head strong').innerText(),'January');

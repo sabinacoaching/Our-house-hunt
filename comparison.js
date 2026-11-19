@@ -78,7 +78,7 @@ export async function openFloorPlan(plan,photo,win=window){
   if(tab)tab.location.replace(url);else win.location.assign(url);
  }catch(error){if(tab)tab.close();throw error}
 }
-export function setupComparison({sb,history,photo,displayPhoto,uniquePhotos,openHouse,openPhotoBrowser,onReorder,canReorder,onStatusChange,onAddressChange,onStationChange,shouldAutoCalculate,onRestore,getStatusSelection,onStatusFilterChange,getStations,getStationSelection,onStationFilterChange}){
+export function setupComparison({sb,history,photo,displayPhoto,uniquePhotos,openHouse,openPhotoBrowser,onReorder,canReorder,onStatusChange,onAddressChange,onStationChange,onViewingDateSaved,shouldAutoCalculate,onRestore,getStatusSelection,onStatusFilterChange,getStations,getStationSelection,onStationFilterChange}){
 const stationAccess=setupStationAccess({sb,history,shouldAutoCalculate});
 const $=id=>document.getElementById(id),node=(tag,cls='',content)=>{const x=document.createElement(tag);x.className=cls;if(content!==undefined)x.textContent=content;return x};
 const statuses=viewingStatuses;
@@ -171,7 +171,9 @@ viewingForm.onsubmit=async event=>{
  try{
   const result=await history.save(p,{viewing_at:value,manual_overrides:{...(p.manual_overrides||{}),viewing_at:true}});
   if(result.error){viewingError.textContent=result.error.message;return}
-  button.textContent=formatViewingDate(p.viewing_at);viewingDialog.close();flash('Saved');
+  onViewingDateSaved?.(p);
+  for(const current of document.querySelectorAll('.hh-viewing-date'))if(current.dataset.property===String(p.id))current.textContent=formatViewingDate(p.viewing_at);
+  viewingDialog.close();flash('Saved');
  }catch(error){viewingError.textContent=error.message||String(error)}finally{viewingSave.disabled=viewingClear.disabled=false}
 };
 function editor(p,key,type='text'){
@@ -497,7 +499,7 @@ function render(list){
   tr.append(cell(editor(p,'comment_sabina','textarea')));
   tr.append(cell(editor(p,'comment_david','textarea')));
   tr.append(cell(editor(p,'status','select')));
-  const view=node('button','hh-viewing-date',formatViewingDate(p.viewing_at));view.type='button';view.setAttribute('aria-label','Viewing date '+(p.address||p.title));view.title='Change viewing date';view.onclick=()=>editViewingDate(p,view);tr.append(cell(view));
+  const view=node('button','hh-viewing-date',formatViewingDate(p.viewing_at));view.type='button';view.dataset.property=p.id;view.setAttribute('aria-label','Viewing date '+(p.address||p.title));view.title='Change viewing date';view.onclick=()=>editViewingDate(p,view);tr.append(cell(view));
   const agency=node('div','hh-stack');
   try{
    const linkUrl=new URL(p.agency_website);
