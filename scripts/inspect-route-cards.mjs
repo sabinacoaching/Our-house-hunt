@@ -8,5 +8,5 @@ try{
  await page.waitForTimeout(2000);
  const rows=await page.locator('[data-trip-index][role="link"], [data-trip-index][role="button"]').evaluateAll(nodes=>nodes.slice(0,4).map(n=>({text:n.innerText,aria:n.getAttribute('aria-label'),icons:[...n.querySelectorAll('[aria-label],img[alt]')].map(x=>({tag:x.tagName,label:x.getAttribute('aria-label'),alt:x.getAttribute('alt')})),html:n.outerHTML.slice(0,20000)})));
  console.log('GOOGLE_CARDS',JSON.stringify(rows));
- await page.locator('[data-trip-index][role="link"], [data-trip-index][role="button"]').first().click();await page.waitForTimeout(3500);console.log('GOOGLE_DETAIL_TEXT',(await page.locator('body').innerText()).slice(0,12000));
+ await page.locator('[data-trip-index][role="link"], [data-trip-index][role="button"]').nth(1).click();await page.waitForTimeout(3500);console.log('GOOGLE_DETAIL_TEXT',(await page.locator('body').innerText()).slice(0,12000));
 }finally{await browser.close()}
