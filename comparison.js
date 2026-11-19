@@ -29,14 +29,15 @@ export function manualJourney(previous,minutes,updatedAt){
  return {...rest,minutes,source:'manual',manual_override:true,manual_updated_at:updatedAt,...(history?{previous_automatic_route:history}:{})};
 }
 export function setStatusChecks(checks,mode){
- for(const [key,input] of checks)input.checked=mode==='all'||(mode==='active'&&key!=='archived'&&key!=='deleted');
+ for(const [key,input] of checks)input.checked=mode==='all'||(mode==='active'&&isActiveStatus(key));
 }
 export const viewingStatuses={'':'No status',interested:'Interested',enquire_viewing:'Enquire a viewing',requested_viewing:'Requested viewing',viewing_booked:'Viewing booked',viewed:'Viewed',only_wo:'Only w/o',under_offer:'Under offer',archived:'Archive (hide)',deleted:'Delete (move to trash)'};
 export const viewingStatusLabels={...viewingStatuses,archived:'Archived',deleted:'Deleted',shortlisted:'Shortlisted',rejected:'Rejected',under_offer_sold:'Under offer'};
 export const viewingStatusKey=status=>status==='under_offer_sold'?'under_offer':status||'';
+export const isActiveStatus=status=>!['archived','deleted','under_offer','only_wo'].includes(viewingStatusKey(status));
 export function matchesViewingStatus(status,selected){
  const key=viewingStatusKey(status);
- return selected.has(key)||(!Object.hasOwn(viewingStatuses,key)&&Object.keys(viewingStatuses).filter(value=>value!=='archived'&&value!=='deleted').every(value=>selected.has(value)));
+ return selected.has(key)||(!Object.hasOwn(viewingStatuses,key)&&Object.keys(viewingStatuses).filter(isActiveStatus).every(value=>selected.has(value)));
 }
 export function statusEditorOptions(current=''){
  const options=Object.entries(viewingStatuses);
@@ -387,9 +388,9 @@ function render(list){
    const heading=node('strong','','Viewing status');
    const options=node('div','hh-status-filter-options');
    const checks=new Map();
-   const selectedNow=new Set(getStatusSelection?.()||Object.keys(statuses).filter(s=>s!=='archived'&&s!=='deleted'));
+   const selectedNow=new Set(getStatusSelection?.()||Object.keys(statuses).filter(isActiveStatus));
    const selectedLabels=[...selectedNow];
-   const normal=Object.keys(statuses).filter(s=>s!=='archived'&&s!=='deleted');
+   const normal=Object.keys(statuses).filter(isActiveStatus);
    if(!(selectedLabels.length===normal.length&&normal.every(x=>selectedNow.has(x)))){
     trigger.textContent=selectedLabels.length===1?'▾ '+(selectedLabels[0]===''?'No status':(statuses[selectedLabels[0]]||selectedLabels[0]).replace(/ \(.*\)$/,'')):'▾ '+selectedLabels.length+' selected';
     trigger.classList.add('hh-status-filter-applied');
@@ -509,7 +510,6 @@ function render(list){
   garden.append(labelledEditor(p,'Size (m²)','garden_area_sqm','number'),labelledEditor(p,'Description','garden_description','textarea'));
   tr.append(cell(garden));
   const station=node('div','hh-stack');
-  if(['station_asc','station_desc'].includes(getSortMode?.())){const best=nearestSelectedWalkingStation(p,getStationSelection?.()??null);station.append(node('small','hh-sort-station',best?'Sorting: '+best.name+' · '+Math.round(best.minutes)+' min':'Sorting: walking time unavailable'))}
   for(let i=0;i<3;i++){
    if(i===2&&!p.station_3_name)continue;
    const name=i===0?p.station_name:i===1?p.station_2_name:p.station_3_name;

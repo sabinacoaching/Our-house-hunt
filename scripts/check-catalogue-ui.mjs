@@ -121,11 +121,11 @@ try{
  await page.locator('#refresh').click();
  const selectStations=async names=>{await page.getByTitle('Filter houses by station').click();const menu=page.locator('.hh-status-filter-menu:visible');await menu.getByRole('button',{name:'Clear all',exact:true}).click();for(const name of names)await menu.locator('label').filter({hasText:name}).locator('input').check();await menu.getByRole('button',{name:'Apply',exact:true}).click()};
  await selectStations(['Alpha Station','Beta Station']);await page.locator('#sort').selectOption('station_asc');
- assert.deepEqual(await addresses(),['Alpha Road','Gamma Road','Beta Road','Legacy Road','Offer Road']);
- await selectStations(['Alpha Station']);assert.deepEqual(await addresses(),['Beta Road','Alpha Road','Gamma Road','Legacy Road','Offer Road']);
+ assert.deepEqual(await addresses(),['Alpha Road','Gamma Road','Beta Road','Legacy Road']);
+ await selectStations(['Alpha Station']);assert.deepEqual(await addresses(),['Beta Road','Alpha Road','Gamma Road','Legacy Road']);
  await page.locator('#search').fill('Alpha');assert.deepEqual(await addresses(),['Alpha Road']);
  await page.getByRole('button',{name:'Clear filters',exact:true}).click();
- assert.equal(await page.locator('#search').inputValue(),'');assert.equal(await page.locator('#sort').inputValue(),'station_asc');assert.equal((await addresses()).length,5);
+ assert.equal(await page.locator('#search').inputValue(),'');assert.equal(await page.locator('#sort').inputValue(),'station_asc');assert.equal((await addresses()).length,4);
  await page.locator('#search').fill('Beta');assert.equal(await page.getByRole('button',{name:'Clear filters',exact:true}).isVisible(),true);await page.getByRole('button',{name:'Clear filters',exact:true}).click();assert.equal(await page.locator('#search').inputValue(),'');
  await page.evaluate(()=>window.__fixtureRows.forEach((p,i)=>p.station_commutes=window.__originalWalking[i]));await page.locator('#refresh').click();await page.locator('#sort').selectOption('manual');
  console.log('FILTER_WALK_MINUTES_UI_PASS combined station filter, minutes ordering, search reset and retained sort');
@@ -134,12 +134,12 @@ try{
  await page.locator('#refresh').click();await selectStations(['Hounslow','Norbury']);await page.locator('#sort').selectOption('station_asc');
  assert.deepEqual(await addresses(),['Beta Road','Alpha Road'],'10 walking minutes precedes 13');
  const visiblePrices=page.locator('.hh-table tbody tr .hh-house-price');assert.equal(await visiblePrices.count(),2);assert.deepEqual(await visiblePrices.allTextContents(),['£500,000','£500,000']);
- assert.match(await page.locator('.hh-table tbody tr').first().locator('.hh-sort-station').innerText(),/Norbury · 10 min/);
+ assert.equal(await page.locator('.hh-table .hh-sort-station').count(),0,'Station sorting must not add a visible row');
  await page.evaluate(()=>document.querySelector('.hh-table-shell').scrollLeft=1200);assert.equal(await visiblePrices.first().isVisible(),true);await page.evaluate(()=>document.querySelector('.hh-table-shell').scrollLeft=0);
  const journeyMenu=async()=>{await page.getByTitle('Filter journey times').click();return page.locator('.hh-journey-filter:visible')};
  let jm=await journeyMenu();await jm.getByLabel('Dance Lab (minutes)').fill('45');await jm.getByRole('button',{name:'Apply',exact:true}).click();assert.deepEqual(await addresses(),['Alpha Road']);assert.equal(await page.locator('.hh-table tbody tr .hh-house-price').innerText(),'£500,000');
  jm=await journeyMenu();await jm.getByLabel('Dance Lab (minutes)').fill('60');await jm.getByLabel('Waterloo (minutes)').fill('40');await jm.getByRole('button',{name:'Apply',exact:true}).click();assert.deepEqual(await addresses(),['Beta Road']);
- await page.getByRole('button',{name:'Clear filters',exact:true}).click();assert.equal((await addresses()).length,5);
+ await page.getByRole('button',{name:'Clear filters',exact:true}).click();assert.equal((await addresses()).length,4);
  await page.evaluate(()=>window.__fixtureRows.forEach((p,i)=>{p.station_name=window.__stationScenario[i].name;p.station_commutes=window.__stationScenario[i].commutes;p.journey_estimates=window.__stationScenario[i].journeys}));await page.locator('#refresh').click();await page.locator('#sort').selectOption('manual');
  console.log('FILTER_SORT_PRICE_JOURNEY_PASS 10 before 13, selected station label, visible price and combined journey filters');
 
@@ -151,7 +151,7 @@ try{
  assert.deepEqual(await addresses(),['Beta Road','Gamma Road']);
  am=await areaMenu();await am.getByLabel('Minimum (m²)').fill('80');await am.getByLabel('Maximum (m²)').fill('85');await am.getByRole('button',{name:'Apply',exact:true}).click();
  assert.deepEqual(await addresses(),['Alpha Road','Beta Road'],'The 120 m² plan must not replace the first value of 80 m²');
- await page.getByRole('button',{name:'Clear filters',exact:true}).click();assert.equal((await addresses()).length,5);
+ await page.getByRole('button',{name:'Clear filters',exact:true}).click();assert.equal((await addresses()).length,4);
  await page.evaluate(()=>window.__fixtureRows.forEach((p,i)=>{p.floor_area_sqm=window.__areaOriginal[i].area;p.import_diagnostics=window.__areaOriginal[i].diagnostics}));await page.locator('#refresh').click();
  const fixedPrice=()=>page.locator('.hh-table tbody tr').filter({hasText:'Alpha Road'}).locator('.hh-house-price');assert.equal(await fixedPrice().innerText(),'£500,000');
  await page.evaluate(()=>document.querySelector('.hh-table-shell').scrollLeft=1200);assert.equal(await fixedPrice().isVisible(),true);
@@ -303,17 +303,18 @@ try{
  await page.evaluate(()=>{window.scrollTo(0,0);document.querySelector('.hh-table-shell').scrollLeft=0});
  console.log('COMPACT_UI_PASS top toolbar, menu exports/password, short editable date, outer/inner wheel scrolling, 14px headings, narrow date, responsive layout');
  assert.equal(await page.locator('.hh-table thead th').nth(10).innerText(),'Current decision');
- assert.equal((await addresses()).length,5);
+ assert.equal((await addresses()).length,4);
  assert.equal(await page.getByLabel('comment_david Alpha Road',{exact:true}).inputValue(),'Keep decision alpha');
  await page.locator('#sort').selectOption('agency_asc');
- assert.deepEqual(await addresses(),['Offer Road','Beta Road','Gamma Road','Alpha Road','Legacy Road']);
+ assert.deepEqual(await addresses(),['Beta Road','Gamma Road','Alpha Road','Legacy Road']);
  await page.locator('#sort').selectOption('agency_desc');
- assert.deepEqual(await addresses(),['Alpha Road','Beta Road','Gamma Road','Offer Road','Legacy Road']);
+ assert.deepEqual(await addresses(),['Alpha Road','Beta Road','Gamma Road','Legacy Road']);
 
  await page.locator('th').filter({hasText:'Viewing status'}).getByRole('button',{name:'Filter'}).click();
  const menu=page.locator('.hh-status-filter-menu:visible');
  const choices=await menu.locator('input[type=checkbox]').evaluateAll(inputs=>inputs.map(input=>input.value));
  assert.ok(choices.includes('enquire_viewing'));assert.ok(choices.includes('requested_viewing'));assert.ok(choices.includes('under_offer'));
+ assert.equal(await menu.locator('input[value=under_offer]').isChecked(),false);assert.equal(await menu.locator('input[value=only_wo]').isChecked(),false);
  assert.ok(!choices.some(value=>['shortlisted','sold','under_offer_sold'].includes(value)));
  await menu.getByRole('button',{name:'All statuses',exact:true}).click();
  await menu.getByRole('button',{name:'Apply',exact:true}).click();
@@ -348,7 +349,7 @@ try{
  assert.deepEqual(await addresses(),['Archive Road']);
  await page.getByRole('button',{name:'Restore to active',exact:true}).first().click();
  await page.waitForFunction(()=>window.__fixtureRows.find(x=>x.id==='archive').status==='');
- await page.locator('#stageFilter').selectOption('all');assert.equal((await addresses()).length,6);
+ await page.locator('#stageFilter').selectOption('all');assert.equal((await addresses()).length,5);
 
  const alphaRow=()=>page.locator('.hh-table tbody tr').filter({hasText:'Alpha Road'});
  await alphaRow().getByLabel('Station 3',{exact:true}).fill('Lebanon Road');
@@ -401,4 +402,15 @@ try{
  if(process.env.HH_UI_SCREENSHOT)await page.screenshot({path:process.env.HH_UI_SCREENSHOT,fullPage:false});
  console.log('CATALOGUE_UI_PASS agency sorting, workflow filters, independent enquiry/request, current decision, legacy preservation, archive restore');
  console.log('MANUAL_STATION_UI_PASS inline rename, detail rename, automatic walking/PT, Refresh retry, reopen resumes only missing component');
+ // Synthetic browser-only benchmark: no network images, isolated fixture data.
+ const results=[];
+ for(const count of [80,160,320]){
+  await page.evaluate(count=>{const base=structuredClone(window.__fixtureRows[0]);window.__fixtureRows.splice(0);for(let i=0;i<count;i++)window.__fixtureRows.push({...structuredClone(base),id:'benchmark-'+i,address:'Benchmark Road '+i,status:'interested',images:[],sort_order:i});performance.mark('catalogue-bench-start')},count);
+  await page.locator('#refresh').click();await page.waitForFunction(count=>document.querySelectorAll('.hh-table tbody tr').length===count,count,{timeout:60000});
+  const loadMs=await page.evaluate(()=>performance.now()-performance.getEntriesByName('catalogue-bench-start').at(-1).startTime);
+  const sortMs=await page.evaluate(()=>{const sort=document.querySelector('#sort'),start=performance.now();sort.value='station_asc';sort.dispatchEvent(new Event('change'));return performance.now()-start});
+  results.push({homes:count,load_ms:Math.round(loadMs),sort_ms:Math.round(sortMs)});
+ }
+ console.log('CATALOGUE_SYNTHETIC_BENCH '+JSON.stringify(results));
+
 }finally{await browser.close();await new Promise(done=>server.close(done))}

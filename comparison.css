@@ -325,4 +325,3 @@ html{overscroll-behavior-x:none}
 .hh-journey-filter{height:auto;min-height:0;resize:none;display:flex;flex-direction:column;gap:9px}
 .hh-journey-filter label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600}
 .hh-table .hh-journey-filter input{width:100%;min-width:0;padding:7px;border:1px solid #cbd7d1;background:#fff}
-.hh-sort-station{display:block;color:#486b5d;font-size:12px;font-weight:650}
