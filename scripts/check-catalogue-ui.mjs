@@ -129,6 +129,22 @@ try{
  await page.locator('#search').fill('Beta');assert.equal(await page.getByRole('button',{name:'Clear filters',exact:true}).isVisible(),true);await page.getByRole('button',{name:'Clear filters',exact:true}).click();assert.equal(await page.locator('#search').inputValue(),'');
  await page.evaluate(()=>window.__fixtureRows.forEach((p,i)=>p.station_commutes=window.__originalWalking[i]));await page.locator('#refresh').click();await page.locator('#sort').selectOption('manual');
  console.log('FILTER_WALK_MINUTES_UI_PASS combined station filter, minutes ordering, search reset and retained sort');
+ // Area bounds use the displayed first figure, even when the plan has a different total.
+ await page.evaluate(()=>{window.__areaOriginal=window.__fixtureRows.map(p=>({area:p.floor_area_sqm,diagnostics:structuredClone(p.import_diagnostics)}));window.__fixtureRows.forEach((p,i)=>p.floor_area_sqm=[80,85,100,null,75,90][i]);const p=window.__fixtureRows[0];p.import_diagnostics.source_values={floor_area_sqm:80};p.import_diagnostics.floorplan_measurements={labelled_values:{floor_area_sqm:120}}});
+ await page.locator('#refresh').click();
+ const areaMenu=async()=>{await page.getByTitle('Filter by floor area in square metres').click();return page.locator('.hh-area-filter:visible')};
+ let am=await areaMenu();await am.getByLabel('Minimum (m²)').fill('85');await am.getByLabel('Maximum (m²)').fill('100');await am.getByRole('button',{name:'Apply',exact:true}).click();
+ assert.deepEqual(await addresses(),['Beta Road','Gamma Road']);
+ am=await areaMenu();await am.getByLabel('Minimum (m²)').fill('80');await am.getByLabel('Maximum (m²)').fill('85');await am.getByRole('button',{name:'Apply',exact:true}).click();
+ assert.deepEqual(await addresses(),['Alpha Road','Beta Road'],'The 120 m² plan must not replace the first value of 80 m²');
+ await page.getByRole('button',{name:'Clear filters',exact:true}).click();assert.equal((await addresses()).length,5);
+ await page.evaluate(()=>window.__fixtureRows.forEach((p,i)=>{p.floor_area_sqm=window.__areaOriginal[i].area;p.import_diagnostics=window.__areaOriginal[i].diagnostics}));await page.locator('#refresh').click();
+ const fixedPrice=()=>page.locator('.hh-table tbody tr').filter({hasText:'Alpha Road'}).locator('.hh-house-price');assert.equal(await fixedPrice().innerText(),'£500,000');
+ await page.evaluate(()=>document.querySelector('.hh-table-shell').scrollLeft=1200);assert.equal(await fixedPrice().isVisible(),true);
+ await page.evaluate(()=>document.querySelector('.hh-table-shell').scrollLeft=0);
+ await page.getByLabel('price Alpha Road',{exact:true}).fill('499000');await page.getByLabel('price Alpha Road',{exact:true}).press('Tab');await page.waitForFunction(()=>document.querySelector('.hh-house-price')?.textContent==='£499,000');
+ await page.getByLabel('price Alpha Road',{exact:true}).fill('500000');await page.getByLabel('price Alpha Road',{exact:true}).press('Tab');await page.waitForFunction(()=>document.querySelector('.hh-house-price')?.textContent==='£500,000');
+ console.log('AREA_FILTER_PINNED_PRICE_PASS range, first value, reset, horizontal scroll, price edits');
  const savedDates=await page.evaluate(()=>Object.fromEntries(window.__fixtureRows.map(p=>[p.id,p.viewing_at])));
  const views=page.locator('#viewControls'),appMenu=page.locator('#appMenu'),dateDialog=page.locator('.hh-viewing-dialog');
  assert.equal(await page.locator('.filters #exportExcel,.filters #exportPdf').count(),0);

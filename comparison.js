@@ -10,10 +10,17 @@ export function additionalPlanArea(p){
  const current=p.floor_area_sqm;
  if(listed==null||planned==null||current==null)return null;
  const a=Number(listed),b=Number(planned),c=Number(current);
- if(!Number.isFinite(a)||!Number.isFinite(b)||a<=0||b<=0||Math.abs(a-c)>.02)return null;
+ if(!Number.isFinite(a)||!Number.isFinite(b)||a<=0||b<=0||Math.abs(a-c)>.02||Math.abs(a-b)<=1)return null;
  const listedFeet=Number(p.import_diagnostics?.source_values?.floor_area_sqft??Math.round(a/.09290304));
  const planFeet=Number(p.import_diagnostics?.floorplan_measurements?.labelled_values?.floor_area_sqft??Math.round(b/.09290304));
  return Math.round(listedFeet)===Math.round(planFeet)?null:b;
+}
+export function formatPinnedPrice(price){
+ const n=Number(price);return price==null||price===''||!Number.isFinite(n)?'Price unavailable':'£'+new Intl.NumberFormat('en-GB',{maximumFractionDigits:0}).format(n);
+}
+export function matchesFloorArea(p,range){
+ if(!range)return true;const raw=p.floor_area_sqm;if(raw==null||raw==='')return false;
+ const area=Number(raw);return Number.isFinite(area)&&(range.min==null||area>=range.min)&&(range.max==null||area<=range.max);
 }
 export function manualJourney(previous,minutes,updatedAt){
  const old=previous||{};
@@ -87,7 +94,7 @@ export async function openFloorPlan(plan,photo,win=window){
   if(tab)tab.location.replace(url);else win.location.assign(url);
  }catch(error){if(tab)tab.close();throw error}
 }
-export function setupComparison({sb,history,photo,displayPhoto,uniquePhotos,openHouse,openPhotoBrowser,onReorder,canReorder,onStatusChange,onAddressChange,onStationChange,onViewingDateSaved,shouldAutoCalculate,onRestore,getStatusSelection,onStatusFilterChange,getStations,getStationSelection,onStationFilterChange}){
+export function setupComparison({sb,history,photo,displayPhoto,uniquePhotos,openHouse,openPhotoBrowser,onReorder,canReorder,onStatusChange,onAddressChange,onStationChange,onViewingDateSaved,getAreaFilter,onAreaFilterChange,shouldAutoCalculate,onRestore,getStatusSelection,onStatusFilterChange,getStations,getStationSelection,onStationFilterChange}){
 const stationAccess=setupStationAccess({sb,history,shouldAutoCalculate});
 const $=id=>document.getElementById(id),node=(tag,cls='',content)=>{const x=document.createElement(tag);x.className=cls;if(content!==undefined)x.textContent=content;return x};
 const statuses=viewingStatuses;
@@ -151,7 +158,7 @@ async function save(p,key,value,input){
  const overrides={...(p.manual_overrides||{}),[key]:true};
  const r=await history.save(p,{[key]:val,manual_overrides:overrides});
  if(r.error){flash(r.error.message,true);input?.classList.add('hh-savefail');return}
- input?.classList.remove('hh-savefail');flash('Saved');if(key==='status')await onStatusChange?.(p,val);if(key==='address')await onAddressChange?.(p);if(['station_name','station_2_name','station_3_name'].includes(key))await onStationChange?.(p);
+ input?.classList.remove('hh-savefail');if(key==='price')for(const badge of table.querySelectorAll('.hh-house-price'))if(badge.dataset.property===String(p.id))badge.textContent=formatPinnedPrice(p.price);flash('Saved');if(key==='status')await onStatusChange?.(p,val);if(key==='address')await onAddressChange?.(p);if(['station_name','station_2_name','station_3_name'].includes(key))await onStationChange?.(p);
  finishEditorSave(p,key,value);
 }
 const viewingDialog=node('dialog','hh-viewing-dialog'),viewingTop=node('div','dialogtop'),viewingTitle=node('h2','','Viewing date'),viewingForm=node('form','hh-date-form'),viewingFields=node('div'),viewingError=node('p','error'),viewingActions=node('div','actions');
@@ -327,6 +334,16 @@ function render(list){
  const head=node('thead'),hr=node('tr');
  for(const [columnIndex,title] of labels.entries()){
   const th=node('th','',title);
+  if(title==='Total floor area'){
+   th.classList.add('hh-status-filter-heading');const selected=getAreaFilter?.()||null;
+   const trigger=node('button','hh-status-filter-button',selected?'▾ Filtered':'▾ Filter');trigger.type='button';trigger.title='Filter by floor area in square metres';if(selected)trigger.classList.add('hh-status-filter-applied');
+   const menu=node('div','hh-status-filter-menu hh-area-filter');menu.hidden=true;menu.append(node('strong','','Floor area (m²)'));
+   const minLabel=node('label','','Minimum (m²)'),maxLabel=node('label','','Maximum (m²)'),min=node('input'),max=node('input');
+   for(const input of [min,max]){input.type='number';input.min='0';input.step='any'}min.value=selected?.min??'';max.value=selected?.max??'';minLabel.append(min);maxLabel.append(max);
+   const error=node('p','hh-area-filter-error'),actions=node('div','hh-status-filter-actions'),cancel=node('button','','Cancel'),apply=node('button','','Apply');cancel.type=apply.type='button';cancel.onclick=()=>{menu.hidden=true};
+   apply.onclick=()=>{const low=min.value===''?null:Number(min.value),high=max.value===''?null:Number(max.value);if((low!=null&&(!Number.isFinite(low)||low<0))||(high!=null&&(!Number.isFinite(high)||high<0))||(low!=null&&high!=null&&low>high)){error.textContent='Enter a valid range: minimum must not exceed maximum.';return}menu.hidden=true;onAreaFilterChange?.(low==null&&high==null?null:{min:low,max:high})};
+   actions.append(cancel,apply);menu.append(minLabel,maxLabel,error,actions);menu.addEventListener('click',e=>e.stopPropagation());trigger.onclick=e=>{e.stopPropagation();menu.hidden=!menu.hidden};th.append(trigger,menu);
+  }
   if(title==='Nearest station'){
    th.classList.add('hh-status-filter-heading');
    const optionsList=getStations?.()||[],selected=getStationSelection?.()??null;
@@ -425,7 +442,8 @@ function render(list){
   details.style.cssText='display:block;margin-top:6px;padding:5px 10px;font-size:12px;background:#fff;color:#315e50;border-color:#cbd7d1';
   const listingRow=node('div','hh-listing-row');listingRow.append(link);
   const positionLabel=node('span','hh-house-number','#'+(rowIndex+1));
-  house.append(positionLabel,photos,address,listingRow);
+  const topRow=node('div','hh-house-heading'),pinnedPrice=node('span','hh-house-price',formatPinnedPrice(p.price));pinnedPrice.dataset.property=p.id;topRow.append(positionLabel,pinnedPrice);
+  house.append(topRow,photos,address,listingRow);
   if(canReorder?.()){
     const tools=node('div','hh-move-controls'),grip=node('button','hh-drag-handle','↕ Drag');
     grip.type='button';grip.draggable=true;grip.title='Drag to place above another house';

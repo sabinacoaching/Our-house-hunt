@@ -35,10 +35,10 @@ dialog.hh-photo-viewer[open]{display:flex;flex-direction:column}
 .hh-import-queue{display:grid;gap:5px;margin-top:10px}.hh-import-item{display:flex;gap:9px;align-items:center;flex-wrap:wrap;font-size:13px;color:#465b51}.hh-import-item .hh-import-url{overflow-wrap:anywhere}.hh-import-item button{font-size:12px;padding:4px 8px}.hh-import-error{color:#a24742}
 @media(max-width:600px){.hh-photo-stage{gap:3px;padding:4px}.hh-photo-stage img{max-width:calc(100% - 78px)}.hh-photo-viewer .hh-photo-prev,.hh-photo-viewer .hh-photo-next{flex-basis:36px;min-width:36px;padding:5px}}
 </style>
-<link rel="stylesheet" href="./comparison.css?v=30">
+<link rel="stylesheet" href="./comparison.css?v=31">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css'">
 </head><body>
-<header class="top"><div class="brand">⌂ &nbsp;<span>Our House Hunt</span></div><div id="viewControls" class="hh-view-controls" hidden></div><div class="topright"><strong id="who"></strong><span id="hhVersion" title="Current House Hunt site version" style="font-size:11px;color:#72817f">v71</span><button id="refresh" class="secondary" hidden>Refresh</button><details id="appMenu" class="hh-app-menu" hidden><summary>Menu</summary><div class="hh-app-menu-items"><button id="refreshOutdoors" class="secondary" type="button">Recalculate house and garden data</button><a href="downloads/our-house-hunt-importer-v0.20.0.zip" download>Download importer 0.20.0</a><hr><button id="exportExcel" class="secondary" type="button">Export Excel</button><button id="exportPdf" class="secondary" type="button">Export PDF</button><hr><button id="changePassword" class="secondary" hidden>Change password</button><button id="logout" class="secondary" hidden>Sign out</button></div></details></div></header>
+<header class="top"><div class="brand">⌂ &nbsp;<span>Our House Hunt</span></div><div id="viewControls" class="hh-view-controls" hidden></div><div class="topright"><strong id="who"></strong><span id="hhVersion" title="Current House Hunt site version" style="font-size:11px;color:#72817f">v72</span><button id="refresh" class="secondary" hidden>Refresh</button><details id="appMenu" class="hh-app-menu" hidden><summary>Menu</summary><div class="hh-app-menu-items"><button id="refreshOutdoors" class="secondary" type="button">Recalculate house and garden data</button><a href="downloads/our-house-hunt-importer-v0.20.0.zip" download>Download importer 0.20.0</a><hr><button id="exportExcel" class="secondary" type="button">Export Excel</button><button id="exportPdf" class="secondary" type="button">Export PDF</button><hr><button id="changePassword" class="secondary" hidden>Change password</button><button id="logout" class="secondary" hidden>Sign out</button></div></details></div></header>
 <main>
 <section id="login" class="panel login" hidden>
 <h1>Welcome home</h1><p>Your shared shortlist, notes and viewings.</p>
@@ -86,7 +86,7 @@ dialog.hh-photo-viewer[open]{display:flex;flex-direction:column}
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.49.8';
 import {createViewingDateFields} from './viewing-date.js?v=2';
 import {createImportQueue} from './import-queue.js?v=1';
-import {setupComparison,stationOptions,nearestSelectedWalkingMinutes,matchesStation,viewingStatuses,viewingStatusLabels,viewingStatusKey,matchesViewingStatus,statusEditorOptions,compareAgencies} from './comparison.js?v=80';
+import {setupComparison,stationOptions,nearestSelectedWalkingMinutes,matchesStation,matchesFloorArea,viewingStatuses,viewingStatusLabels,viewingStatusKey,matchesViewingStatus,statusEditorOptions,compareAgencies} from './comparison.js?v=81';
 import {calculateGoogleRoutes,needsGoogleRouteResume} from './google-routes-runner.js?v=10';
 import {prepareStationChanges,changedStationNames,hasPendingStationChoices} from './station-choice-state.js?v=1';
 import {calculateManualStationRoutes} from './manual-station-routes.js?v=2';
@@ -104,7 +104,7 @@ const $=id=>document.getElementById(id);
 const detailViewingDate=createViewingDateFields($('editViewing'),{clearButton:true});
 const labels=viewingStatusLabels;
 let user=null,people={},homes=[],visibleHomes=[],selected=null;
-let viewingSelections=null,stationSelection=null;
+let viewingSelections=null,stationSelection=null,areaFilter=null;
 const allActiveStatuses=Object.keys(viewingStatuses).filter(status=>status!=='archived'&&status!=='deleted');
 function selectedViewingStatuses(){
  if(viewingSelections!==null)return [...viewingSelections];
@@ -666,7 +666,7 @@ async function startAutoFill(){
 }
 let reorderBusy=false;
 async function reorderHouses(dragId,targetId,step=0,exactPosition=null){
- if($('sort').value!=='manual'||$('stageFilter').value!=='all'||viewingSelections!==null||stationSelection!==null||$('search').value.trim()){report('To rearrange: select My order, All active and clear Search, Viewing status and Nearest station filters.',true);return}
+ if($('sort').value!=='manual'||$('stageFilter').value!=='all'||viewingSelections!==null||stationSelection!==null||areaFilter!==null||$('search').value.trim()){report('To rearrange: select My order, All active and clear Search, Viewing status, Nearest station and Total floor area filters.',true);return}
  const active=homes.filter(p=>p.status!=='archived'&&p.status!=='deleted').sort((a,b)=>Number(a.sort_order??0)-Number(b.sort_order??0)||(new Date(b.created_at)-new Date(a.created_at)));
  const source=active.findIndex(p=>p.id===dragId),destination=active.findIndex(p=>p.id===targetId);
  if(source<0||destination<0||reorderBusy)return;
@@ -695,9 +695,10 @@ async function restoreHouse(p){
  if(r.error){report('Could not restore house: '+r.error.message,true);return}
  await refresh();report('Restored '+(p.address||'house')+' to active houses.');
 }
-function render(){$('resetComparisonFilters').hidden=viewingSelections===null&&stationSelection===null&&$('stageFilter').value==='all'&&!$('search').value;let rows=homes.filter(p=>(
+function render(){$('resetComparisonFilters').hidden=viewingSelections===null&&stationSelection===null&&areaFilter===null&&$('stageFilter').value==='all'&&!$('search').value;let rows=homes.filter(p=>(
  (viewingSelections!==null?matchesViewingStatus(p.status,viewingSelections):($('stageFilter').value==='all'?p.status!=='archived'&&p.status!=='deleted':viewingStatusKey(p.status)===$('stageFilter').value))
  &&matchesStation(p,stationSelection)
+ &&matchesFloorArea(p,areaFilter)
  &&(!$('search').value.trim()||((p.address||'')+' '+(p.title||'')).toLowerCase().includes($('search').value.trim().toLowerCase()))
  ));if($('sort').value==='manual')rows.sort((a,b)=>Number(a.sort_order??0)-Number(b.sort_order??0)||(new Date(b.created_at)-new Date(a.created_at)));if($('sort').value==='price_asc')rows.sort((a,b)=>(a.price??Infinity)-(b.price??Infinity));if($('sort').value==='price_desc')rows.sort((a,b)=>(b.price??0)-(a.price??0));
 const numeric=(v)=>v==null||v===''?null:Number(v);
@@ -941,7 +942,7 @@ $('refresh').onclick=async()=>{await refresh();report('Saved data refreshed. Che
 
 $('importForm').onsubmit=async e=>{e.preventDefault();const raw=$('urlInput').value.trim();try{if(!importQueue)throw Error('Sign in before adding a house');const result=await importQueue.enqueue(listing(raw));if($('urlInput').value.trim()===raw)$('urlInput').value='';report(result.duplicate?'This link is already in the import queue.':'Link added to the import queue.') }catch(err){report(err.message,true)}};
 for(const id of ['stageFilter','sort','search'])$(id).addEventListener(id==='search'?'input':'change',id==='stageFilter'?()=>{viewingSelections=null;render()}:render);
-$('resetComparisonFilters').onclick=()=>{viewingSelections=null;stationSelection=null;$('stageFilter').value='all';$('search').value='';render()};
+$('resetComparisonFilters').onclick=()=>{viewingSelections=null;stationSelection=null;areaFilter=null;$('stageFilter').value='all';$('search').value='';render()};
 $('archiveToggle').onclick=()=>{const inArchive=$('stageFilter').value==='archived'||viewingSelections?.size===1&&viewingSelections.has('archived');viewingSelections=null;$('stageFilter').value=inArchive?'all':'archived';$('search').value='';render();};
 $('close').onclick=()=>$('dialog').close();
 $('save').onclick=async()=>{if(!selected)return;const viewing=detailViewingDate.read();if(viewing.error)return;const payload={address:$('editAddress').value.trim(),price:$('editPrice').value?Number($('editPrice').value):null,bedrooms:$('editBeds').value?Number($('editBeds').value):null,bathrooms:$('editBaths').value?Number($('editBaths').value):null,status:$('editStage').value,...enhancements.edited()};if(viewing.changed)payload.viewing_at=viewing.value;if(payload.status==='deleted'&&!confirm('Move this house to Deleted?'))return;const id=selected.id,addressChanged=payload.address!==selected.address,stationsChanged=changedStationNames(selected,payload).length>0;const overrides={...(selected.manual_overrides||{})};for(const [k,v] of Object.entries(payload)){if(String(selected[k]??'')!==String(v??''))overrides[k]=true;}payload.manual_overrides=overrides;const r=await history.save(selected,payload);if(r.error){alert(r.error.message);return}await refresh();$('dialog').close();if(stationsChanged)await resumeManualStationRoutes(id);if(addressChanged)void updateLocationForAddress(id)};
@@ -975,7 +976,7 @@ $('floorPlanFile').onchange=async()=>{
  finally{button.disabled=false;button.textContent='Upload floor plan'}
 };
 const history=createEditHistory({sb,prepareChanges:prepareStationChanges,onRestored:async last=>{const wasOpen=$('dialog').open;if(wasOpen)$('dialog').close();await refresh();if(wasOpen&&selected)await openHouse(selected);if(Object.keys(last.before||{}).some(key=>['station_name','station_2_name','station_3_name'].includes(key)))void resumeManualStationRoutes(last.id)}});
-const enhancements=setupComparison({sb,history,photo,displayPhoto,uniquePhotos,openHouse,openPhotoBrowser,onReorder:reorderHouses,canReorder:()=> viewingSelections===null&&stationSelection===null&&$('sort').value==='manual'&&$('stageFilter').value==='all'&&!$('search').value.trim(),getStatusSelection:selectedViewingStatuses,onStatusFilterChange:applyViewingStatuses,getStations:()=>stationOptions(homes),getStationSelection:()=>stationSelection,onStationFilterChange:keys=>{const options=stationOptions(homes);stationSelection=keys.length===options.length?null:new Set(keys);render()},onStatusChange:async()=>{await refresh()},onViewingDateSaved:p=>{++refreshEpoch;const current=homes.find(h=>h.id===p.id);if(current){current.viewing_at=p.viewing_at;current.manual_overrides=p.manual_overrides}void refresh()},onAddressChange:async p=>{await refresh();void updateLocationForAddress(p.id)},onStationChange:stationNameChanged,shouldAutoCalculate:()=>false,onRestore:restoreHouse});
+const enhancements=setupComparison({sb,history,photo,displayPhoto,uniquePhotos,openHouse,openPhotoBrowser,onReorder:reorderHouses,canReorder:()=> viewingSelections===null&&stationSelection===null&&areaFilter===null&&$('sort').value==='manual'&&$('stageFilter').value==='all'&&!$('search').value.trim(),getStatusSelection:selectedViewingStatuses,onStatusFilterChange:applyViewingStatuses,getStations:()=>stationOptions(homes),getStationSelection:()=>stationSelection,onStationFilterChange:keys=>{const options=stationOptions(homes);stationSelection=keys.length===options.length?null:new Set(keys);render()},onStatusChange:async()=>{await refresh()},onViewingDateSaved:p=>{++refreshEpoch;const current=homes.find(h=>h.id===p.id);if(current){current.viewing_at=p.viewing_at;current.manual_overrides=p.manual_overrides}void refresh()},onAddressChange:async p=>{await refresh();void updateLocationForAddress(p.id)},onStationChange:stationNameChanged,getAreaFilter:()=>areaFilter,onAreaFilterChange:range=>{areaFilter=range;render()},shouldAutoCalculate:()=>false,onRestore:restoreHouse});
 setupExports({getVisible:()=>visibleHomes.slice(),getAll:()=>homes.slice(),photo});
 const session=await sb.auth.getSession();user=session.data.session?.user||null;if(user){await show();}else $('login').hidden=false;
 // No automatic polling: properties are read at sign-in and upon explicit Refresh or a saved edit.
