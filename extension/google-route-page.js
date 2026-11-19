@@ -44,9 +44,10 @@ async function houseHuntReadMapsPage(request){
    const options=[...document.querySelectorAll('[data-trip-index][role="link"],[data-trip-index][role="button"]')].filter(e=>e.querySelector('h1'));
    const selected=options.find(e=>norm(e.querySelector('h1')?.innerText)===norm(request.heading)&&norm(e.innerText).includes(norm(request.duration)));
    if(!selected)throw Error('Route details: selected option not found');selected.click();
+   let detailsClicked=false;
    const detail=await waitFor(()=>{
     const body=document.body?.innerText||'';if(/\nWalk\s*\n/i.test(body)&&/\bfrom\s+.+\bto\s+/is.test(body))return {body};
-    const button=[...selected.querySelectorAll('button,[role="button"],a')].find(x=>(x.innerText||'').trim()==='Details');if(button){button.click();return null}return null;
+    const button=[...document.querySelectorAll('button,[role="button"],a')].find(x=>(x.innerText||'').trim()==='Details');if(button&&!detailsClicked){detailsClicked=true;button.click()}return null;
    },'Google itinerary details',25000);
    const lines=detail.body.split(/\r?\n/).map(x=>x.trim()).filter(Boolean),walking=[];
    for(let i=0;i<lines.length;i++)if(/^walk(?:ing)?$/i.test(lines[i])){
