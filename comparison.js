@@ -153,7 +153,15 @@ const viewingSave=node('button','','Save date'),viewingClear=node('button','seco
 viewingSave.type='submit';viewingClear.type=viewingCancel.type='button';
 viewingActions.append(viewingSave,viewingClear,viewingCancel);viewingForm.append(viewingFields,viewingError,viewingActions);viewingDialog.append(viewingTop,viewingForm);document.body.append(viewingDialog);
 let viewingEdit=null;
-function editViewingDate(p,button){viewingEdit={p,button};viewingPicker.setValue(p.viewing_at);viewingError.textContent='';viewingDialog.showModal();viewingPicker.focus()}
+async function editViewingDate(p,button){
+ button.disabled=true;
+ try{
+  const current=await sb.from('properties').select('viewing_at').eq('id',p.id).single();
+  if(current.error||!current.data)throw current.error||new Error('House not found');
+  p.viewing_at=current.data.viewing_at??null;button.textContent=formatViewingDate(p.viewing_at);
+  viewingEdit={p,button};viewingPicker.setValue(p.viewing_at);viewingError.textContent='';viewingDialog.showModal();viewingPicker.focus();
+ }catch(error){flash('Cannot load the current viewing date: '+(error.message||String(error)),true)}finally{button.disabled=false}
+}
 viewingCancel.onclick=()=>viewingDialog.close();
 viewingClear.onclick=()=>{viewingPicker.clear();viewingForm.requestSubmit()};
 viewingForm.onsubmit=async event=>{

@@ -38,7 +38,7 @@ dialog.hh-photo-viewer[open]{display:flex;flex-direction:column}
 <link rel="stylesheet" href="./comparison.css?v=30">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css'">
 </head><body>
-<header class="top"><div class="brand">⌂ &nbsp;<span>Our House Hunt</span></div><div id="viewControls" class="hh-view-controls" hidden></div><div class="topright"><strong id="who"></strong><span id="hhVersion" title="Current House Hunt site version" style="font-size:11px;color:#72817f">v68</span><button id="refresh" class="secondary" hidden>Refresh</button><details id="appMenu" class="hh-app-menu" hidden><summary>Menu</summary><div class="hh-app-menu-items"><button id="refreshOutdoors" class="secondary" type="button">Recalculate house and garden data</button><a href="downloads/our-house-hunt-importer-v0.20.0.zip" download>Download importer 0.20.0</a><hr><button id="exportExcel" class="secondary" type="button">Export Excel</button><button id="exportPdf" class="secondary" type="button">Export PDF</button><hr><button id="changePassword" class="secondary" hidden>Change password</button><button id="logout" class="secondary" hidden>Sign out</button></div></details></div></header>
+<header class="top"><div class="brand">⌂ &nbsp;<span>Our House Hunt</span></div><div id="viewControls" class="hh-view-controls" hidden></div><div class="topright"><strong id="who"></strong><span id="hhVersion" title="Current House Hunt site version" style="font-size:11px;color:#72817f">v69</span><button id="refresh" class="secondary" hidden>Refresh</button><details id="appMenu" class="hh-app-menu" hidden><summary>Menu</summary><div class="hh-app-menu-items"><button id="refreshOutdoors" class="secondary" type="button">Recalculate house and garden data</button><a href="downloads/our-house-hunt-importer-v0.20.0.zip" download>Download importer 0.20.0</a><hr><button id="exportExcel" class="secondary" type="button">Export Excel</button><button id="exportPdf" class="secondary" type="button">Export PDF</button><hr><button id="changePassword" class="secondary" hidden>Change password</button><button id="logout" class="secondary" hidden>Sign out</button></div></details></div></header>
 <main>
 <section id="login" class="panel login" hidden>
 <h1>Welcome home</h1><p>Your shared shortlist, notes and viewings.</p>
@@ -86,7 +86,7 @@ dialog.hh-photo-viewer[open]{display:flex;flex-direction:column}
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.49.8';
 import {createViewingDateFields} from './viewing-date.js?v=2';
 import {createImportQueue} from './import-queue.js?v=1';
-import {setupComparison,stationOptions,stationDistance,matchesStation,viewingStatuses,viewingStatusLabels,viewingStatusKey,matchesViewingStatus,statusEditorOptions,compareAgencies} from './comparison.js?v=77';
+import {setupComparison,stationOptions,stationDistance,matchesStation,viewingStatuses,viewingStatusLabels,viewingStatusKey,matchesViewingStatus,statusEditorOptions,compareAgencies} from './comparison.js?v=78';
 import {calculateGoogleRoutes,needsGoogleRouteResume} from './google-routes-runner.js?v=10';
 import {prepareStationChanges,changedStationNames,hasPendingStationChoices} from './station-choice-state.js?v=1';
 import {calculateManualStationRoutes} from './manual-station-routes.js?v=2';

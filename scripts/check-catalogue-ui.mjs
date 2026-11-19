@@ -142,6 +142,14 @@ try{
  await views.getByRole('button',{name:'Map',exact:true}).click();assert.equal(await page.locator('.hh-map').isVisible(),true);
  await views.getByRole('button',{name:'Table',exact:true}).click();
  const dateButton=()=>page.getByRole('button',{name:'Viewing date Alpha Road',exact:true});
+ // Simulate another tab changing a date after this table was loaded.
+ await page.evaluate(()=>window.__fixtureRows.find(p=>p.id==='alpha').viewing_at='2026-11-16T17:45:00.000Z');
+ await dateButton().click();
+ assert.equal(await dateDialog.getByRole('button',{name:'16 November',exact:true}).getAttribute('aria-pressed'),'true');
+ assert.equal(await dateDialog.getByLabel('Time',{exact:true}).inputValue(),'17:45');
+ await dateDialog.getByRole('button',{name:'Cancel',exact:true}).click();
+ await page.evaluate(value=>window.__fixtureRows.find(p=>p.id==='alpha').viewing_at=value,savedDates.alpha);
+ await dateButton().click();await dateDialog.getByRole('button',{name:'Cancel',exact:true}).click();
  assert.equal(await dateButton().innerText(),'15 Nov\n14:05');
  for(const button of await page.locator('.hh-table .hh-viewing-date').all()){
   await button.click();
