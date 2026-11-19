@@ -229,6 +229,18 @@ function editor(p,key,type='text'){
 const cell=value=>{const t=node('td');if(value instanceof Node)t.append(value);else t.textContent=value;return t};
 const val=v=>v==null||v===''?'—':String(v);
 
+// Keep loaded image elements across catalogue redraws. Invalidate when source photos change.
+const housePhotoGrids=new Map();
+function photoGridFor(p){
+ const signature=JSON.stringify((p.images||[]).map(x=>[x.path||'',x.url||'',x.sha256||'']));
+ let entry=housePhotoGrids.get(p.id);
+ if(!entry||entry.signature!==signature){
+  const grid=node('div','hh-photo-grid');grid._property=p;entry={signature,grid};housePhotoGrids.set(p.id,entry);
+  distinctPhotos(p,grid).catch(e=>console.warn('Photo gallery',e));
+ }else{entry.grid._property=p;housePhotoGrids.delete(p.id);housePhotoGrids.set(p.id,entry)}
+ while(housePhotoGrids.size>200)housePhotoGrids.delete(housePhotoGrids.keys().next().value);
+ return entry.grid;
+}
 async function distinctPhotos(p,container){
   const photos=await uniquePhotos(p,4);
   if(!photos.length){container.append(node('div','hh-photo-unavailable','No photos'));return}
@@ -236,12 +248,12 @@ async function distinctPhotos(p,container){
     const img=node('img','hh-photo'+(i===0?' hh-photo-main':''));
     img.alt='Property photograph '+(i+1);
     img.loading='lazy';
-    img.onclick=()=>openPhotoBrowser(p,i);
+    img.onclick=()=>openPhotoBrowser(container._property||p,i);
     img.style.cursor='zoom-in';
     img.tabIndex=0;
     img.setAttribute('role','button');
     img.setAttribute('aria-label','Enlarge photograph '+(i+1)+' of '+p.address);
-    img.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openPhotoBrowser(p,i)}};
+    img.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openPhotoBrowser(container._property||p,i)}};
     container.append(img);
     displayPhoto(img,photos[i]);
   }
@@ -444,8 +456,7 @@ function render(list){
  for(const [rowIndex,p] of list.entries()){
   try {
   const tr=node('tr');
-  const house=node('div','hh-house'),photos=node('div','hh-photo-grid');
-  distinctPhotos(p,photos).catch(e=>console.warn('Photo gallery',e));
+  const house=node('div','hh-house'),photos=photoGridFor(p);
   const address=node('div','hh-address',clean(p.address||p.title));
   address.contentEditable='true';address.setAttribute('role','textbox');address.setAttribute('aria-label','Property address, editable');
   address.spellcheck=false;address.title='Edit property address';

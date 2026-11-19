@@ -390,6 +390,17 @@ try{
  for(const p of await page.evaluate(()=>window.__fixtureRows)){assert.equal(p.garden_area_sqm,60);assert.match(p.garden_description,/Off-street parking for two cars/)}
  assert.deepEqual(await page.evaluate(()=>window.__fixtureRows.map(({garden_area_sqm,garden_description,import_diagnostics,...p})=>p)),beforeOutdoor);
  console.log('OUTDOOR_REFRESH_UI_PASS Menu reprocesses existing cards, displays sizes and parking, preserves exact dates, comments, routes and station choices');
+ // Keep an already loaded image element when sorting or filtering rebuilds rows.
+ await page.evaluate(()=>{const p=window.__fixtureRows.find(x=>x.id==='alpha');p.images=[{url:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/IioAAAAASUVORK5CYII=',sha256:'a'.repeat(64)}]});
+ await page.locator('#refresh').click();await page.waitForFunction(()=>{const img=document.querySelector('img[aria-label="Enlarge photograph 1 of Alpha Road"]');return img?.src&&img.complete});
+ await page.evaluate(()=>window.__retainedImage=document.querySelector('img[aria-label="Enlarge photograph 1 of Alpha Road"]'));
+ await page.locator('#sort').selectOption('price_asc');await page.locator('#search').fill('Alpha');
+ assert.equal(await page.evaluate(()=>document.querySelector('.hh-table tbody tr .hh-photo-grid img')===window.__retainedImage),true,'Loaded photo survives filter and sort');
+ await page.getByRole('button',{name:'Clear filters',exact:true}).click();
+ assert.equal(await page.evaluate(()=>[...document.querySelectorAll('.hh-table tbody tr .hh-photo-grid img')].includes(window.__retainedImage)),true,'Restoring the rows retains the loaded photo');
+ await page.evaluate(()=>{const p=window.__fixtureRows.find(x=>x.id==='alpha');p.images=[{url:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/IioAAAAASUVORK5CYII=#replacement',sha256:'b'.repeat(64)}]});
+ await page.locator('#refresh').click();await page.waitForFunction(()=>![...document.querySelectorAll('.hh-table tbody tr .hh-photo-grid img')].includes(window.__retainedImage));
+ console.log('PHOTO_REUSE_UI_PASS loaded image retained on filtering and sorting, invalidated when photos change');
  await page.evaluate(()=>window.__holdImport=true);
  await page.locator('#urlInput').fill('https://www.zoopla.co.uk/for-sale/details/888001');await page.locator('#importButton').click();
  await page.waitForFunction(()=>document.querySelector('#importQueue')?.innerText.includes('Saving'));
