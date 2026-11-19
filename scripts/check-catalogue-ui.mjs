@@ -145,6 +145,16 @@ try{
  await page.getByLabel('price Alpha Road',{exact:true}).fill('499000');await page.getByLabel('price Alpha Road',{exact:true}).press('Tab');await page.waitForFunction(()=>document.querySelector('.hh-house-price')?.textContent==='£499,000');
  await page.getByLabel('price Alpha Road',{exact:true}).fill('500000');await page.getByLabel('price Alpha Road',{exact:true}).press('Tab');await page.waitForFunction(()=>document.querySelector('.hh-house-price')?.textContent==='£500,000');
  console.log('AREA_FILTER_PINNED_PRICE_PASS range, first value, reset, horizontal scroll, price edits');
+ // Exercise both horizontal edges with an active filter; vertical behaviour stays unchanged.
+ await page.locator('#search').fill('Alpha');
+ const scrollGuard=await page.evaluate(()=>{const table=document.querySelector('.hh-table-shell');window.__scrollGuardDocument=document;return {tableX:getComputedStyle(table).overscrollBehaviorX,tableY:getComputedStyle(table).overscrollBehaviorY,rootX:getComputedStyle(document.documentElement).overscrollBehaviorX}});
+ assert.deepEqual(scrollGuard,{tableX:'none',tableY:'auto',rootX:'none'});
+ const scrollBox=page.locator('.hh-table-shell');await scrollBox.scrollIntoViewIfNeeded();const box=await scrollBox.boundingBox();await page.mouse.move(box.x+box.width/2,Math.min(box.y+100,900));
+ await page.mouse.wheel(1100,0);await page.waitForFunction(()=>document.querySelector('.hh-table-shell').scrollLeft>0);
+ await page.mouse.wheel(-2500,0);await page.waitForFunction(()=>document.querySelector('.hh-table-shell').scrollLeft===0);
+ await page.mouse.wheel(-500,0);assert.equal(await page.evaluate(()=>window.__scrollGuardDocument===document),true);assert.equal(await page.locator('#search').inputValue(),'Alpha');assert.deepEqual(await addresses(),['Alpha Road']);
+ await page.getByRole('button',{name:'Clear filters',exact:true}).click();
+ console.log('HORIZONTAL_OVERSCROLL_PASS horizontal movement, both boundaries, active filter, vertical behaviour');
  const savedDates=await page.evaluate(()=>Object.fromEntries(window.__fixtureRows.map(p=>[p.id,p.viewing_at])));
  const views=page.locator('#viewControls'),appMenu=page.locator('#appMenu'),dateDialog=page.locator('.hh-viewing-dialog');
  assert.equal(await page.locator('.filters #exportExcel,.filters #exportPdf').count(),0);

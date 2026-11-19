@@ -271,7 +271,8 @@
 .filters input{min-width:200px}
 .filters>button{font-size:12px;padding:8px 11px;border-radius:7px}
 main:has(#mainApp:not([hidden]) .hh-table-shell:not([hidden])){margin-bottom:0}
-.hh-table-shell{height:100vh;height:100dvh;max-height:100vh;max-height:100dvh;overscroll-behavior:auto}
+html{overscroll-behavior-x:none}
+.hh-table-shell{height:100vh;height:100dvh;max-height:100vh;max-height:100dvh;overscroll-behavior-x:none;overscroll-behavior-y:auto}
 .hh-table th{font-size:14px;line-height:1.2;padding:8px 10px;white-space:normal}
 .hh-table th:nth-child(13),.hh-table td:nth-child(13){width:104px;min-width:104px;max-width:120px}
 .hh-table .hh-viewing-date{width:100%;min-width:0;padding:4px 3px;border:1px solid transparent;border-radius:5px;background:transparent;color:#253433;white-space:pre-line;text-align:left;font-size:13px;line-height:1.45;font-variant-numeric:tabular-nums;font-weight:400}
