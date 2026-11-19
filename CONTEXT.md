@@ -7,7 +7,7 @@
 - Репозиторий: `sabinacoaching/Our-house-hunt`, ветка `main`.
 - Сайт: https://sabinacoaching.github.io/Our-house-hunt/ (GitHub Pages).
 - Данные: проект Supabase House hunt, таблица `public.properties`; приватное хранилище `property-photos`.
-- Получение данных объявлений и маршрутов: Chrome-расширение Our House Hunt Importer. На момент сверки опубликованы сайт v68 и импортёр 0.20.0.
+- Получение данных объявлений и маршрутов: Chrome-расширение Our House Hunt Importer. На момент сверки опубликованы сайт v69 и импортёр 0.20.0.
 - Проект не является частью сайта Sabina Coaching. Не изменяй другой репозиторий.
 
 ## Очередь импорта (v68)
