@@ -43,17 +43,20 @@
   const elapsed=(t.arrival-t.departure+1440)%1440;if(Math.abs(elapsed-minutes)>1||t.arrival>target)return null;
   const modes=(row.modes||[]).filter(x=>/^(train|bus|tram|subway|rail|underground|ferry|light rail)$/i.test(x));
   if(!modes.length)return null;const steps=Array.isArray(row.walking_legs)?row.walking_legs:[];
-  const explicitWalk=(row.modes||[]).some(x=>/^walk$/i.test(x));
-  if(explicitWalk&&!steps.length)return null;
-  const firstWalk=explicitWalk?Number(steps[0]):0;if(!Number.isFinite(firstWalk)||firstWalk<0)return null;
+  if(!steps.length)return null;
+  const firstWalk=Number(steps[0]);if(!Number.isFinite(firstWalk)||firstWalk<0)return null;
   return {departure:t.departure,arrival:t.arrival,minutes,heading:row.heading,arrival_gap:target-t.arrival,transfers:Math.max(0,modes.length-1),first_walk_minutes:firstWalk};
  }
  // Inspect the candidate ranking separately from Google extraction. Never treat missing
  // walking details as confirmation and never use a train or tram reached after >15 minutes.
  function rankDetailedTransit(rows,target){
-  const valid=(rows||[]).map(row=>{const c=candidateDetails(row,target);if(!c)return null;
+  const valid=(rows||[]).map(row=>{if(!row.details_verified)return null;const c=candidateDetails(row,target);if(!c)return null;
    const first=(row.modes||[]).find(x=>/^(train|bus|tram|subway|rail|underground|ferry|light rail)$/i.test(x));
-   if(!/^bus$/i.test(first||'')&&c.first_walk_minutes>15)return null;return {...c,row};}).filter(Boolean);
+   if(!/^bus$/i.test(first||'')&&c.first_walk_minutes>15)return null;
+   // Until the walk preceding a later station can be identified, do not certify
+   // mixed bus/rail trips that contain any over-limit walking leg.
+   if(/^bus$/i.test(first||'')&&(row.modes||[]).some(x=>/^(train|tram|subway|rail|underground|light rail)$/i.test(x))&&row.walking_legs.some(x=>x>15))return null;
+   return {...c,row};}).filter(Boolean);
   const within=valid.filter(x=>x.arrival_gap<=5),pool=within.length?within:valid;
   pool.sort((a,b)=>(a.transfers>=2)-(b.transfers>=2)||a.minutes-b.minutes||a.transfers-b.transfers||a.arrival_gap-b.arrival_gap||b.departure-a.departure);
   return {selected:pool[0]||null,top_three:pool.slice(0,3),within_window:within.length>0};

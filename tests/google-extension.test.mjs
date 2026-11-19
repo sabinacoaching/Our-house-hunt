@@ -5,7 +5,7 @@ import {readFileSync} from 'node:fs';
 const code=readFileSync(new URL('../extension/background.js',import.meta.url),'utf8');
 const parser=readFileSync(new URL('../extension/google-route-parser.js',import.meta.url),'utf8');
 function setup(challenge=false,walkingOnly=false){let closed=0,opened=[],listener;
- const chrome={tabs:{create:async info=>{opened.push(info.url);return {id:42}},get:async()=>({status:'complete'}),remove:async()=>{closed++},onUpdated:{addListener(){},removeListener(){}}},scripting:{executeScript:async({args})=>{if(challenge)throw Error('GOOGLE_VERIFICATION_REQUIRED');if(walkingOnly){assert.equal(args[0].mode,'depart');return [{result:{url:'https://www.google.com/maps/test',rows:[{duration:'8 min',heading:'via Cedar Rd and Billinton Hill',distance:'0.4 mile',modes:['Walking']}]}}]}assert.ok(['arrive','depart'].includes(args[0].mode));return [{result:{url:'https://www.google.com/maps/test',rows:[{duration:'38 min',heading:'7:09 PM—7:47 PM',modes:['Train','Bus']},{duration:'37 min',heading:'7:03 PM—7:40 PM',modes:['Train']}]}}]}},runtime:{onMessage:{addListener:fn=>{listener=fn}}}};
+ const chrome={tabs:{create:async info=>{opened.push(info.url);return {id:42}},get:async()=>({status:'complete'}),remove:async()=>{closed++},onUpdated:{addListener(){},removeListener(){}}},scripting:{executeScript:async({args})=>{if(challenge)throw Error('GOOGLE_VERIFICATION_REQUIRED');if(args[0].phase==='details')return [{result:{details_verified:true,walking_legs:[9]}}];if(walkingOnly){assert.equal(args[0].mode,'depart');return [{result:{url:'https://www.google.com/maps/test',rows:[{duration:'8 min',heading:'via Cedar Rd and Billinton Hill',distance:'0.4 mile',modes:['Walking']}]}}]}assert.ok(['arrive','depart'].includes(args[0].mode));return [{result:{url:'https://www.google.com/maps/test',rows:[{duration:'38 min',heading:'7:09 PM—7:47 PM',modes:['Train','Bus']},{duration:'37 min',heading:'7:03 PM—7:40 PM',modes:['Train']}]}}]}},runtime:{onMessage:{addListener:fn=>{listener=fn}}}};
  const context=vm.createContext({chrome,URL,URLSearchParams,Intl,Date,setTimeout,clearTimeout,console});vm.runInContext(parser,context);vm.runInContext('async function houseHuntReadMapsPage() {}',context);vm.runInContext(code,context);
  return {context,opened,closed:()=>closed,listener:()=>listener};
 }
@@ -30,6 +30,7 @@ test('a faster earlier Google itinerary triggers a later-departure lookup and th
  const opened=[],closed=[],requests=[];
  const chrome={tabs:{create:async info=>{opened.push(info.url);return {id:opened.length}},get:async()=>({status:'complete'}),remove:async id=>closed.push(id),onUpdated:{addListener(){},removeListener(){}}},runtime:{onMessage:{addListener(){}}},scripting:{executeScript:async({args})=>{
   const request=args[0];requests.push(request);
+  if(request.phase==='details')return [{result:{details_verified:true,walking_legs:[9]}}];
   const rows=request.mode==='depart'?[{duration:'41 min',heading:'6:57 AM-7:38 AM',modes:['Train']},{duration:'44 min',heading:'7:04 AM-7:48 AM',modes:['Train']}]:[{duration:'41 min',heading:'6:42 AM-7:23 AM',modes:['Train']},{duration:'53 min',heading:'6:46 AM-7:39 AM',modes:['Train']}];
   return [{result:{url:'https://www.google.com/maps/test',rows}}];
  }}};
@@ -37,7 +38,7 @@ test('a faster earlier Google itinerary triggers a later-departure lookup and th
  vm.runInContext(parser,context);vm.runInContext('async function houseHuntReadMapsPage(){}',context);vm.runInContext(code,context);
  const result=await context.googleRoute({kind:'waterloo',origin:{lat:51.3694953,lon:-.0883864}});
  assert.equal(result.minutes,41);assert.ok(result.departure.endsWith('T06:57:00'));assert.ok(result.arrival.endsWith('T07:38:00'));
- assert.equal(result.departure_probe,'checked');assert.deepEqual(requests.map(x=>x.mode),['arrive','depart']);
- assert.equal(requests[1].time24,'06:54');assert.equal(opened.length,2);assert.equal(closed.length,2);
+ assert.equal(result.departure_probe,'checked');assert.deepEqual(requests.filter(x=>!x.phase).map(x=>x.mode),['arrive','depart']);
+ assert.equal(requests[1].time24,'06:54');assert.ok(opened.length>=2);assert.equal(closed.length,opened.length);
  assert.match(opened[1],/!6e0!/);
 });

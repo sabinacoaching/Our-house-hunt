@@ -22,10 +22,10 @@ test('excludes a 23 minute walk to a tram and falls back to three verified alter
   {duration:'45 min',heading:'7:12 PM - 7:57 PM',modes:['Walk','Train','Bus'],walking_legs:[10]},
   {duration:'42 min',heading:'6:50 PM - 7:32 PM',modes:['Walk','Train'],walking_legs:[]}
  ];
- const r=rankDetailedTransit(rows,1190);assert.equal(r.within_window,false);assert.equal(r.selected.minutes,50);assert.deepEqual(r.top_three.map(x=>x.minutes),[50,51,52]);assert.equal(r.selected.transfers,1);
+ rows.forEach(row=>row.details_verified=true);const r=rankDetailedTransit(rows,1190);assert.equal(r.within_window,false);assert.equal(r.selected.minutes,50);assert.deepEqual(r.top_three.map(x=>x.minutes),[50,51,52]);assert.equal(r.selected.transfers,1);
 });
 test('within five minutes prefer the fastest viable trip and count changes',()=>{
  const {rankDetailedTransit}=globalThis.HouseHuntGoogleRoutes;
  const rows=[{duration:'40 min',heading:'7:05 PM - 7:45 PM',modes:['Walk','Train','Bus','Train'],walking_legs:[10]},{duration:'41 min',heading:'7:07 PM - 7:48 PM',modes:['Walk','Train','Bus'],walking_legs:[9]},{duration:'39 min',heading:'7:06 PM - 7:45 PM',modes:['Walk','Train'],walking_legs:[18]}];
- const r=rankDetailedTransit(rows,1190);assert.equal(r.selected.minutes,41);assert.equal(r.selected.transfers,1);assert.equal(r.within_window,true);
+ rows.forEach(row=>row.details_verified=true);const r=rankDetailedTransit(rows,1190);assert.equal(r.selected.minutes,41);assert.equal(r.selected.transfers,1);assert.equal(r.within_window,true);
 });
