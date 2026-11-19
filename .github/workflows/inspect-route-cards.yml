@@ -1,0 +1,18 @@
+name: Inspect public route cards
+on:
+  push:
+    branches: [work-route-inspect-20261119]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-save --package-lock=false playwright@1.62.1
+      - run: npx playwright install chromium
+      - run: node scripts/inspect-route-cards.mjs
