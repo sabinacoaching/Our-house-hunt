@@ -460,7 +460,7 @@ async function readPropertyFromPage(){
  }
  const agency_website=null;
  if(!listingText)listingText=mainText.split(/\n\s*(?:Zoopla tools|Stamp duty calculator|Similar properties|Mortgage calculator|About the agent)\s*\n/i)[0];
- return {listing_id:location.pathname.match(/\/(?:details|properties)\/(\d+)/)?.[1]||null,source,title,address,agency_name,agency_email,agency_website,agency_address,agency_profile_url,price,bedrooms,bathrooms,wc_count:wcs,floors,floor_area_sqm:area,garden_area_sqm:gardenArea,garden_description:gardenDescription,listing_text:listingText.slice(0,80000),nearby_stations,station_name:stationName,station_distance_miles:stationMiles,station_2_name:station2Name,station_2_distance_miles:station2Miles,latitude,longitude,location_hint,property_type:propertyType,tenure,images:gallery,floorplans:plans,floorplan_status:plans.length?'found-in-original-listing':clickedPlanTab?'tab-opened-but-image-not-found':floorTab?'floorplan-tab-click-failed':'floorplan-tab-not-found',floorplan_diagnostic:{tabFound:!!floorTab,tabClicked:clickedPlanTab,candidateCount:plans.length,error:planTabError},extension_version:'0.20.0'};
+ return {listing_id:location.pathname.match(/\/(?:details|properties)\/(\d+)/)?.[1]||null,source,title,address,agency_name,agency_email,agency_website,agency_address,agency_profile_url,price,bedrooms,bathrooms,wc_count:wcs,floors,floor_area_sqm:area,garden_area_sqm:gardenArea,garden_description:gardenDescription,listing_text:listingText.slice(0,80000),nearby_stations,station_name:stationName,station_distance_miles:stationMiles,station_2_name:station2Name,station_2_distance_miles:station2Miles,latitude,longitude,location_hint,property_type:propertyType,tenure,images:gallery,floorplans:plans,floorplan_status:plans.length?'found-in-original-listing':clickedPlanTab?'tab-opened-but-image-not-found':floorTab?'floorplan-tab-click-failed':'floorplan-tab-not-found',floorplan_diagnostic:{tabFound:!!floorTab,tabClicked:clickedPlanTab,candidateCount:plans.length,error:planTabError},extension_version:'0.21.0'};
  }catch(error){return {listing_id:location.pathname.match(/\/(?:details|properties)\/(\d+)/)?.[1]||null,read_error:String(error?.message||error)}}
 }
 async function readAgencyProfile(expectedName){
@@ -598,23 +598,20 @@ async function googleRoute(input){
    const deadline=hour*60+minute,seen=new Set(),candidates=[];
    for(const row of page.rows){const key=[row.heading,row.duration,(row.modes||[]).join('|')].join('::');if(seen.has(key))continue;seen.add(key);
     const preview=HouseHuntGoogleRoutes.candidateDetails({...row,walking_legs:[1]},deadline);if(preview)candidates.push({...preview,row});}
-   const order=(a,b)=>(a.transfers>=2)-(b.transfers>=2)||a.minutes-b.minutes||a.transfers-b.transfers||a.arrival_gap-b.arrival_gap||b.departure-a.departure;
-   const groups=[candidates.filter(c=>c.arrival_gap<=5).sort(order),candidates.filter(c=>c.arrival_gap>5).sort(order)];
-   for(const [groupIndex,group] of groups.entries()){
-    const confirmed=[];
-    for(const candidate of group){
-     const ref=candidate.row._detail;if(!ref)throw Error('Cannot verify route details');let detailTab;
-     try{
-      detailTab=await chrome.tabs.create({url:ref.url,active:false});await waitForLoad(detailTab.id,30000);
-      const response=await chrome.scripting.executeScript({target:{tabId:detailTab.id},func:houseHuntReadMapsPage,args:[{...args,mode:ref.mode,time24:ref.time24,phase:'details',detailsPage:ref.page,heading:candidate.row.heading,duration:candidate.row.duration}]});
-      const detail=response?.[0]?.result;if(detail?.error)throw Error(detail.error);if(!detail?.details_verified||!Array.isArray(detail.walking_legs))throw Error('Route walking details not verified');
-      const row={...candidate.row,walking_legs:detail.walking_legs,details_verified:true};
-      const evaluated=HouseHuntGoogleRoutes.rankDetailedTransit([row],deadline).selected;if(evaluated)confirmed.push(row);
-     }finally{if(detailTab?.id)await chrome.tabs.remove(detailTab.id).catch(()=>{})}
-     if(confirmed.length>=(groupIndex===0?1:3))break;
-    }
-    if(confirmed.length){detailedSelection=HouseHuntGoogleRoutes.rankDetailedTransit(confirmed,deadline);break}
+   candidates.sort(HouseHuntGoogleRoutes.compareCandidates);
+   const confirmed=[];
+   for(const candidate of candidates){
+    const ref=candidate.row._detail;if(!ref)throw Error('Cannot verify route details');let detailTab;
+    try{
+     detailTab=await chrome.tabs.create({url:ref.url,active:false});await waitForLoad(detailTab.id,30000);
+     const response=await chrome.scripting.executeScript({target:{tabId:detailTab.id},func:houseHuntReadMapsPage,args:[{...args,mode:ref.mode,time24:ref.time24,phase:'details',detailsPage:ref.page,heading:candidate.row.heading,duration:candidate.row.duration}]});
+     const detail=response?.[0]?.result;if(detail?.error)throw Error(detail.error);if(!detail?.details_verified||!Array.isArray(detail.walking_legs)||!Array.isArray(detail.access_walking_legs))throw Error('Route walking details not verified');
+     const row={...candidate.row,walking_legs:detail.walking_legs,access_walking_legs:detail.access_walking_legs,details_verified:true};
+     if(HouseHuntGoogleRoutes.rankDetailedTransit([row],deadline).selected)confirmed.push(row);
+    }finally{if(detailTab?.id)await chrome.tabs.remove(detailTab.id).catch(()=>{})}
+    if(confirmed.length===3)break;
    }
+   detailedSelection=HouseHuntGoogleRoutes.rankDetailedTransit(confirmed,deadline);
    if(!detailedSelection?.selected)throw Error('No verified route met the walking and arrival requirements');
   }
   const parsed=mode==='walking'?HouseHuntGoogleRoutes.readWalk(page.rows):target?detailedSelection.selected:HouseHuntGoogleRoutes.readTransit(page.rows,hour*60+minute,mode);
@@ -623,12 +620,12 @@ async function googleRoute(input){
   const stamp=n=>String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0');
   const dayBefore=new Date(date);dayBefore.setUTCDate(dayBefore.getUTCDate()-1);
   const depDate=parsed.departure>parsed.arrival?dayBefore.toISOString().slice(0,10):dateISO;
-  return {station_id:stationNamed?station.station_id:null,destination_name:stationNamed?station.name:null,selection_version:target?'walk-limited-v1':'pareto-arrival-v2',departure_probe:probeStatus,alternatives:page.rows,...(target?{walking_legs:parsed.row.walking_legs,first_walk_minutes:parsed.first_walk_minutes,transfers:parsed.transfers,warning_two_transfers:parsed.transfers>=2,within_arrival_window:detailedSelection.within_window,selected_candidates:detailedSelection.top_three.map(x=>({minutes:x.minutes,departure:x.departure,arrival:x.arrival,arrival_gap:x.arrival_gap,transfers:x.transfers,first_walk_minutes:x.first_walk_minutes}))}:{}),minutes:parsed.minutes,departure:depDate+'T'+stamp(parsed.departure)+':00',arrival:dateISO+'T'+stamp(parsed.arrival)+':00',date:dateISO,desired_arrival:target?.time||null,source:'Google Maps',origin,destination,url:page.url};
+  return {station_id:stationNamed?station.station_id:null,destination_name:stationNamed?station.name:null,selection_version:target?'departure-balanced-v1':'pareto-arrival-v2',departure_probe:probeStatus,alternatives:page.rows,...(target?{walking_legs:parsed.row.walking_legs,first_walk_minutes:parsed.first_walk_minutes,transfers:parsed.transfers,warning_two_transfers:parsed.transfers>=2,access_walking_legs:parsed.row.access_walking_legs,selected_candidates:detailedSelection.top_three.map(x=>({minutes:x.minutes,departure:x.departure,arrival:x.arrival,arrival_gap:x.arrival_gap,transfers:x.transfers,first_walk_minutes:x.first_walk_minutes}))}:{}),minutes:parsed.minutes,departure:depDate+'T'+stamp(parsed.departure)+':00',arrival:dateISO+'T'+stamp(parsed.arrival)+':00',date:dateISO,desired_arrival:target?.time||null,source:'Google Maps',origin,destination,url:page.url};
  }finally{if(tab?.id)await chrome.tabs.remove(tab.id).catch(()=>{})}
 }
 chrome.runtime.onMessage.addListener((req,sender,sendResponse)=>{
  if(!/^https:\/\/sabinacoaching\.github\.io\/(?:our-house-hunt|Our-house-hunt)\//.test(sender.url||''))return false;
- if(req.action==='PING'){sendResponse({ok:true,data:{extension:'Our House Hunt',version:'0.20.0'}});return false;}
+ if(req.action==='PING'){sendResponse({ok:true,data:{extension:'Our House Hunt',version:'0.21.0'}});return false;}
  if(!['IMPORT_URL','FETCH_IMAGE','GOOGLE_ROUTE'].includes(req.action))return false;
  (async()=>{try{const data=req.action==='IMPORT_URL'?await extract(req.url):req.action==='GOOGLE_ROUTE'?await googleRoute(req.route):await fetchImage(req.url);sendResponse({ok:true,data})}catch(e){sendResponse({ok:false,error:e.message})}})();
  return true;

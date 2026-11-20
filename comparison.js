@@ -282,7 +282,7 @@ function journeySummary(p,d){
  if(v&&Number.isFinite(Number(v.minutes))&&v.minutes>0){
    const verified=v.audit_version==='google-address-validated-v1'&&v.address===p.address;
    const label=v.manual_override===true?'manual':verified?'Google':'';
-   return Math.round(v.minutes)+' min'+(label?' · '+label:'');
+   return Math.round(v.minutes)+' min'+(v.warning_two_transfers?' !':'')+(label?' · '+label:'');
  }
  return '—';
 }

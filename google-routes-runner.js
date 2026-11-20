@@ -18,11 +18,11 @@ function nextTuesday(){const now=new Date(),parts=Object.fromEntries(new Intl.Da
 
 // Every step is validated and saved for the same original-listing point. Failed
 // steps remain pending; a retry resumes them and never discards completed routes.
-export async function calculateGoogleRoutes(id,{sb,extension,progress=()=>{},onPointSaved=async()=>{},onSaved=onPointSaved,routingDate=null,delay=ms=>new Promise(r=>setTimeout(r,ms))}){
+export async function calculateGoogleRoutes(id,{sb,extension,progress=()=>{},onPointSaved=async()=>{},onSaved=onPointSaved,routingDate=null,refreshJourneys=false,delay=ms=>new Promise(r=>setTimeout(r,ms))}){
  async function read(){const r=await sb.from('properties').select('*').eq('id',id).single();if(r.error||!r.data)throw r.error||Error('House not found');if(r.data.status==='deleted')throw Error('House was deleted');return r.data}
  let p=await read();
  const saved=p.import_diagnostics||{},savedSource=saved.source_location;
- if(saved.route_pending!==true&&saved.google_routes_version==='google-maps-ui-v2'&&savedSource?.listing_url===p.url&&savedSource.address_input===p.address&&Number(savedSource.latitude)===Number(p.latitude)&&Number(savedSource.longitude)===Number(p.longitude))return {alreadyDone:true};
+ if(!refreshJourneys&&saved.route_pending!==true&&saved.google_routes_version==='google-maps-ui-v2'&&savedSource?.listing_url===p.url&&savedSource.address_input===p.address&&Number(savedSource.latitude)===Number(p.latitude)&&Number(savedSource.longitude)===Number(p.longitude))return {alreadyDone:true};
  let listing=null,listingWarning=null;
  let d=p.import_diagnostics||{};
  const hasSource=()=>validListingLocationHint(d.source_location,p.address)&&d.source_location.listing_url===p.url&&d.source_location.address_input===p.address&&p.latitude!=null&&p.longitude!=null&&Number(d.source_location.latitude)===Number(p.latitude)&&Number(d.source_location.longitude)===Number(p.longitude);
@@ -44,7 +44,7 @@ export async function calculateGoogleRoutes(id,{sb,extension,progress=()=>{},onP
   p=result.data;d=p.import_diagnostics;await onPointSaved();
  }
  const completed=d.source_location;
- if(d.route_pending!==true&&d.google_routes_version==='google-maps-ui-v2'&&completed?.listing_url===p.url&&completed.address_input===p.address&&Number(completed.latitude)===Number(p.latitude)&&Number(completed.longitude)===Number(p.longitude))return {alreadyDone:true};
+ if(!refreshJourneys&&d.route_pending!==true&&d.google_routes_version==='google-maps-ui-v2'&&completed?.listing_url===p.url&&completed.address_input===p.address&&Number(completed.latitude)===Number(p.latitude)&&Number(completed.longitude)===Number(p.longitude))return {alreadyDone:true};
  let source=d.source_location;
  if(!hasSource()){
   progress('Reading the original listing map: '+p.address);
@@ -65,6 +65,7 @@ export async function calculateGoogleRoutes(id,{sb,extension,progress=()=>{},onP
  const date=routingDate||nextTuesday(),old=p.import_diagnostics?.google_routes_work;
  const reusable=old?.version==='google-pipeline-v3'&&old.origin===originKey&&old.address===p.address&&old.listing_url===p.url;
  const work=reusable?structuredClone(old):{version:'google-pipeline-v3',job_id:crypto.randomUUID(),origin:originKey,address:p.address,listing_url:p.url,walks:{},google:{stations:[],journeys:{}}};
+ if(refreshJourneys){work.google.journeys={};work.job_id=crypto.randomUUID()}
  if(work.date&&work.date!==date){work.google.journeys={};work.google.stations=(work.google.stations||[]).map(x=>x?{walking:x.walking}:null)}
  work.date=date;work.errors={};
  work.listing_stations=listing?.nearby_stations||d.nearby_stations||work.listing_stations||[];
@@ -83,7 +84,7 @@ export async function calculateGoogleRoutes(id,{sb,extension,progress=()=>{},onP
   }
   throw Error('House changed during calculation; the saved user data was retained');
  }
- async function route(kind,destination){await delay(250);const value=await extension('GOOGLE_ROUTE',{route:{kind,origin,...(destination?{destination}:{})}},130000);if(kind!=='station_walk'&&!value?.unavailable&&value?.date!==date)throw Error('Google returned a different timetable date');return {...value,calculated_at:new Date().toISOString()}}
+ async function route(kind,destination){await delay(250);const value=await extension('GOOGLE_ROUTE',{route:{kind,origin,...(destination?{destination}:{})}},260000);if(kind!=='station_walk'&&!value?.unavailable&&value?.date!==date)throw Error('Google returned a different timetable date');return {...value,calculated_at:new Date().toISOString()}}
  async function step(key,fn,visible=true){
   const before=structuredClone(google),beforePreview=work.preview;
   for(let attempt=0;attempt<2;attempt++){

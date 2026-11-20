@@ -159,3 +159,14 @@ test('the source listing map starts journeys without Street View and stays the r
  assert.equal(x.row().journey_estimates.waterloo.origin_source,'Listing map');assert.equal(x.row().import_diagnostics.route_pending,false);
  const requests=x.calls.length;assert.deepEqual(await calculateGoogleRoutes(id,{...x.options(),extension}),{alreadyDone:true});assert.equal(x.calls.length,requests);
 });
+test('explicit journey refresh recalculates destinations, reuses stations and preserves manual journeys',async()=>{
+ const x=fixture();await calculateGoogleRoutes(id,x.options());const before=structuredClone(x.row());x.calls.length=0;
+ await calculateGoogleRoutes(id,{...x.options(),refreshJourneys:true});
+ assert.deepEqual(x.calls,['waterloo','dilly','dancelab']);assert.deepEqual(x.row().station_commutes.google_routes.results,before.station_commutes.google_routes.results);
+ assert.deepEqual(x.row().journey_estimates.dilly,before.journey_estimates.dilly);assert.equal(x.row().import_diagnostics.route_pending,false);
+});
+test('failed destination refresh retains its prior visible journey and retries only the missing destination',async()=>{
+ const x=fixture();await calculateGoogleRoutes(id,x.options());const previous=structuredClone(x.row().journey_estimates.waterloo),original=x.extension;
+ await assert.rejects(()=>calculateGoogleRoutes(id,{...x.options(),refreshJourneys:true,extension:async(action,args)=>args?.route?.kind==='waterloo'?Promise.reject(Error('network failed')):original(action,args)}));
+ assert.deepEqual(x.row().journey_estimates.waterloo,previous);x.calls.length=0;await calculateGoogleRoutes(id,x.options());assert.deepEqual(x.calls,['waterloo']);
+});

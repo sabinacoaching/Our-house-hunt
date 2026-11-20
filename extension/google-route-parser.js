@@ -49,17 +49,17 @@
  }
  // Inspect the candidate ranking separately from Google extraction. Never treat missing
  // walking details as confirmation and never use a train or tram reached after >15 minutes.
+ function compareCandidates(a,b){
+  // target - departure = travel duration + early-arrival waiting. Latest departure
+  // therefore minimizes the whole time committed to this appointment.
+  return (a.transfers>=2)-(b.transfers>=2)||b.departure-a.departure||a.minutes-b.minutes||a.transfers-b.transfers||a.arrival_gap-b.arrival_gap;
+ }
  function rankDetailedTransit(rows,target){
   const valid=(rows||[]).map(row=>{if(!row.details_verified)return null;const c=candidateDetails(row,target);if(!c)return null;
-   const first=(row.modes||[]).find(x=>/^(train|bus|tram|subway|rail|underground|ferry|light rail)$/i.test(x));
-   if(!/^bus$/i.test(first||'')&&c.first_walk_minutes>15)return null;
-   // Until the walk preceding a later station can be identified, do not certify
-   // mixed bus/rail trips that contain any over-limit walking leg.
-   if(/^bus$/i.test(first||'')&&(row.modes||[]).some(x=>/^(train|tram|subway|rail|underground|light rail)$/i.test(x))&&row.walking_legs.some(x=>x>15))return null;
-   return {...c,row};}).filter(Boolean);
-  const within=valid.filter(x=>x.arrival_gap<=5),pool=within.length?within:valid;
-  pool.sort((a,b)=>(a.transfers>=2)-(b.transfers>=2)||a.minutes-b.minutes||a.transfers-b.transfers||a.arrival_gap-b.arrival_gap||b.departure-a.departure);
-  return {selected:pool[0]||null,top_three:pool.slice(0,3),within_window:within.length>0};
+   const access=row.access_walking_legs;
+   if(!Array.isArray(access)||access.some(x=>!Number.isFinite(x)||x<0||x>15))return null;
+   return {...c,row};}).filter(Boolean).sort(compareCandidates);
+  return {selected:valid[0]||null,top_three:valid.slice(0,3)};
  }
  function readWalk(rows){
   const options=[];
@@ -68,5 +68,5 @@
    options.push({walking_minutes:minutes,walking_miles:Math.round(miles*1000)/1000,display_distance:r.distance});
   }return options.sort((a,b)=>a.walking_minutes-b.walking_minutes||a.walking_miles-b.walking_miles)[0]||null;
  }
- root.HouseHuntGoogleRoutes={duration,times,readTransit,readWalk,readWalkingLegs,candidateDetails,rankDetailedTransit};
+ root.HouseHuntGoogleRoutes={duration,times,readTransit,readWalk,readWalkingLegs,candidateDetails,compareCandidates,rankDetailedTransit};
 })(globalThis);

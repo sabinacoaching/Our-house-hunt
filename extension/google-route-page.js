@@ -49,16 +49,19 @@ async function houseHuntReadMapsPage(request){
     const body=document.body?.innerText||'';if(/\nWalk\s*\n/i.test(body)&&/\bfrom\s+.+\bto\s+/is.test(body))return {body};
     const button=[...document.querySelectorAll('button,[role="button"],a')].find(x=>(x.innerText||'').trim()==='Details');if(button&&!detailsClicked){detailsClicked=true;button.click()}return null;
    },'Google itinerary details',25000);
-   const lines=detail.body.split(/\r?\n/).map(x=>x.trim()).filter(Boolean),walking=[];
+   const lines=detail.body.split(/\r?\n/).map(x=>x.trim()).filter(Boolean),walking=[];let lastWalk=-1;
    for(let i=0;i<lines.length;i++)if(/^walk(?:ing)?$/i.test(lines[i])){
-    let minutes=null;for(let j=i+1;j<Math.min(lines.length,i+5);j++){
+    lastWalk=i;let minutes=null;for(let j=i+1;j<Math.min(lines.length,i+5);j++){
      if(/^(?:walk|train|bus|tram|underground|subway)$/i.test(lines[j]))break;
      const m=lines[j].match(/^(?:about\s+)?(?:(\d+)\s*(?:h(?:ou)?rs?|hours?)\s*)?(?:(\d+)\s*(?:mins?|minutes?))\b/i);
      if(m){minutes=Number(m[1]||0)*60+Number(m[2]||0);break}
     }if(minutes==null)throw Error('Route details: walking time unavailable');walking.push(minutes);
    }
    if(!walking.length)throw Error('Route details: walking legs unavailable');
-   return {walking_legs:walking,details_verified:true};
+   const tail=lines.slice(lastWalk+1).join(' ').toLowerCase().replace(/[^a-z0-9]/g,'');
+   const finalWalk=lines.slice(lastWalk+1).filter(line=>/^\d{1,2}:\d{2}\s*(?:AM|PM)?$/i.test(line.replace(/[\u00a0\u202f]/g,' '))).length<=1&&(request.destinationCheck||[]).length>0&&(request.destinationCheck||[]).every(part=>tail.includes(part.toLowerCase().replace(/[^a-z0-9]/g,'')));
+   // Multiple subsequent event times indicate another transit leg after this walk.
+   return {walking_legs:walking,access_walking_legs:finalWalk?walking.slice(0,-1):walking,details_verified:true};
   }
   const later=request.mode==='arrive'?[...document.querySelectorAll('button')].find(x=>/later trips/i.test(x.getAttribute('aria-label')||'')):null;
   if(request.phase==='later'){

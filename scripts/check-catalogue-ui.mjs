@@ -57,7 +57,7 @@ await page.addInitScript(()=>{
  window.addEventListener('message',event=>{
   const request=event.data;if(request?.source!=='our-house-hunt-site')return;
   let data,ok=true,error;
-  if(request.action==='PING')data={extension:'Our House Hunt',version:window.__outdoorFixture?'0.20.0':'0.18.0'};
+  if(request.action==='PING')data={extension:'Our House Hunt',version:'0.21.0'};
   else if(request.action==='IMPORT_URL'&&window.__holdImport)return;
   else if(request.action==='IMPORT_URL'&&window.__outdoorFixture)data={listing_text:'Rear garden 12.0m x 5.0m\n\nOff-street parking for two cars.'};
   else if(request.action==='GOOGLE_ROUTE'){

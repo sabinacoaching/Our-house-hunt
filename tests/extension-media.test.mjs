@@ -80,7 +80,7 @@ test('an open Zoopla gallery cannot replace the complete address with the proper
  const headings=[{textContent:'2 bed terraced house for sale',closest:()=>null},{textContent:'2 bed terraced house for saleAlpine Close, Park Hill CR0',closest:()=>null}];
  const result=await runPage({host:'www.zoopla.co.uk',path:'/for-sale/details/123',body:'£439,999\n2 bedroom house',script,headings});
  assert.equal(result.address,'Alpine Close, Park Hill CR0');
- assert.equal(result.extension_version,'0.20.0');
+ assert.equal(result.extension_version,'0.21.0');
 });
 test('streamed Zoopla descriptions resolve UTF-8 text records and supply the matching map fallback',async()=>{
  const detail='Private rear garden with side access. Off-street parking for two cars. Café nearby.';

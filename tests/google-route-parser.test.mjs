@@ -12,20 +12,26 @@ test('walk detail text reads actual legs instead of the total walking time',()=>
  const {readWalkingLegs}=globalThis.HouseHuntGoogleRoutes;
  assert.deepEqual(readWalkingLegs('6:47 PM\nWalk\n\nAbout 23 min, 1.1 mi\nMitcham Junction\nTram\nWalk\n\nAbout 4 min\nWimbledon'),[23,4]);
 });
-test('excludes a 23 minute walk to a tram and falls back to three verified alternatives',()=>{
+test('rejects long station walks, selects latest departure and compares three verified options',()=>{
  const {rankDetailedTransit}=globalThis.HouseHuntGoogleRoutes;
  const rows=[
-  {duration:'58 min',heading:'6:47 PM - 7:45 PM',modes:['Walk','Tram','Underground'],walking_legs:[23,4,4]},
-  {duration:'50 min',heading:'6:43 PM - 7:33 PM',modes:['Walk','Train','Bus'],walking_legs:[11,2,1]},
-  {duration:'51 min',heading:'6:44 PM - 7:35 PM',modes:['Walk','Train','Bus'],walking_legs:[10,3]},
-  {duration:'52 min',heading:'6:46 PM - 7:38 PM',modes:['Walk','Train','Bus'],walking_legs:[12,2]},
-  {duration:'45 min',heading:'7:12 PM - 7:57 PM',modes:['Walk','Train','Bus'],walking_legs:[10]},
-  {duration:'42 min',heading:'6:50 PM - 7:32 PM',modes:['Walk','Train'],walking_legs:[]}
- ];
- rows.forEach(row=>row.details_verified=true);const r=rankDetailedTransit(rows,1190);assert.equal(r.within_window,false);assert.equal(r.selected.minutes,50);assert.deepEqual(r.top_three.map(x=>x.minutes),[50,51,52]);assert.equal(r.selected.transfers,1);
+  {duration:'58 min',heading:'6:47 PM - 7:45 PM',modes:['Walk','Tram','Subway'],walking_legs:[23,4,4],access_walking_legs:[23,4]},
+  {duration:'63 min',heading:'6:43 PM - 7:46 PM',modes:['Walk','Bus'],walking_legs:[15,9],access_walking_legs:[15]},
+  {duration:'50 min',heading:'6:43 PM - 7:33 PM',modes:['Walk','Train','Bus'],walking_legs:[11,2,1],access_walking_legs:[11,2]},
+  {duration:'51 min',heading:'6:44 PM - 7:35 PM',modes:['Walk','Train','Bus'],walking_legs:[10,3],access_walking_legs:[10]},
+  {duration:'52 min',heading:'6:46 PM - 7:38 PM',modes:['Walk','Train','Bus'],walking_legs:[12,2],access_walking_legs:[12]},
+  {duration:'45 min',heading:'7:12 PM - 7:57 PM',modes:['Walk','Train','Bus'],walking_legs:[10],access_walking_legs:[10]}
+ ].map(row=>({...row,details_verified:true}));
+ const r=rankDetailedTransit(rows,1190);assert.equal(r.selected.minutes,52);assert.deepEqual(r.top_three.map(x=>x.minutes),[52,51,50]);
+ const pair=rankDetailedTransit(rows.filter(x=>[50,63].includes(x.duration.split(' ')[0]*1)),1190);assert.equal(pair.selected.minutes,50);
 });
-test('within five minutes prefer the fastest viable trip and count changes',()=>{
+test('two or more changes are a reserve; missing or over-limit transfer walks are rejected',()=>{
  const {rankDetailedTransit}=globalThis.HouseHuntGoogleRoutes;
- const rows=[{duration:'40 min',heading:'7:05 PM - 7:45 PM',modes:['Walk','Train','Bus','Train'],walking_legs:[10]},{duration:'41 min',heading:'7:07 PM - 7:48 PM',modes:['Walk','Train','Bus'],walking_legs:[9]},{duration:'39 min',heading:'7:06 PM - 7:45 PM',modes:['Walk','Train'],walking_legs:[18]}];
- rows.forEach(row=>row.details_verified=true);const r=rankDetailedTransit(rows,1190);assert.equal(r.selected.minutes,41);assert.equal(r.selected.transfers,1);assert.equal(r.within_window,true);
+ const base={duration:'40 min',heading:'7:05 PM - 7:45 PM',walking_legs:[10,20],details_verified:true};
+ const bad={...base,modes:['Bus','Train'],access_walking_legs:[10,18]};
+ const many={...base,modes:['Train','Bus','Train'],access_walking_legs:[10]};
+ const simple={...base,duration:'41 min',heading:'7:04 PM - 7:45 PM',modes:['Train','Bus'],access_walking_legs:[10]};
+ assert.equal(rankDetailedTransit([bad,{...many,details_verified:false}],1190).selected,null);
+ assert.equal(rankDetailedTransit([many,simple],1190).selected.minutes,41);
+ assert.equal(rankDetailedTransit([many],1190).selected.transfers,2);
 });
