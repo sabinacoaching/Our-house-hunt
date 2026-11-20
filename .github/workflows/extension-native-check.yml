@@ -70,4 +70,5 @@ jobs:
       - if: steps.routing_baseline.outputs.unchanged != 'true'
         run: xvfb-run --auto-servernum node scripts/check-native-extension.mjs
       - if: steps.routing_baseline.outputs.unchanged != 'true'
-        run: xvfb-run --auto-servernum node scripts/check-routing-live.mjs
+        name: Check changed journey selection against Google Maps
+        run: xvfb-run --auto-servernum node scripts/check-journey-selection-live.mjs
