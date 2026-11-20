@@ -12,7 +12,7 @@ test('walk detail text reads actual legs instead of the total walking time',()=>
  const {readWalkingLegs}=globalThis.HouseHuntGoogleRoutes;
  assert.deepEqual(readWalkingLegs('6:47 PM\nWalk\n\nAbout 23 min, 1.1 mi\nMitcham Junction\nTram\nWalk\n\nAbout 4 min\nWimbledon'),[23,4]);
 });
-test('rejects long station walks, selects latest departure and compares three verified options',()=>{
+test('deprioritizes long station walks, selects latest departure and compares three verified options',()=>{
  const {rankDetailedTransit}=globalThis.HouseHuntGoogleRoutes;
  const rows=[
   {duration:'58 min',heading:'6:47 PM - 7:45 PM',modes:['Walk','Tram','Subway'],walking_legs:[23,4,4],access_walking_legs:[23,4]},
@@ -25,13 +25,15 @@ test('rejects long station walks, selects latest departure and compares three ve
  const r=rankDetailedTransit(rows,1190);assert.equal(r.selected.minutes,52);assert.deepEqual(r.top_three.map(x=>x.minutes),[52,51,50]);
  const pair=rankDetailedTransit(rows.filter(x=>[50,63].includes(x.duration.split(' ')[0]*1)),1190);assert.equal(pair.selected.minutes,50);
 });
-test('two or more changes are a reserve; missing or over-limit transfer walks are rejected',()=>{
+test('walking of 17 minutes and many changes are preferences; a verified fallback is always retained',()=>{
  const {rankDetailedTransit}=globalThis.HouseHuntGoogleRoutes;
- const base={duration:'40 min',heading:'7:05 PM - 7:45 PM',walking_legs:[10,20],details_verified:true};
- const bad={...base,modes:['Bus','Train'],access_walking_legs:[10,18]};
- const many={...base,modes:['Train','Bus','Train'],access_walking_legs:[10]};
- const simple={...base,duration:'41 min',heading:'7:04 PM - 7:45 PM',modes:['Train','Bus'],access_walking_legs:[10]};
- assert.equal(rankDetailedTransit([bad,{...many,details_verified:false}],1190).selected,null);
- assert.equal(rankDetailedTransit([many,simple],1190).selected.minutes,41);
+ const base={duration:'40 min',heading:'7:05 PM - 7:45 PM',details_verified:true,modes:['Train','Bus']};
+ const comfortable={...base,walking_legs:[16,3]};const long={...base,heading:'7:10 PM - 7:50 PM',walking_legs:[17,3]};
+ assert.equal(rankDetailedTransit([long,comfortable],1190).selected.heading,comfortable.heading);
+ assert.equal(rankDetailedTransit([long],1190).selected.max_walk_minutes,17);
+ assert.equal(rankDetailedTransit([{...long,walking_legs:[24,3]}],1190).selected.max_walk_minutes,24);
+ assert.equal(rankDetailedTransit([{...comfortable,details_verified:false}],1190).selected,null);
+ const many={...base,modes:['Train','Bus','Train'],walking_legs:[5,3]};
+ assert.equal(rankDetailedTransit([many,comfortable],1190).selected.transfers,1);
  assert.equal(rankDetailedTransit([many],1190).selected.transfers,2);
 });

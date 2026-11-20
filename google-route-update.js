@@ -18,10 +18,7 @@ export function buildGoogleRouteUpdate(p,location,stationPreview,google,{partial
  });
  const next={...(p.journey_estimates||{})},automatic={};
  const deadlines={dancelab:'19:50',dilly:'18:40',waterloo:'07:40'};
- for(const id of ['dancelab','dilly','waterloo']){const v=google?.journeys?.[id];if(!v&&partial)continue;if(v?.unavailable===true){
-   if(v.source!=='Google Maps'||v.origin!==origin||v.selection_version!=='departure-balanced-v1'||v.reason!=='walk_limit'||!/^\d{4}-\d{2}-\d{2}$/.test(v.date||'')||!v.rejected_candidates?.length||!v.rejected_candidates.every(c=>Array.isArray(c.access_walking_legs)&&c.access_walking_legs.some(n=>Number.isFinite(n)&&n>15)))throw Error('Unverified unavailable journey '+id);
-   const item={...v,id,minutes:null,calculated_at:v.calculated_at||google.calculated_at};automatic[id]=item;if(next[id]?.manual_override!==true&&next[id]?.source!=='manual')next[id]=item;continue;
-  }if(!v||v.source!=='Google Maps'||v.origin!==origin||!Number.isFinite(Number(v.minutes))||!v.departure||!v.arrival||!/^\d{4}-\d{2}-\d{2}$/.test(v.date||''))throw Error('Missing Google journey '+id);
+ for(const id of ['dancelab','dilly','waterloo']){const v=google?.journeys?.[id];if(!v&&partial)continue;if(!v||v.source!=='Google Maps'||v.origin!==origin||!Number.isFinite(Number(v.minutes))||!v.departure||!v.arrival||!/^\d{4}-\d{2}-\d{2}$/.test(v.date||''))throw Error('Missing Google journey '+id);
   const dep=Date.parse(v.departure+'Z'),arr=Date.parse(v.arrival+'Z'),deadline=Date.parse(v.date+'T'+deadlines[id]+':00Z');
   if(!Number.isFinite(dep)||!Number.isFinite(arr)||arr<=dep||!(Number(v.minutes)>0)||arr>deadline||Math.abs((arr-dep)/60000-Number(v.minutes))>1)throw Error('Invalid Google journey timing '+id);
   const item={...v,id,minutes:Number(v.minutes),origin_input:p.address,origin_source:source.source==='listing-map'?'Listing map':'Listing Street View',destination_address:v.destination,calculated_at:v.calculated_at||google.calculated_at,calculation_version:'google-visible-v2'};automatic[id]=item;if(next[id]?.manual_override!==true&&next[id]?.source!=='manual')next[id]=item;

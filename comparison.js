@@ -279,7 +279,6 @@ const journeyFresh=p=>travelDestinations.every(d=>{
 });
 function journeySummary(p,d){
  const v=p.journey_estimates?.[d.id];
- if(v?.unavailable&&v.reason==='walk_limit')return 'No route within walking limit';
  if(v&&Number.isFinite(Number(v.minutes))&&v.minutes>0){
    const verified=v.audit_version==='google-address-validated-v1'&&v.address===p.address;
    const label=v.manual_override===true?'manual':verified?'Google':'';

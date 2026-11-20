@@ -45,19 +45,17 @@
   if(!modes.length)return null;const steps=Array.isArray(row.walking_legs)?row.walking_legs:[];
   if(!steps.length)return null;
   const firstWalk=Number(steps[0]);if(!Number.isFinite(firstWalk)||firstWalk<0)return null;
-  return {departure:t.departure,arrival:t.arrival,minutes,heading:row.heading,arrival_gap:target-t.arrival,transfers:Math.max(0,modes.length-1),first_walk_minutes:firstWalk};
+  return {departure:t.departure,arrival:t.arrival,minutes,heading:row.heading,arrival_gap:target-t.arrival,transfers:Math.max(0,modes.length-1),first_walk_minutes:firstWalk,max_walk_minutes:Math.max(...steps),total_walk_minutes:steps.reduce((a,b)=>a+b,0)};
  }
- // Inspect the candidate ranking separately from Google extraction. Never treat missing
- // walking details as confirmation and never use a train or tram reached after >15 minutes.
+ // Walking and transfers are preferences, never reasons to suppress a verified trip.
+ function inconvenience(c){return (c.max_walk_minutes>=17?1:0)+(c.transfers>=2?1:0)}
  function compareCandidates(a,b){
-  // target - departure = travel duration + early-arrival waiting. Latest departure
-  // therefore minimizes the whole time committed to this appointment.
-  return (a.transfers>=2)-(b.transfers>=2)||(b.departure>b.arrival?b.departure-1440:b.departure)-(a.departure>a.arrival?a.departure-1440:a.departure)||a.minutes-b.minutes||a.transfers-b.transfers||a.arrival_gap-b.arrival_gap;
+  const pa=inconvenience(a),pb=inconvenience(b);
+  return pa-pb||(pa?(a.transfers-b.transfers||a.max_walk_minutes-b.max_walk_minutes||a.total_walk_minutes-b.total_walk_minutes):0)||(b.departure>b.arrival?b.departure-1440:b.departure)-(a.departure>a.arrival?a.departure-1440:a.departure)||a.minutes-b.minutes||a.transfers-b.transfers||a.arrival_gap-b.arrival_gap;
  }
  function rankDetailedTransit(rows,target){
   const valid=(rows||[]).map(row=>{if(!row.details_verified)return null;const c=candidateDetails(row,target);if(!c)return null;
-   const access=row.access_walking_legs;
-   if(!Array.isArray(access)||access.some(x=>!Number.isFinite(x)||x<0||x>15))return null;
+   if(!row.walking_legs.every(x=>Number.isFinite(x)&&x>=0))return null;
    return {...c,row};}).filter(Boolean).sort(compareCandidates);
   return {selected:valid[0]||null,top_three:valid.slice(0,3)};
  }
@@ -68,5 +66,5 @@
    options.push({walking_minutes:minutes,walking_miles:Math.round(miles*1000)/1000,display_distance:r.distance});
   }return options.sort((a,b)=>a.walking_minutes-b.walking_minutes||a.walking_miles-b.walking_miles)[0]||null;
  }
- root.HouseHuntGoogleRoutes={duration,times,readTransit,readWalk,readWalkingLegs,candidateDetails,compareCandidates,rankDetailedTransit};
+ root.HouseHuntGoogleRoutes={duration,times,readTransit,readWalk,readWalkingLegs,candidateDetails,inconvenience,compareCandidates,rankDetailedTransit};
 })(globalThis);

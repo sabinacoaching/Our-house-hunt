@@ -596,10 +596,10 @@ async function googleRoute(input){
   let detailedSelection=null;
   if(target){
    const deadline=hour*60+minute,seen=new Set(),candidates=[];
-   for(const row of page.rows){const key=[row.heading,row.duration,(row.modes||[]).join('|')].join('::');if(seen.has(key))continue;seen.add(key);
+   for(const row of page.rows){const key=[row.heading,row.duration,(row.modes||[]).filter(x=>/^(walk|train|bus|tram|subway|rail|underground|ferry|light rail)$/i.test(x)).join('|')].join('::');if(seen.has(key))continue;seen.add(key);
     const preview=HouseHuntGoogleRoutes.candidateDetails({...row,walking_legs:[1]},deadline);if(preview)candidates.push({...preview,row});}
    candidates.sort(HouseHuntGoogleRoutes.compareCandidates);
-   const confirmed=[],rejected=[];
+   const confirmed=[];
    for(const candidate of candidates){
     const ref=candidate.row._detail;if(!ref)throw Error('Cannot verify route details');let detailTab;
     try{
@@ -607,12 +607,12 @@ async function googleRoute(input){
      const response=await chrome.scripting.executeScript({target:{tabId:detailTab.id},func:houseHuntReadMapsPage,args:[{...args,mode:ref.mode,time24:ref.time24,phase:'details',detailsPage:ref.page,heading:candidate.row.heading,duration:candidate.row.duration}]});
      const detail=response?.[0]?.result;if(detail?.error)throw Error(detail.error);if(!detail?.details_verified||!Array.isArray(detail.walking_legs)||!Array.isArray(detail.access_walking_legs))throw Error('Route walking details not verified');
      const row={...candidate.row,walking_legs:detail.walking_legs,access_walking_legs:detail.access_walking_legs,details_verified:true};
-     if(HouseHuntGoogleRoutes.rankDetailedTransit([row],deadline).selected)confirmed.push(row);else rejected.push({heading:row.heading,duration:row.duration,access_walking_legs:row.access_walking_legs});
+     if(HouseHuntGoogleRoutes.rankDetailedTransit([row],deadline).selected)confirmed.push(row);
     }finally{if(detailTab?.id)await chrome.tabs.remove(detailTab.id).catch(()=>{})}
-    if(confirmed.length===3)break;
+    if(confirmed.filter(row=>HouseHuntGoogleRoutes.inconvenience(HouseHuntGoogleRoutes.candidateDetails(row,deadline))===0).length>=3)break;
    }
    detailedSelection=HouseHuntGoogleRoutes.rankDetailedTransit(confirmed,deadline);
-   if(!detailedSelection?.selected){if(!rejected.length)throw Error('No verifiable Google route candidates');return {unavailable:true,reason:'walk_limit',selection_version:'departure-balanced-v1',rejected_candidates:rejected,date:dateISO,desired_arrival:target.time,source:'Google Maps',origin,destination,url:page.url}}
+   if(!detailedSelection?.selected)throw Error('No verified Google itinerary details available');
   }
   const parsed=mode==='walking'?HouseHuntGoogleRoutes.readWalk(page.rows):target?detailedSelection.selected:HouseHuntGoogleRoutes.readTransit(page.rows,hour*60+minute,mode);
   if(!parsed){if(kind==='station_transit'&&page.rows.some(r=>(r.modes||[]).some(m=>/^walk(?:ing)?$/i.test(m)))&&page.rows.every(r=>(r.modes||[]).length&&(r.modes||[]).every(m=>/^walk(?:ing)?$/i.test(m))))return {unavailable:true,source:'Google Maps',origin,destination,station_id:stationNamed?station.station_id:null,destination_name:stationNamed?station.name:null,url:page.url};throw Error('No valid Google Maps route for the requested time')}
@@ -620,7 +620,7 @@ async function googleRoute(input){
   const stamp=n=>String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0');
   const dayBefore=new Date(date);dayBefore.setUTCDate(dayBefore.getUTCDate()-1);
   const depDate=parsed.departure>parsed.arrival?dayBefore.toISOString().slice(0,10):dateISO;
-  return {station_id:stationNamed?station.station_id:null,destination_name:stationNamed?station.name:null,selection_version:target?'departure-balanced-v1':'pareto-arrival-v2',departure_probe:probeStatus,alternatives:page.rows,...(target?{walking_legs:parsed.row.walking_legs,first_walk_minutes:parsed.first_walk_minutes,transfers:parsed.transfers,warning_two_transfers:parsed.transfers>=2,access_walking_legs:parsed.row.access_walking_legs,selected_candidates:detailedSelection.top_three.map(x=>({minutes:x.minutes,departure:x.departure,arrival:x.arrival,arrival_gap:x.arrival_gap,transfers:x.transfers,first_walk_minutes:x.first_walk_minutes}))}:{}),minutes:parsed.minutes,departure:depDate+'T'+stamp(parsed.departure)+':00',arrival:dateISO+'T'+stamp(parsed.arrival)+':00',date:dateISO,desired_arrival:target?.time||null,source:'Google Maps',origin,destination,url:page.url};
+  return {station_id:stationNamed?station.station_id:null,destination_name:stationNamed?station.name:null,selection_version:target?'departure-balanced-v2':'pareto-arrival-v2',departure_probe:probeStatus,alternatives:page.rows,...(target?{walking_legs:parsed.row.walking_legs,first_walk_minutes:parsed.first_walk_minutes,transfers:parsed.transfers,warning_two_transfers:parsed.transfers>=2,walking_deprioritized:parsed.max_walk_minutes>=17,max_walk_minutes:parsed.max_walk_minutes,access_walking_legs:parsed.row.access_walking_legs,selected_candidates:detailedSelection.top_three.map(x=>({minutes:x.minutes,departure:x.departure,arrival:x.arrival,arrival_gap:x.arrival_gap,transfers:x.transfers,first_walk_minutes:x.first_walk_minutes}))}:{}),minutes:parsed.minutes,departure:depDate+'T'+stamp(parsed.departure)+':00',arrival:dateISO+'T'+stamp(parsed.arrival)+':00',date:dateISO,desired_arrival:target?.time||null,source:'Google Maps',origin,destination,url:page.url};
  }finally{if(tab?.id)await chrome.tabs.remove(tab.id).catch(()=>{})}
 }
 chrome.runtime.onMessage.addListener((req,sender,sendResponse)=>{
