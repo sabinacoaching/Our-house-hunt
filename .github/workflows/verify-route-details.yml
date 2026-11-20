@@ -1,0 +1,34 @@
+name: Verify route detail reader
+on:
+  push:
+    branches: [work-route-details-20261119]
+    paths: ['extension/**', '.github/workflows/verify-route-details.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-save --package-lock=false playwright@1.62.1
+      - run: npx playwright install --with-deps chromium
+      - name: Check actual Google itinerary
+        run: |
+          cat > verify-details.mjs <<'JS'
+          import {chromium} from 'playwright';
+          import {resolve} from 'node:path';
+          const path=resolve('extension');
+          const browser=await chromium.launchPersistentContext('',{channel:'chromium',headless:false,locale:'en-GB',timezoneId:'Europe/London',args:['--disable-extensions-except='+path,'--load-extension='+path]});
+          try {
+            let [worker]=browser.serviceWorkers();if(!worker)worker=await browser.waitForEvent('serviceworker');
+            const result=await worker.evaluate(()=>googleRoute({kind:'dancelab',origin:{lat:51.4032072,lon:-0.1495626}}));
+            console.log('VERIFIED_ROUTE',JSON.stringify(result));
+            if(result.selection_version!=='departure-balanced-v1'||!result.walking_legs?.length||result.access_walking_legs.some(x=>x>15)||result.selected_candidates.length!==3)throw Error('Journey criteria not met');
+            if(result.minutes!==50)throw Error('Expected the verified 50-minute option instead of 63/58 minutes');
+          } finally {await browser.close()}
+          JS
+          xvfb-run --auto-servernum node verify-details.mjs
