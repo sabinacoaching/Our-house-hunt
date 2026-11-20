@@ -30,6 +30,7 @@ try{
   try{
    await calculateGoogleRoutes(id,{sb,extension:async(action,{route})=>{assert.equal(action,'GOOGLE_ROUTE');calls.push(route.kind);return extensionWorker.evaluate(async route=>googleRoute(route),route)},progress:message=>console.log('PROGRESS '+message)});
    assert.equal(row.import_diagnostics.route_pending,false);assert.equal(Object.keys(row.journey_estimates).length,3);
+   for(const journey of Object.values(row.journey_estimates)){if(journey.unavailable){assert.equal(journey.reason,'walk_limit');assert.ok(journey.rejected_candidates.length>0);assert.ok(journey.rejected_candidates.every(c=>c.access_walking_legs.some(n=>n>15)))}else {assert.equal(journey.selection_version,'departure-balanced-v1');assert.ok(journey.access_walking_legs.every(n=>n<=15));assert.ok(journey.selected_candidates.length>0)}}
    assert.ok(row.station_commutes.google_routes.results.filter(Boolean).every(x=>x.destination_mode==='named-station'));
    assert.ok(row.station_commutes.tfl_final.results.filter(Boolean).every(x=>x.transport_type!=='tram'));
    if(address==='Alpine Close'){

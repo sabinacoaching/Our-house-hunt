@@ -599,7 +599,7 @@ async function googleRoute(input){
    for(const row of page.rows){const key=[row.heading,row.duration,(row.modes||[]).join('|')].join('::');if(seen.has(key))continue;seen.add(key);
     const preview=HouseHuntGoogleRoutes.candidateDetails({...row,walking_legs:[1]},deadline);if(preview)candidates.push({...preview,row});}
    candidates.sort(HouseHuntGoogleRoutes.compareCandidates);
-   const confirmed=[];
+   const confirmed=[],rejected=[];
    for(const candidate of candidates){
     const ref=candidate.row._detail;if(!ref)throw Error('Cannot verify route details');let detailTab;
     try{
@@ -607,12 +607,12 @@ async function googleRoute(input){
      const response=await chrome.scripting.executeScript({target:{tabId:detailTab.id},func:houseHuntReadMapsPage,args:[{...args,mode:ref.mode,time24:ref.time24,phase:'details',detailsPage:ref.page,heading:candidate.row.heading,duration:candidate.row.duration}]});
      const detail=response?.[0]?.result;if(detail?.error)throw Error(detail.error);if(!detail?.details_verified||!Array.isArray(detail.walking_legs)||!Array.isArray(detail.access_walking_legs))throw Error('Route walking details not verified');
      const row={...candidate.row,walking_legs:detail.walking_legs,access_walking_legs:detail.access_walking_legs,details_verified:true};
-     if(HouseHuntGoogleRoutes.rankDetailedTransit([row],deadline).selected)confirmed.push(row);
+     if(HouseHuntGoogleRoutes.rankDetailedTransit([row],deadline).selected)confirmed.push(row);else rejected.push({heading:row.heading,duration:row.duration,access_walking_legs:row.access_walking_legs});
     }finally{if(detailTab?.id)await chrome.tabs.remove(detailTab.id).catch(()=>{})}
     if(confirmed.length===3)break;
    }
    detailedSelection=HouseHuntGoogleRoutes.rankDetailedTransit(confirmed,deadline);
-   if(!detailedSelection?.selected)throw Error('No verified route met the walking and arrival requirements');
+   if(!detailedSelection?.selected){if(!rejected.length)throw Error('No verifiable Google route candidates');return {unavailable:true,reason:'walk_limit',selection_version:'departure-balanced-v1',rejected_candidates:rejected,date:dateISO,desired_arrival:target.time,source:'Google Maps',origin,destination,url:page.url}}
   }
   const parsed=mode==='walking'?HouseHuntGoogleRoutes.readWalk(page.rows):target?detailedSelection.selected:HouseHuntGoogleRoutes.readTransit(page.rows,hour*60+minute,mode);
   if(!parsed){if(kind==='station_transit'&&page.rows.some(r=>(r.modes||[]).some(m=>/^walk(?:ing)?$/i.test(m)))&&page.rows.every(r=>(r.modes||[]).length&&(r.modes||[]).every(m=>/^walk(?:ing)?$/i.test(m))))return {unavailable:true,source:'Google Maps',origin,destination,station_id:stationNamed?station.station_id:null,destination_name:stationNamed?station.name:null,url:page.url};throw Error('No valid Google Maps route for the requested time')}

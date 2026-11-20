@@ -52,7 +52,7 @@
  function compareCandidates(a,b){
   // target - departure = travel duration + early-arrival waiting. Latest departure
   // therefore minimizes the whole time committed to this appointment.
-  return (a.transfers>=2)-(b.transfers>=2)||b.departure-a.departure||a.minutes-b.minutes||a.transfers-b.transfers||a.arrival_gap-b.arrival_gap;
+  return (a.transfers>=2)-(b.transfers>=2)||(b.departure>b.arrival?b.departure-1440:b.departure)-(a.departure>a.arrival?a.departure-1440:a.departure)||a.minutes-b.minutes||a.transfers-b.transfers||a.arrival_gap-b.arrival_gap;
  }
  function rankDetailedTransit(rows,target){
   const valid=(rows||[]).map(row=>{if(!row.details_verified)return null;const c=candidateDetails(row,target);if(!c)return null;

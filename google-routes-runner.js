@@ -1,5 +1,5 @@
 import {validListingLocationHint,streetViewListingUrl} from './import-utils.js?v=6';
-import {buildGoogleRouteUpdate} from './google-route-update.js?v=4';
+import {buildGoogleRouteUpdate} from './google-route-update.js?v=5';
 import {selectGoogleStations,stationTransportType} from './google-station-selection.js?v=4';
 
 export function needsGoogleRouteResume(p){
@@ -84,7 +84,7 @@ export async function calculateGoogleRoutes(id,{sb,extension,progress=()=>{},onP
   }
   throw Error('House changed during calculation; the saved user data was retained');
  }
- async function route(kind,destination){await delay(250);const value=await extension('GOOGLE_ROUTE',{route:{kind,origin,...(destination?{destination}:{})}},260000);if(kind!=='station_walk'&&!value?.unavailable&&value?.date!==date)throw Error('Google returned a different timetable date');return {...value,calculated_at:new Date().toISOString()}}
+ async function route(kind,destination){await delay(250);const value=await extension('GOOGLE_ROUTE',{route:{kind,origin,...(destination?{destination}:{})}},260000);if(kind!=='station_walk'&&(!value?.unavailable||['waterloo','dilly','dancelab'].includes(kind))&&value?.date!==date)throw Error('Google returned a different timetable date');return {...value,calculated_at:new Date().toISOString()}}
  async function step(key,fn,visible=true){
   const before=structuredClone(google),beforePreview=work.preview;
   for(let attempt=0;attempt<2;attempt++){
